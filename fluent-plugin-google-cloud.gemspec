@@ -16,5 +16,4 @@ Gem::Specification.new do |spec|
 
   spec.add_runtime_dependency 'fluentd'
   spec.add_runtime_dependency 'google-api-client', '~> 0.7.1'
-  spec.add_runtime_dependency 'rest-client', '~> 1.6.7'
 end

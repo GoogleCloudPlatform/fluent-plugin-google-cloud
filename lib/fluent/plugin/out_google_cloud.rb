@@ -23,7 +23,7 @@ module Fluent
       super
       require 'google/api_client'
       require 'google/api_client/auth/compute_service_account'
-      require 'rest_client'
+      require 'open-uri'
     end
 
     def configure(conf)
@@ -133,9 +133,10 @@ module Fluent
     private
 
     def fetch_metadata(metadata_path)
-      # TODO: Eliminate dependency on rest-client?
-      RestClient.get('http://metadata/computeMetadata/v1/' + metadata_path,
-                     {'Metadata-Flavor' => 'Google'})
+      open('http://metadata/computeMetadata/v1/' + metadata_path,
+           {'Metadata-Flavor' => 'Google'}) { |f|
+        f.read
+      }
     end
 
     def init_api_client
