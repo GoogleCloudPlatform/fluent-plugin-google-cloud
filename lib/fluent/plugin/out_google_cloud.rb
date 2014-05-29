@@ -2,6 +2,23 @@ module Fluent
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
 
+    # Legal values:
+    # 'compute_engine_service_account' - Use the service account automatically
+    #   available on Google Compute Engine VMs. Note that this requires that
+    #   the logs.writeonly API scope is enabled on the VM, and scopes can
+    #   only be enabled at the time that a VM is created.
+    # 'private_key' - Use the service account credentials (email, private key
+    #   local file path, and file passphrase) provided below.
+    config_param :auth_method, :string,
+      :default => 'compute_engine_service_account'
+
+    # Parameters necessary to use the private_key auth_method.
+    config_param :private_key_email, :string, :default => nil
+    config_param :private_key_path, :string, :default => nil
+    config_param :private_key_passphrase, :string, :default => 'notasecret'
+
+    # TODO: Add a log_name config option rather than just using the tag?
+
     def initialize
       super
       require 'google/api_client'
@@ -11,15 +28,34 @@ module Fluent
 
     def configure(conf)
       super
+
+      case @auth_method
+      when 'private_key'
+        if !@private_key_email
+          raise Fluent::ConfigError '"private_key_email" must be specified '\
+                                    'if auth_method is "private_key"'
+        elsif !@private_key_path
+          raise Fluent::ConfigError '"private_key_path" must be specified '\
+                                    'if auth_method is "private_key"'
+        elsif !@private_key_passphrase
+          raise Fluent::ConfigError '"private_key_passphrase" must be '\
+                                    'specified if auth_method is "private_key"'
+        end
+      when 'compute_engine_service_account'
+        # pass
+      else
+        raise Fluent::ConfigError,
+          'Unrecognized "auth_method" parameter. Please specify either '\
+          '"compute_engine_service_account" or "private_key".'
+      end
     end
 
     def start
       super
 
-      @client = nil
-      # TODO: Switch over to using api client when the logs API is discoverable.
+      init_api_client()
+      # TODO: Switch over to using this when the logs API is discoverable.
       #@api = api_client().discovered_api('logs', 'v1')
-      puts api_client()
 
       # Grab metadata about the Google Compute Engine instance that we're on.
       @project_id = fetch_metadata('project/numeric-project-id')
@@ -56,9 +92,9 @@ module Fluent
     def write(chunk)
       payload = {
         'metadata' => {
-          'project' => @project_id,
           'location' => @zone
-        }
+        },
+        'logEntry' => {}
       }
       if @running_on_managed_vm
         payload['metadata']['appEngine'] = {
@@ -74,37 +110,57 @@ module Fluent
       chunk.msgpack_each do |row_object|
         # Ignore the extra info that can be automatically appended to the tag
         # for certain log types such as syslog.
-        log_name = row_object[0].partition('.')[0]
-        url = "https://www.googleapis.com/logs/v1beta/projects/#{@project_id}/logs/#{log_name}/entries"
+        url = "https://www.googleapis.com/logs/v1beta/projects/#{@project_id}/logs/#{row_object[0]}/entries"
         payload['metadata']['timeNanos'] = row_object[1] * 1000000000
-        payload['textLogEntry'] = row_object[2]
+        payload['logEntry']['details'] = row_object[2]
         
         # TODO: Remove print statements
         puts url
         puts payload
-        RestClient.post(url, payload.to_json,
-                        {'Content-Type'=>'application/json'})
+        options = {:uri => url, :body_object => payload.to_json,
+                   :http_method => 'POST', :authenticated => true}
+        client = api_client()
+        request = client.generate_request({
+          :uri => url,
+          :body_object => payload,
+          :http_method => 'POST',
+          :authenticated => true
+        })
+        client.execute!(request)
       end
     end
 
+    private
+
     def fetch_metadata(metadata_path)
+      # TODO: Eliminate dependency on rest-client?
       RestClient.get('http://metadata/computeMetadata/v1/' + metadata_path,
                      {'Metadata-Flavor' => 'Google'})
     end
 
-    def init_payload()
-    end
-
-    def api_client
-      return @client if @client && !@client.authorization.expired?
-
+    def init_api_client
       @client = Google::APIClient.new(
         :application_name => 'Fluentd Google Cloud Logging plugin',
         # TODO: Set this from a shared configuration file.
-        :application_version => '0.1.0'
-      )
-      @client.authorization = Google::APIClient::ComputeServiceAccount.new
-      @client.authorization.fetch_access_token!
+        :application_version => '0.1.0')
+
+      if @auth_method == 'private_key'
+        key = Google::APIClient::PKCS12.load_key(@private_key_path,
+                                                 @private_key_passphrase)
+        jwt_asserter = Google::APIClient::JWTAsserter.new(
+          @private_key_email, "https://www.googleapis.com/auth/logs.writeonly",
+          key)
+        @client.authorization = jwt_asserter.to_authorization
+        @client.authorization.expiry = 3600  # 3600s is the max allowed value
+      else
+        @client.authorization = Google::APIClient::ComputeServiceAccount.new
+      end
+    end
+
+    def api_client
+      if !@client.authorization.expired?
+        @client.authorization.fetch_access_token!
+      end
       return @client
     end
   end
