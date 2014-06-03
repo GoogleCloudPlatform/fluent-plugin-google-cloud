@@ -19,6 +19,15 @@ module Fluent
 
     # TODO: Add a log_name config option rather than just using the tag?
 
+    # Expose attr_readers to make testing of metadata more direct than only
+    # testing it indirectly through metadata sent with logs.
+    attr_reader :project_id
+    attr_reader :zone
+    attr_reader :vm_id
+    attr_reader :running_on_managed_vm
+    attr_reader :gae_backend_name
+    attr_reader :gae_backend_version
+
     def initialize
       super
       require 'google/api_client'
@@ -32,14 +41,14 @@ module Fluent
       case @auth_method
       when 'private_key'
         if !@private_key_email
-          raise Fluent::ConfigError '"private_key_email" must be specified '\
-                                    'if auth_method is "private_key"'
+          raise Fluent::ConfigError, '"private_key_email" must be specified '\
+                                     'if auth_method is "private_key"'
         elsif !@private_key_path
-          raise Fluent::ConfigError '"private_key_path" must be specified '\
-                                    'if auth_method is "private_key"'
+          raise Fluent::ConfigError, '"private_key_path" must be specified '\
+                                     'if auth_method is "private_key"'
         elsif !@private_key_passphrase
-          raise Fluent::ConfigError '"private_key_passphrase" must be '\
-                                    'specified if auth_method is "private_key"'
+          raise Fluent::ConfigError, '"private_key_passphrase" must be '\
+                                     'specified if auth_method is "private_key"'
         end
       when 'compute_engine_service_account'
         # pass
@@ -114,12 +123,12 @@ module Fluent
         payload['metadata']['timeNanos'] = row_object[1] * 1000000000
         payload['logEntry']['details'] = row_object[2]
         
-        # TODO: Remove print statements
-        puts url
-        puts payload
         options = {:uri => url, :body_object => payload.to_json,
                    :http_method => 'POST', :authenticated => true}
         client = api_client()
+        # TODO: Either handle errors locally or send all logs in a single
+        # request. Otherwise if a single request raises an error, the buffering
+        # plugin will retry the entire block, potentially leading to duplicates.
         request = client.generate_request({
           :uri => url,
           :body_object => payload,
