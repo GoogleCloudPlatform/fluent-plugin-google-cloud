@@ -63,8 +63,6 @@ module Fluent
       super
 
       init_api_client()
-      # TODO: Switch over to using this when the logs API is discoverable.
-      #@api = api_client().discovered_api('logs', 'v1')
 
       # Grab metadata about the Google Compute Engine instance that we're on.
       @project_id = fetch_metadata('project/numeric-project-id')
@@ -75,7 +73,7 @@ module Fluent
 
       # If this is running on a Managed VM, grab the relevant App Engine
       # metadata as well.
-      # TODO: Use a configuration flag instead of detecting automatically?
+      # TODO: Add config options for these to allow for running outside GCE?
       attributes_string = fetch_metadata('instance/attributes/')
       attributes = attributes_string.split
       if attributes.include?('gae_backend_name') &&
@@ -119,6 +117,7 @@ module Fluent
       chunk.msgpack_each do |row_object|
         # Ignore the extra info that can be automatically appended to the tag
         # for certain log types such as syslog.
+        # TODO: Switch over to using discovery once the API is discoverable?
         url = "https://www.googleapis.com/logs/v1beta/projects/#{@project_id}/logs/#{row_object[0]}/entries"
         payload['metadata']['timeNanos'] = row_object[1] * 1000000000
         payload['logEntry']['details'] = row_object[2]
@@ -129,6 +128,7 @@ module Fluent
         # TODO: Either handle errors locally or send all logs in a single
         # request. Otherwise if a single request raises an error, the buffering
         # plugin will retry the entire block, potentially leading to duplicates.
+        # Adding sequence numbers could help with this as well.
         request = client.generate_request({
           :uri => url,
           :body_object => payload,
@@ -151,7 +151,6 @@ module Fluent
     def init_api_client
       @client = Google::APIClient.new(
         :application_name => 'Fluentd Google Cloud Logging plugin',
-        # TODO: Set this from a shared configuration file.
         :application_version => '0.1.0')
 
       if @auth_method == 'private_key'

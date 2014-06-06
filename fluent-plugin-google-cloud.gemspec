@@ -1,5 +1,3 @@
-$:.push File.expand_path('../lib', __FILE__)
-
 Gem::Specification.new do |gem|
   gem.name          = 'fluent-plugin-google-cloud'
   gem.description   = %q{Fluentd plugin to stream logs to the Google Cloud Platform's logs API, which will make them viewable in the Developer Console's log viewer and can optionally store them in Google Cloud Storage and/or BigQuery.}
