@@ -79,6 +79,7 @@ module Fluent
       init_api_client()
 
       # Grab metadata about the Google Compute Engine instance that we're on.
+      # TODO(salty): this should eventually be project/project-id
       @project_id = fetch_metadata('project/numeric-project-id')
       fully_qualified_zone = fetch_metadata('instance/zone')
       @zone = fully_qualified_zone.rpartition('/')[2]
@@ -112,32 +113,59 @@ module Fluent
 
     def write(chunk)
       payload = {
-        'metadata' => {
-          'location' => @zone
-        },
-        'logEntry' => {}
+        'entries' => []
       }
+      entry = {}
       if @running_on_managed_vm
-        payload['metadata']['appEngine'] = {
-          'moduleId' => @gae_backend_name,
-          'versionId' => @gae_backend_version,
-          'computeEngineVmId' => @vm_id
+        service = 'appengine.googleapis.com'
+        entry['metadata'] = {
+          'serviceName' => service,
+          'labels' => [
+            {
+              'key' => "#{service}/module_id",
+              'strValue' => @gae_backend_name
+            },
+            {
+              'key' => "#{service}/version_id",
+              'strValue' => @gae_backend_version
+            },
+            {
+              'key' => "#{service}/compute_engine_vm_id",
+              'strValue' => @vm_id
+            }
+          ]
         }
       else
-        payload['metadata']['computeEngine'] = { 'instanceId' => @vm_id }
+        service = 'compute.googleapis.com'
+        entry['metadata'] = {
+          'serviceName' => service,
+          'labels' => [
+            {
+              'key' => "#{service}/resource_type",
+              'strValue' => 'instance'
+            },
+            {
+              'key' => "#{service}/instance_id",
+              'strValue' => @vm_id
+            }
+          ]
+        }
       end
 
-      # TODO: Add in calls for creating log streams?
+      entry['metadata']['projectId'] = @project_id
+      entry['metadata']['zone'] = @zone
+      # TODO(salty): batch these into 'entries' instead of making one call per.
       chunk.msgpack_each do |row_object|
         # Ignore the extra info that can be automatically appended to the tag
         # for certain log types such as syslog.
         # TODO: Switch over to using discovery once the API is discoverable?
-        url = "https://www.googleapis.com/logs/v1beta/projects/#{@project_id}/logs/#{row_object[0]}/entries"
-        payload['metadata']['timeNanos'] = row_object[1] * 1000000000
-        payload['logEntry']['details'] = row_object[2]
-        
-        options = {:uri => url, :body_object => payload.to_json,
-                   :http_method => 'POST', :authenticated => true}
+        url = "https://www.googleapis.com/logging/v1beta/projects/"\
+          "#{@project_id}/logs/#{row_object[0]}/entries:write"
+        entry['metadata']['timeNanos'] = row_object[1] * 1000000000
+        # TODO(salty): severity?
+        entry['textPayload'] = row_object[2]
+        payload['entries'] = [ entry ]
+
         client = api_client()
         # TODO: Either handle errors locally or send all logs in a single
         # request. Otherwise if a single request raises an error, the buffering
@@ -157,9 +185,9 @@ module Fluent
 
     def fetch_metadata(metadata_path)
       open('http://metadata/computeMetadata/v1/' + metadata_path,
-           {'Metadata-Flavor' => 'Google'}) { |f|
+           {'Metadata-Flavor' => 'Google'}) do |f|
         f.read
-      }
+      end
     end
 
     def init_api_client

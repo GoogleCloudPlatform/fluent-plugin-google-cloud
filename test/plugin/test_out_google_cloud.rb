@@ -34,12 +34,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                 :headers => { 'Content-Length' => FAKE_AUTH_TOKEN })
 
     @logs_sent = []
-    stub_request(:post, 'https://www.googleapis.com/logs/v1beta/projects/' +
-                 PROJECT_ID + '/logs/test/entries').
-      to_return { |request|
+    stub_request(:post, 'https://www.googleapis.com/logging/v1beta/projects/' +
+                 PROJECT_ID + '/logs/test/entries:write').
+      to_return do |request|
         @logs_sent << JSON.parse(request.body)
         { :body => '' }
-    }
+      end
   end
 
   PROJECT_ID = '1234567890'
@@ -199,25 +199,63 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'test log entry ' + i.to_s
   end
 
+  def check_labels(entry, expected_labels)
+    entry['metadata']['labels'].each do |label|
+      key = label['key']
+      assert expected_labels.has_key?(key), "Unexpected label #{label}"
+      expected_type = expected_labels[key][0]
+      expected_value = expected_labels[key][1]
+      assert label.has_key?(expected_type), "Type mismatch - expected "\
+        "#{expected_type} in #{label}"
+      assert_equal label[expected_type], expected_value,
+        "Value mismatch - expected #{expected_value} in #{label}"
+    end
+    assert_equal expected_labels.length, entry['metadata']['labels'].length,
+      "Expected #{expected_labels.length} labels, got "\
+      "#{entry['metadata']['labels'].length}"
+  end
+
+  # TODO(salty) refactor these verify_* methods
   def verify_log_entries(n)
-    n.times { |i|
-      assert_equal "test log entry #{i}", @logs_sent[i]['logEntry']['details']
-      assert_equal ZONE, @logs_sent[i]['metadata']['location']
-      assert_equal VM_ID,
-                   @logs_sent[i]['metadata']['computeEngine']['instanceId']
-    }
+    i = 0
+    @logs_sent.each do |batch|
+      # TODO(salty) handle common_labels
+      batch['entries'].each do |entry|
+        assert_equal "test log entry #{i}", entry['textPayload']
+        assert_equal ZONE, entry['metadata']['zone']
+        assert_equal 'compute.googleapis.com', entry['metadata']['serviceName']
+        check_labels entry, {
+          'compute.googleapis.com/resource_type' => [ 'strValue', 'instance' ],
+          'compute.googleapis.com/instance_id' => [ 'strValue', VM_ID ]
+        }
+      end
+      i += 1
+      assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
+    end
+    assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 
   def verify_managed_vm_log_entries(n)
-    n.times { |i|
-      assert_equal "test log entry #{i}", @logs_sent[i]['logEntry']['details']
-      assert_equal ZONE, @logs_sent[i]['metadata']['location']
-      assert_equal MANAGED_VM_BACKEND_NAME,
-                   @logs_sent[i]['metadata']['appEngine']['moduleId']
-      assert_equal MANAGED_VM_BACKEND_VERSION,
-                   @logs_sent[i]['metadata']['appEngine']['versionId']
-      assert_equal VM_ID,
-                   @logs_sent[i]['metadata']['appEngine']['computeEngineVmId']
-    }
+    i = 0
+    @logs_sent.each do |batch|
+      # TODO(salty) handle common_labels
+      batch['entries'].each do |entry|
+        assert_equal "test log entry #{i}", entry['textPayload']
+        assert_equal ZONE, entry['metadata']['zone']
+        assert_equal 'appengine.googleapis.com',
+          entry['metadata']['serviceName']
+        check_labels entry, {
+          'appengine.googleapis.com/module_id' => [
+            'strValue', MANAGED_VM_BACKEND_NAME ],
+          'appengine.googleapis.com/version_id' => [
+            'strValue', MANAGED_VM_BACKEND_VERSION ],
+          'appengine.googleapis.com/compute_engine_vm_id' => [
+            'strValue', VM_ID ]
+        }
+      end
+      i += 1
+      assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
+    end
+    assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 end
