@@ -199,7 +199,7 @@ module Fluent
         key = Google::APIClient::PKCS12.load_key(@private_key_path,
                                                  @private_key_passphrase)
         jwt_asserter = Google::APIClient::JWTAsserter.new(
-          @private_key_email, "https://www.googleapis.com/auth/logs.writeonly",
+          @private_key_email, "https://www.googleapis.com/auth/logging.write",
           key)
         @client.authorization = jwt_asserter.to_authorization
         @client.authorization.expiry = 3600  # 3600s is the max allowed value
