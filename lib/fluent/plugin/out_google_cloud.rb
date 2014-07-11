@@ -79,8 +79,7 @@ module Fluent
       init_api_client()
 
       # Grab metadata about the Google Compute Engine instance that we're on.
-      # TODO(salty): this should eventually be project/project-id
-      @project_id = fetch_metadata('project/numeric-project-id')
+      @project_id = fetch_metadata('project/project-id')
       fully_qualified_zone = fetch_metadata('instance/zone')
       @zone = fully_qualified_zone.rpartition('/')[2]
       @vm_id = fetch_metadata('instance/id')

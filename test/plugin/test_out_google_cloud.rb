@@ -21,7 +21,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     Fluent::Test.setup
 
     # Create stubs for all the GCE metadata lookups the agent needs to make.
-    stub_metadata_request('project/numeric-project-id', PROJECT_ID)
+    stub_metadata_request('project/project-id', PROJECT_ID)
     stub_metadata_request('instance/zone', FULLY_QUALIFIED_ZONE)
     stub_metadata_request('instance/id', VM_ID)
     stub_metadata_request('instance/attributes/',
@@ -42,7 +42,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       end
   end
 
-  PROJECT_ID = '1234567890'
+  PROJECT_ID = 'test-project-id'
   ZONE = 'us-central1-b'
   FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   VM_ID = '9876543210'
