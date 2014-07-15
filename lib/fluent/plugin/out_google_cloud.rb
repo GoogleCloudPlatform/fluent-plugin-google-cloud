@@ -16,6 +16,10 @@ module Fluent
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
 
+    # Constants for Google service names.
+    APPENGINE_SERVICE = 'appengine.googleapis.com'
+    COMPUTE_SERVICE = 'compute.googleapis.com'
+
     # Legal values:
     # 'compute_engine_service_account' - Use the service account automatically
     #   available on Google Compute Engine VMs. Note that this requires that
@@ -110,47 +114,29 @@ module Fluent
       [tag, time, record['message']].to_msgpack
     end
 
+    def add_label(labels, key, type, value)
+      labels.push({'key' => key, type => value})
+    end
+
     def write(chunk)
-      payload = {
-        'entries' => []
-      }
-      entry = {}
+      payload = { 'entries' => [] }
+      entry = { 'metadata' => {} }
+      labels = []
+      add_label(labels, "#{COMPUTE_SERVICE}/resource_type",
+                'strValue', 'instance')
+      add_label(labels, "#{COMPUTE_SERVICE}/resource_id",
+                'strValue', @vm_id)
       if @running_on_managed_vm
-        service = 'appengine.googleapis.com'
-        entry['metadata'] = {
-          'serviceName' => service,
-          'labels' => [
-            {
-              'key' => "#{service}/module_id",
-              'strValue' => @gae_backend_name
-            },
-            {
-              'key' => "#{service}/version_id",
-              'strValue' => @gae_backend_version
-            },
-            {
-              'key' => "#{service}/compute_engine_vm_id",
-              'strValue' => @vm_id
-            }
-          ]
-        }
+        entry['metadata']['serviceName'] = APPENGINE_SERVICE
+        add_label(labels, "#{APPENGINE_SERVICE}/module_id",
+                  'strValue', @gae_backend_name)
+        add_label(labels, "#{APPENGINE_SERVICE}/version_id",
+                  'strValue', @gae_backend_version)
       else
-        service = 'compute.googleapis.com'
-        entry['metadata'] = {
-          'serviceName' => service,
-          'labels' => [
-            {
-              'key' => "#{service}/resource_type",
-              'strValue' => 'instance'
-            },
-            {
-              'key' => "#{service}/instance_id",
-              'strValue' => @vm_id
-            }
-          ]
-        }
+        entry['metadata']['serviceName'] = COMPUTE_SERVICE
       end
 
+      entry['metadata']['labels'] = labels
       entry['metadata']['projectId'] = @project_id
       entry['metadata']['zone'] = @zone
       # TODO(salty): batch these into 'entries' instead of making one call per.

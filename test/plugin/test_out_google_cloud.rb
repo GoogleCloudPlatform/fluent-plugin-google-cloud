@@ -226,7 +226,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         assert_equal 'compute.googleapis.com', entry['metadata']['serviceName']
         check_labels entry, {
           'compute.googleapis.com/resource_type' => [ 'strValue', 'instance' ],
-          'compute.googleapis.com/instance_id' => [ 'strValue', VM_ID ]
+          'compute.googleapis.com/resource_id' => [ 'strValue', VM_ID ]
         }
       end
       i += 1
@@ -249,8 +249,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
             'strValue', MANAGED_VM_BACKEND_NAME ],
           'appengine.googleapis.com/version_id' => [
             'strValue', MANAGED_VM_BACKEND_VERSION ],
-          'appengine.googleapis.com/compute_engine_vm_id' => [
-            'strValue', VM_ID ]
+          'compute.googleapis.com/resource_type' => [ 'strValue', 'instance' ],
+          'compute.googleapis.com/resource_id' => [ 'strValue', VM_ID ]
         }
       end
       i += 1
