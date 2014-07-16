@@ -34,12 +34,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                 :headers => { 'Content-Length' => FAKE_AUTH_TOKEN })
 
     @logs_sent = []
-    stub_request(:post, 'https://www.googleapis.com/logging/v1beta/projects/' +
-                 PROJECT_ID + '/logs/test/entries:write').
-      to_return do |request|
+    @total_requests = 0
+    [COMPUTE_LOG_NAME, APPENGINE_LOG_NAME].each do |log_name|
+      stub_request(:post, uri_for_log(log_name)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
         { :body => '' }
       end
+    end
   end
 
   PROJECT_ID = 'test-project-id'
@@ -73,6 +74,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   INVALID_CONFIG3 = %[
     auth_method service_account
   ]
+
+  COMPUTE_LOG_NAME = 'test'
+  APPENGINE_LOG_NAME = 'appengine.googleapis.com%2Ftest'
 
   def create_driver(conf = PRIVATE_KEY_CONFIG)
     Fluent::Test::BufferedOutputTestDriver.new(
@@ -180,6 +184,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
+  def uri_for_log(log_name)
+    'https://www.googleapis.com/logging/v1beta/projects/' + PROJECT_ID +
+        '/logs/' + log_name + '/entries:write'
+  end
+
   def stub_metadata_request(metadata_path, response_body)
     stub_request(:get, 'http://metadata/computeMetadata/v1/' + metadata_path).
       to_return(:body => response_body, :status => 200,
@@ -217,6 +226,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # TODO(salty) refactor these verify_* methods
   def verify_log_entries(n)
+    @total_requests += n
+    assert_requested(:post, uri_for_log(COMPUTE_LOG_NAME),
+                     :times=>@total_requests)
     i = 0
     @logs_sent.each do |batch|
       # TODO(salty) handle common_labels
@@ -236,6 +248,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def verify_managed_vm_log_entries(n)
+    @total_requests += n
+    assert_requested(:post, uri_for_log(APPENGINE_LOG_NAME),
+                     :times=>@total_requests)
     i = 0
     @logs_sent.each do |batch|
       # TODO(salty) handle common_labels

@@ -48,6 +48,7 @@ module Fluent
 
     def initialize
       super
+      require 'cgi'
       require 'google/api_client'
       require 'google/api_client/auth/compute_service_account'
       require 'open-uri'
@@ -143,9 +144,16 @@ module Fluent
       chunk.msgpack_each do |row_object|
         # Ignore the extra info that can be automatically appended to the tag
         # for certain log types such as syslog.
+
+        # Add a prefix to VMEngines logs to prevent namespace collisions,
+        # and also escape the log name.
+        log_name = CGI::escape(@running_on_managed_vm ?
+                               "#{APPENGINE_SERVICE}/#{row_object[0]}" :
+                               row_object[0])
+
         # TODO: Switch over to using discovery once the API is discoverable?
         url = "https://www.googleapis.com/logging/v1beta/projects/"\
-          "#{@project_id}/logs/#{row_object[0]}/entries:write"
+          "#{@project_id}/logs/#{log_name}/entries:write"
         entry['metadata']['timeNanos'] = row_object[1] * 1000000000
         # TODO(salty): severity?
         entry['textPayload'] = row_object[2]
