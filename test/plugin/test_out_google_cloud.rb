@@ -31,14 +31,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
       to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
                 :status => 200,
-                :headers => { 'Content-Length' => FAKE_AUTH_TOKEN })
+                :headers => {'Content-Length' => FAKE_AUTH_TOKEN})
 
     @logs_sent = []
     @total_requests = 0
     [COMPUTE_LOG_NAME, APPENGINE_LOG_NAME].each do |log_name|
       stub_request(:post, uri_for_log(log_name)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
-        { :body => '' }
+        {:body => ''}
       end
     end
   end
@@ -78,9 +78,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   COMPUTE_LOG_NAME = 'test'
   APPENGINE_LOG_NAME = 'appengine.googleapis.com%2Ftest'
 
-  def create_driver(conf = PRIVATE_KEY_CONFIG)
+  def create_driver(conf=PRIVATE_KEY_CONFIG)
     Fluent::Test::BufferedOutputTestDriver.new(
-      Fluent::GoogleCloudOutput).configure(conf)
+        Fluent::GoogleCloudOutput).configure(conf)
   end
 
   def test_configure_service_account
@@ -146,12 +146,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_multiple_logs
     d = create_driver(PRIVATE_KEY_CONFIG)
     # Only test a few values because otherwise the test can take minutes.
-    [2,3,5,11,50].each do |n|
+    [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
-      d.instance_variable_get("@entries").clear
+      d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit({ 'message' => log_entry(i) }) }
+      n.times { |i| d.emit({'message' => log_entry(i)}) }
       d.run
       assert_equal n, @logs_sent.length
       verify_log_entries(n)
@@ -170,12 +170,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_multiple_managed_vm_logs
     set_up_managed_vm_metadata_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
-    [2,3,5,11,50].each do |n|
+    [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
-      d.instance_variable_get("@entries").clear
+      d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit({ 'message' => log_entry(i) }) }
+      n.times { |i| d.emit({'message' => log_entry(i)}) }
       d.run
       assert_equal n, @logs_sent.length
       verify_managed_vm_log_entries(n)
@@ -192,7 +192,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def stub_metadata_request(metadata_path, response_body)
     stub_request(:get, 'http://metadata/computeMetadata/v1/' + metadata_path).
       to_return(:body => response_body, :status => 200,
-                :headers => { 'Content-Length' => response_body.length })
+                :headers => {'Content-Length' => response_body.length})
   end
 
   def set_up_managed_vm_metadata_stubs
@@ -214,14 +214,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert expected_labels.has_key?(key), "Unexpected label #{label}"
       expected_type = expected_labels[key][0]
       expected_value = expected_labels[key][1]
-      assert label.has_key?(expected_type), "Type mismatch - expected "\
-        "#{expected_type} in #{label}"
+      assert label.has_key?(expected_type),
+          "Type mismatch - expected #{expected_type} in #{label}"
       assert_equal label[expected_type], expected_value,
-        "Value mismatch - expected #{expected_value} in #{label}"
+          "Value mismatch - expected #{expected_value} in #{label}"
     end
     assert_equal expected_labels.length, entry['metadata']['labels'].length,
-      "Expected #{expected_labels.length} labels, got "\
-      "#{entry['metadata']['labels'].length}"
+        ("Expected #{expected_labels.length} labels, got " +
+         "#{entry['metadata']['labels'].length}")
   end
 
   # TODO(salty) refactor these verify_* methods
@@ -237,8 +237,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         assert_equal ZONE, entry['metadata']['zone']
         assert_equal 'compute.googleapis.com', entry['metadata']['serviceName']
         check_labels entry, {
-          'compute.googleapis.com/resource_type' => [ 'strValue', 'instance' ],
-          'compute.googleapis.com/resource_id' => [ 'strValue', VM_ID ]
+          'compute.googleapis.com/resource_type' => ['strValue', 'instance'],
+          'compute.googleapis.com/resource_id' => ['strValue', VM_ID]
         }
       end
       i += 1
@@ -258,14 +258,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         assert_equal "test log entry #{i}", entry['textPayload']
         assert_equal ZONE, entry['metadata']['zone']
         assert_equal 'appengine.googleapis.com',
-          entry['metadata']['serviceName']
+            entry['metadata']['serviceName']
         check_labels entry, {
           'appengine.googleapis.com/module_id' => [
-            'strValue', MANAGED_VM_BACKEND_NAME ],
+            'strValue', MANAGED_VM_BACKEND_NAME],
           'appengine.googleapis.com/version_id' => [
-            'strValue', MANAGED_VM_BACKEND_VERSION ],
-          'compute.googleapis.com/resource_type' => [ 'strValue', 'instance' ],
-          'compute.googleapis.com/resource_id' => [ 'strValue', VM_ID ]
+            'strValue', MANAGED_VM_BACKEND_VERSION],
+          'compute.googleapis.com/resource_type' => ['strValue', 'instance'],
+          'compute.googleapis.com/resource_id' => ['strValue', VM_ID]
         }
       end
       i += 1

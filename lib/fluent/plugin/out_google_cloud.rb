@@ -28,7 +28,7 @@ module Fluent
     # 'private_key' - Use the service account credentials (email, private key
     #   local file path, and file passphrase) provided below.
     config_param :auth_method, :string,
-      :default => 'compute_engine_service_account'
+        :default => 'compute_engine_service_account'
 
     # Parameters necessary to use the private_key auth_method.
     config_param :private_key_email, :string, :default => nil
@@ -60,21 +60,21 @@ module Fluent
       case @auth_method
       when 'private_key'
         if !@private_key_email
-          raise Fluent::ConfigError, '"private_key_email" must be specified '\
-                                     'if auth_method is "private_key"'
+          raise Fluent::ConfigError, ('"private_key_email" must be ' +
+              'specified if auth_method is "private_key"')
         elsif !@private_key_path
-          raise Fluent::ConfigError, '"private_key_path" must be specified '\
-                                     'if auth_method is "private_key"'
+          raise Fluent::ConfigError, ('"private_key_path" must be ' +
+              'specified if auth_method is "private_key"')
         elsif !@private_key_passphrase
-          raise Fluent::ConfigError, '"private_key_passphrase" must be '\
-                                     'specified if auth_method is "private_key"'
+          raise Fluent::ConfigError, ('"private_key_passphrase" must be ' +
+              'specified if auth_method is "private_key"')
         end
       when 'compute_engine_service_account'
         # pass
       else
         raise Fluent::ConfigError,
-          'Unrecognized "auth_method" parameter. Please specify either '\
-          '"compute_engine_service_account" or "private_key".'
+            ('Unrecognized "auth_method" parameter. Please specify either ' +
+             '"compute_engine_service_account" or "private_key".')
       end
     end
 
@@ -95,13 +95,13 @@ module Fluent
       # TODO: Add config options for these to allow for running outside GCE?
       attributes_string = fetch_metadata('instance/attributes/')
       attributes = attributes_string.split
-      if attributes.include?('gae_backend_name') &&
-         attributes.include?('gae_backend_version')
+      if (attributes.include?('gae_backend_name') &&
+          attributes.include?('gae_backend_version'))
         @running_on_managed_vm = true
         @gae_backend_name =
-          fetch_metadata('instance/attributes/gae_backend_name')
+            fetch_metadata('instance/attributes/gae_backend_name')
         @gae_backend_version =
-          fetch_metadata('instance/attributes/gae_backend_version')
+            fetch_metadata('instance/attributes/gae_backend_version')
       else
         @running_on_managed_vm = false
       end
@@ -120,8 +120,8 @@ module Fluent
     end
 
     def write(chunk)
-      payload = { 'entries' => [] }
-      entry = { 'metadata' => {} }
+      payload = {'entries' => []}
+      entry = {'metadata' => {}}
       labels = []
       add_label(labels, "#{COMPUTE_SERVICE}/resource_type",
                 'strValue', 'instance')
@@ -152,12 +152,12 @@ module Fluent
                                row_object[0])
 
         # TODO: Switch over to using discovery once the API is discoverable?
-        url = "https://www.googleapis.com/logging/v1beta/projects/"\
-          "#{@project_id}/logs/#{log_name}/entries:write"
+        url = ('https://www.googleapis.com/logging/v1beta/projects/' +
+               "#{@project_id}/logs/#{log_name}/entries:write")
         entry['metadata']['timeNanos'] = row_object[1] * 1000000000
         # TODO(salty): severity?
         entry['textPayload'] = row_object[2]
-        payload['entries'] = [ entry ]
+        payload['entries'] = [entry]
 
         client = api_client()
         # TODO: Either handle errors locally or send all logs in a single
@@ -192,7 +192,7 @@ module Fluent
         key = Google::APIClient::PKCS12.load_key(@private_key_path,
                                                  @private_key_passphrase)
         jwt_asserter = Google::APIClient::JWTAsserter.new(
-          @private_key_email, "https://www.googleapis.com/auth/logging.write",
+          @private_key_email, 'https://www.googleapis.com/auth/logging.write',
           key)
         @client.authorization = jwt_asserter.to_authorization
         @client.authorization.expiry = 3600  # 3600s is the max allowed value
