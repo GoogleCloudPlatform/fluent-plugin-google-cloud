@@ -45,6 +45,8 @@ module Fluent
     attr_reader :running_on_managed_vm
     attr_reader :gae_backend_name
     attr_reader :gae_backend_version
+    attr_reader :service_name
+    attr_reader :common_labels
 
     def initialize
       super
@@ -89,6 +91,11 @@ module Fluent
       @zone = fully_qualified_zone.rpartition('/')[2]
       @vm_id = fetch_metadata('instance/id')
       # TODO: Send instance tags and/or hostname with the logs as well?
+      @common_labels = []
+      add_label(common_labels, "#{COMPUTE_SERVICE}/resource_type",
+                'strValue', 'instance')
+      add_label(common_labels, "#{COMPUTE_SERVICE}/resource_id",
+                'strValue', @vm_id)
 
       # If this is running on a Managed VM, grab the relevant App Engine
       # metadata as well.
@@ -102,8 +109,14 @@ module Fluent
             fetch_metadata('instance/attributes/gae_backend_name')
         @gae_backend_version =
             fetch_metadata('instance/attributes/gae_backend_version')
+        @service_name = APPENGINE_SERVICE
+        add_label(common_labels, "#{APPENGINE_SERVICE}/module_id",
+                  'strValue', @gae_backend_name)
+        add_label(common_labels, "#{APPENGINE_SERVICE}/version_id",
+                  'strValue', @gae_backend_version)
       else
         @running_on_managed_vm = false
+        @service_name = COMPUTE_SERVICE
       end
     end
 
@@ -120,44 +133,44 @@ module Fluent
     end
 
     def write(chunk)
-      payload = {'entries' => []}
-      entry = {'metadata' => {}}
-      labels = []
-      add_label(labels, "#{COMPUTE_SERVICE}/resource_type",
-                'strValue', 'instance')
-      add_label(labels, "#{COMPUTE_SERVICE}/resource_id",
-                'strValue', @vm_id)
-      if @running_on_managed_vm
-        entry['metadata']['serviceName'] = APPENGINE_SERVICE
-        add_label(labels, "#{APPENGINE_SERVICE}/module_id",
-                  'strValue', @gae_backend_name)
-        add_label(labels, "#{APPENGINE_SERVICE}/version_id",
-                  'strValue', @gae_backend_version)
-      else
-        entry['metadata']['serviceName'] = COMPUTE_SERVICE
+      # Group the entries since we have to make one call per tag.
+      grouped_entries = {}
+      chunk.msgpack_each do |tag, *arr|
+        if !grouped_entries.has_key?(tag)
+          grouped_entries[tag] = []
+        end
+        grouped_entries[tag].push(arr)
       end
 
-      entry['metadata']['labels'] = labels
-      entry['metadata']['projectId'] = @project_id
-      entry['metadata']['zone'] = @zone
-      # TODO(salty): batch these into 'entries' instead of making one call per.
-      chunk.msgpack_each do |row_object|
-        # Ignore the extra info that can be automatically appended to the tag
-        # for certain log types such as syslog.
+      grouped_entries.each do |tag, arr|
+        write_log_entries_request = {
+          'commonLabels' => @common_labels,
+          'entries' => [],
+        }
+        arr.each do |time, record|
+          entry = {
+            'metadata' => {
+              'serviceName' => @service_name,
+              'projectId' => @project_id,
+              'zone' => @zone,
+              'timeNanos' => time * 1000000000
+            },
+            'textPayload' => record
+            # TODO(salty): severity?
+          }
+          write_log_entries_request['entries'].push(entry)
+        end
+
+        # TODO: (salty: unsure of the origin of this - investigate) Ignore the
+        # extra info that can be automatically appended to the tag for certain
+        # log types such as syslog.
 
         # Add a prefix to VMEngines logs to prevent namespace collisions,
         # and also escape the log name.
         log_name = CGI::escape(@running_on_managed_vm ?
-                               "#{APPENGINE_SERVICE}/#{row_object[0]}" :
-                               row_object[0])
-
-        # TODO: Switch over to using discovery once the API is discoverable?
+                               "#{APPENGINE_SERVICE}/#{tag}" : tag)
         url = ('https://www.googleapis.com/logging/v1beta/projects/' +
                "#{@project_id}/logs/#{log_name}/entries:write")
-        entry['metadata']['timeNanos'] = row_object[1] * 1000000000
-        # TODO(salty): severity?
-        entry['textPayload'] = row_object[2]
-        payload['entries'] = [entry]
 
         client = api_client()
         # TODO: Either handle errors locally or send all logs in a single
@@ -166,7 +179,7 @@ module Fluent
         # Adding sequence numbers could help with this as well.
         request = client.generate_request({
           :uri => url,
-          :body_object => payload,
+          :body_object => write_log_entries_request,
           :http_method => 'POST',
           :authenticated => true
         })

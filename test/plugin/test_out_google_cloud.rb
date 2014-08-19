@@ -34,9 +34,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                 :headers => {'Content-Length' => FAKE_AUTH_TOKEN})
 
     @logs_sent = []
-    @total_requests = 0
-    [COMPUTE_LOG_NAME, APPENGINE_LOG_NAME].each do |log_name|
-      stub_request(:post, uri_for_log(log_name)).to_return do |request|
+    [COMPUTE_PARAMS, VMENGINE_PARAMS].each do |params|
+      stub_request(:post, uri_for_log(params)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
         {:body => ''}
       end
@@ -75,8 +74,30 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     auth_method service_account
   ]
 
-  COMPUTE_LOG_NAME = 'test'
-  APPENGINE_LOG_NAME = 'appengine.googleapis.com%2Ftest'
+  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
+  APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
+
+  COMPUTE_PARAMS = {
+    'service_name' => COMPUTE_SERVICE_NAME,
+    'log_name' => 'test',
+    'labels' => {
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => ['strValue', 'instance'],
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => ['strValue', VM_ID]
+    }
+  }
+
+  VMENGINE_PARAMS = {
+    'service_name' => APPENGINE_SERVICE_NAME,
+    'log_name' => "#{APPENGINE_SERVICE_NAME}%2Ftest",
+    'labels' => {
+      "#{APPENGINE_SERVICE_NAME}/module_id" => [
+        'strValue', MANAGED_VM_BACKEND_NAME],
+      "#{APPENGINE_SERVICE_NAME}/version_id" => [
+        'strValue', MANAGED_VM_BACKEND_VERSION],
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => ['strValue', 'instance'],
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => ['strValue', VM_ID]
+    }
+  }
 
   def create_driver(conf=PRIVATE_KEY_CONFIG)
     Fluent::Test::BufferedOutputTestDriver.new(
@@ -139,8 +160,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
     d.run
-    assert_equal 1, @logs_sent.length
-    verify_log_entries(1)
+    verify_log_entries(1, COMPUTE_PARAMS)
   end
 
   def test_multiple_logs
@@ -153,8 +173,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       @logs_sent = []
       n.times { |i| d.emit({'message' => log_entry(i)}) }
       d.run
-      assert_equal n, @logs_sent.length
-      verify_log_entries(n)
+      verify_log_entries(n, COMPUTE_PARAMS)
     end
   end
 
@@ -163,8 +182,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
     d.run
-    assert_equal 1, @logs_sent.length
-    verify_managed_vm_log_entries(1)
+    verify_log_entries(1, VMENGINE_PARAMS)
   end
 
   def test_multiple_managed_vm_logs
@@ -177,16 +195,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       @logs_sent = []
       n.times { |i| d.emit({'message' => log_entry(i)}) }
       d.run
-      assert_equal n, @logs_sent.length
-      verify_managed_vm_log_entries(n)
+      verify_log_entries(n, VMENGINE_PARAMS)
     end
   end
 
   private
 
-  def uri_for_log(log_name)
+  def uri_for_log(config)
     'https://www.googleapis.com/logging/v1beta/projects/' + PROJECT_ID +
-        '/logs/' + log_name + '/entries:write'
+        '/logs/' + config['log_name'] + '/entries:write'
   end
 
   def stub_metadata_request(metadata_path, response_body)
@@ -208,8 +225,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'test log entry ' + i.to_s
   end
 
-  def check_labels(entry, expected_labels)
-    entry['metadata']['labels'].each do |label|
+  def check_labels(entry, common_labels, expected_labels)
+    # TODO(salty) test/handle overlap between common_labels and entry labels
+    all_labels = common_labels.to_a + entry['metadata']['labels'].to_a
+    all_labels.each do |label|
       key = label['key']
       assert expected_labels.has_key?(key), "Unexpected label #{label}"
       expected_type = expected_labels[key][0]
@@ -219,57 +238,22 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal label[expected_type], expected_value,
           "Value mismatch - expected #{expected_value} in #{label}"
     end
-    assert_equal expected_labels.length, entry['metadata']['labels'].length,
+    assert_equal expected_labels.length, all_labels.length,
         ("Expected #{expected_labels.length} labels, got " +
-         "#{entry['metadata']['labels'].length}")
+         "#{all_labels.length}")
   end
 
-  # TODO(salty) refactor these verify_* methods
-  def verify_log_entries(n)
-    @total_requests += n
-    assert_requested(:post, uri_for_log(COMPUTE_LOG_NAME),
-                     :times=>@total_requests)
+  def verify_log_entries(n, params)
     i = 0
     @logs_sent.each do |batch|
-      # TODO(salty) handle common_labels
       batch['entries'].each do |entry|
-        assert_equal "test log entry #{i}", entry['textPayload']
+        assert_equal "test log entry #{i}", entry['textPayload'], batch
         assert_equal ZONE, entry['metadata']['zone']
-        assert_equal 'compute.googleapis.com', entry['metadata']['serviceName']
-        check_labels entry, {
-          'compute.googleapis.com/resource_type' => ['strValue', 'instance'],
-          'compute.googleapis.com/resource_id' => ['strValue', VM_ID]
-        }
+        assert_equal params['service_name'], entry['metadata']['serviceName']
+        check_labels entry, batch['commonLabels'], params['labels']
+        i += 1
+        assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
       end
-      i += 1
-      assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
-    end
-    assert i == n, "Number of entries #{i} does not match expected number #{n}"
-  end
-
-  def verify_managed_vm_log_entries(n)
-    @total_requests += n
-    assert_requested(:post, uri_for_log(APPENGINE_LOG_NAME),
-                     :times=>@total_requests)
-    i = 0
-    @logs_sent.each do |batch|
-      # TODO(salty) handle common_labels
-      batch['entries'].each do |entry|
-        assert_equal "test log entry #{i}", entry['textPayload']
-        assert_equal ZONE, entry['metadata']['zone']
-        assert_equal 'appengine.googleapis.com',
-            entry['metadata']['serviceName']
-        check_labels entry, {
-          'appengine.googleapis.com/module_id' => [
-            'strValue', MANAGED_VM_BACKEND_NAME],
-          'appengine.googleapis.com/version_id' => [
-            'strValue', MANAGED_VM_BACKEND_VERSION],
-          'compute.googleapis.com/resource_type' => ['strValue', 'instance'],
-          'compute.googleapis.com/resource_id' => ['strValue', VM_ID]
-        }
-      end
-      i += 1
-      assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
     end
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
