@@ -125,7 +125,7 @@ module Fluent
     end
 
     def format(tag, time, record)
-      [tag, time, record['message']].to_msgpack
+      [tag, time, record].to_msgpack
     end
 
     def add_label(labels, key, type, value)
@@ -153,11 +153,17 @@ module Fluent
               'serviceName' => @service_name,
               'projectId' => @project_id,
               'zone' => @zone,
-              'timeNanos' => time * 1000000000
+              'timeNanos' => (record['timeNanos'] or time * 1000000000)
             },
-            'textPayload' => record
-            # TODO(salty): severity?
+            'textPayload' => record['message']
+            # TODO(salty): default severity?
           }
+          if record.has_key?('severity')
+            entry['metadata']['severity'] = record['severity']
+          end
+          if record.has_key?('thread')
+            entry['metadata']['thread'] = record['thread']
+          end
           write_log_entries_request['entries'].push(entry)
         end
 
