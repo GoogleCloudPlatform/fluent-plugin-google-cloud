@@ -163,6 +163,33 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_log_entries(1, COMPUTE_PARAMS)
   end
 
+  def test_timestamps
+    d = create_driver(PRIVATE_KEY_CONFIG)
+    expected_ts = []
+    emit_index = 0
+    [Time.at(123456.789), Time.at(0), Time.now].each do |ts|
+      # Test both the "native" fluentd timestamp and timeNanos.
+      d.emit({'message' => log_entry(emit_index)}, ts.to_f)
+      # The native timestamp currently only supports second granularity
+      # (fluentd issue #461), so strip nanoseconds from the expected value.
+      expected_ts.push(Time.at(ts.tv_sec))
+      emit_index += 1
+      d.emit({'message' => log_entry(emit_index),
+              'timeNanos' => ts.tv_sec * 1000000000 + ts.tv_nsec})
+      expected_ts.push(ts)
+      emit_index += 1
+    end
+    d.run
+    verify_index = 0
+    verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
+      assert_equal expected_ts[verify_index].tv_sec,
+        entry['metadata']['timestamp']['seconds'], entry
+      assert_equal expected_ts[verify_index].tv_nsec,
+        entry['metadata']['timestamp']['nanos'], entry
+      verify_index += 1
+    end
+  end
+
   def test_multiple_logs
     d = create_driver(PRIVATE_KEY_CONFIG)
     # Only test a few values because otherwise the test can take minutes.
@@ -243,6 +270,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
          "#{all_labels.length}")
   end
 
+  # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params)
     i = 0
     @logs_sent.each do |batch|
@@ -251,6 +279,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         assert_equal ZONE, entry['metadata']['zone']
         assert_equal params['service_name'], entry['metadata']['serviceName']
         check_labels entry, batch['commonLabels'], params['labels']
+        if (block_given?)
+          yield(entry)
+        end
         i += 1
         assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
       end

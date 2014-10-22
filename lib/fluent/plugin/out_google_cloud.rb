@@ -148,12 +148,23 @@ module Fluent
           'entries' => [],
         }
         arr.each do |time, record|
+          if (record.has_key?('timeNanos'))
+            ts_secs = (record['timeNanos'] / 1000000000).to_i
+            ts_nanos = record['timeNanos'] % 1000000000
+          else
+            timestamp = Time.at(time)
+            ts_secs = timestamp.tv_sec
+            ts_nanos = timestamp.tv_usec
+          end
           entry = {
             'metadata' => {
               'serviceName' => @service_name,
               'projectId' => @project_id,
               'zone' => @zone,
-              'timeNanos' => (record['timeNanos'] or time * 1000000000)
+              'timestamp' => {
+                'seconds' => ts_secs,
+                'nanos' => ts_nanos
+              },
             },
             'textPayload' => record['message']
             # TODO(salty): default severity?
