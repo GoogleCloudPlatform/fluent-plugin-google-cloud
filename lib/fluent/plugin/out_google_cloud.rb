@@ -172,9 +172,6 @@ module Fluent
           if record.has_key?('severity')
             entry['metadata']['severity'] = record['severity']
           end
-          if record.has_key?('thread')
-            entry['metadata']['thread'] = record['thread']
-          end
           write_log_entries_request['entries'].push(entry)
         end
 
