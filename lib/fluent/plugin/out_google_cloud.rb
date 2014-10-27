@@ -154,7 +154,7 @@ module Fluent
           else
             timestamp = Time.at(time)
             ts_secs = timestamp.tv_sec
-            ts_nanos = timestamp.tv_usec
+            ts_nanos = timestamp.tv_nsec
           end
           entry = {
             'metadata' => {
