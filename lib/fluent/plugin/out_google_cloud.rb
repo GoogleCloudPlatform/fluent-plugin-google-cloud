@@ -186,18 +186,31 @@ module Fluent
         url = ('https://www.googleapis.com/logging/v1beta/projects/' +
                "#{@project_id}/logs/#{log_name}/entries:write")
 
-        client = api_client()
         # TODO: Either handle errors locally or send all logs in a single
         # request. Otherwise if a single request raises an error, the buffering
         # plugin will retry the entire block, potentially leading to duplicates.
         # Adding sequence numbers could help with this as well.
-        request = client.generate_request({
-          :uri => url,
-          :body_object => write_log_entries_request,
-          :http_method => 'POST',
-          :authenticated => true
-        })
-        client.execute!(request)
+        begin
+          client = api_client()
+          request = client.generate_request({
+            :uri => url,
+            :body_object => write_log_entries_request,
+            :http_method => 'POST',
+            :authenticated => true
+          })
+          client.execute!(request)
+        # Allow most exceptions to propagate, which will cause fluentd to
+        # retry (with backoff). However, most ClientErrors indicate a problem
+        # with the request itself and should not be retried - the exception
+        # is 'Invalid Credentials' which we can retry.
+        rescue Google::APIClient::ClientError => error
+          if (error.message == 'Invalid Credentials')
+            raise error
+          end
+          dropped = write_log_entries_request['entries'].length
+          $log.warn "Dropping #{dropped} log message(s)",
+              :error_class=>error.class.to_s, :error=>error.to_s
+        end
       end
     end
 
@@ -213,7 +226,8 @@ module Fluent
     def init_api_client
       @client = Google::APIClient.new(
         :application_name => 'Fluentd Google Cloud Logging plugin',
-        :application_version => '0.1.0')
+        :application_version => '0.1.0',
+        :retries => 1)
 
       if @auth_method == 'private_key'
         key = Google::APIClient::PKCS12.load_key(@private_key_path,

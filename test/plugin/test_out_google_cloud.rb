@@ -34,6 +34,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                 :headers => {'Content-Length' => FAKE_AUTH_TOKEN})
 
     @logs_sent = []
+  end
+
+  def setup_logging_stubs
     [COMPUTE_PARAMS, VMENGINE_PARAMS].each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
@@ -145,7 +148,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_managed_vm_metadata_loading
-    set_up_managed_vm_metadata_stubs
+    setup_managed_vm_metadata_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.run
     assert_equal PROJECT_ID, d.instance.project_id
@@ -157,6 +160,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log
+    setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
     d.run
@@ -164,6 +168,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_timestamps
+    setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     expected_ts = []
     emit_index = 0
@@ -191,6 +196,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_multiple_logs
+    setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     # Only test a few values because otherwise the test can take minutes.
     [2, 3, 5, 11, 50].each do |n|
@@ -204,8 +210,59 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_client_error
+    # The API Client should not retry this and the plugin should consume
+    # the exception.
+    # Note that the current release of the API client (0.7-1) does actually
+    # retry the request; this appears to be due to a bug which has since been
+    # fixed but not released (see below).
+    stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
+        :status => 400, :body => "Bad Request")
+    d = create_driver(PRIVATE_KEY_CONFIG)
+    d.emit({'message' => log_entry(0)})
+    d.run
+    # TODO(salty) times should be 1, change it when the API client is fixed.
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
+  end
+
+  def test_client_error_invalid_credentials
+    # we expect this to retry once, then throw the error.
+    stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
+        :status => 401, :body => "Invalid Credentials")
+    d = create_driver(PRIVATE_KEY_CONFIG)
+    d.emit({'message' => log_entry(0)})
+    exception_count = 0
+    begin
+      d.run
+    rescue Google::APIClient::ClientError => error
+      assert_equal 'Invalid Credentials', error.message
+      exception_count += 1
+    end
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
+    assert_equal 1, exception_count
+  end
+
+  def test_server_error
+    # The API client should retry this once, then throw an exception which
+    # gets propagated through the plugin.
+    stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
+        :status => 500, :body => "Server Error")
+    d = create_driver(PRIVATE_KEY_CONFIG)
+    d.emit({'message' => log_entry(0)})
+    exception_count = 0
+    begin
+      d.run
+    rescue Google::APIClient::ServerError => error
+      assert_equal 'Server Error', error.message
+      exception_count += 1
+    end
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
+    assert_equal 1, exception_count
+  end
+
   def test_one_managed_vm_log
-    set_up_managed_vm_metadata_stubs
+    setup_managed_vm_metadata_stubs
+    setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
     d.run
@@ -213,7 +270,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_multiple_managed_vm_logs
-    set_up_managed_vm_metadata_stubs
+    setup_managed_vm_metadata_stubs
+    setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
@@ -239,7 +297,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                 :headers => {'Content-Length' => response_body.length})
   end
 
-  def set_up_managed_vm_metadata_stubs
+  def setup_managed_vm_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
       "attribute1\ngae_backend_name\ngae_backend_version\nlast_attribute")
