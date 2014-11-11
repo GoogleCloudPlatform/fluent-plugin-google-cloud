@@ -8,8 +8,8 @@ Gem::Specification.new do |gem|
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
 
-  gem.files         = `git ls-files`.split('\n')
-  gem.test_files     = `git ls-files -- {test}/*`.split("\n")
+  gem.files         = Dir['**/*'].keep_if { |file| File.file?(file) }
+  gem.test_files    = gem.files.grep(%r{^(test)})
   gem.require_paths = ['lib']
 
   gem.add_runtime_dependency 'fluentd', '~> 0.10'
