@@ -167,7 +167,7 @@ module Fluent
               },
             },
             'textPayload' => record['message']
-            # TODO(salty): default severity?
+            # TODO: default severity?
           }
           if record.has_key?('severity')
             entry['metadata']['severity'] = record['severity']
@@ -175,21 +175,12 @@ module Fluent
           write_log_entries_request['entries'].push(entry)
         end
 
-        # TODO: (salty: unsure of the origin of this - investigate) Ignore the
-        # extra info that can be automatically appended to the tag for certain
-        # log types such as syslog.
-
         # Add a prefix to VMEngines logs to prevent namespace collisions,
         # and also escape the log name.
         log_name = CGI::escape(@running_on_managed_vm ?
                                "#{APPENGINE_SERVICE}/#{tag}" : tag)
         url = ('https://www.googleapis.com/logging/v1beta/projects/' +
                "#{@project_id}/logs/#{log_name}/entries:write")
-
-        # TODO: Either handle errors locally or send all logs in a single
-        # request. Otherwise if a single request raises an error, the buffering
-        # plugin will retry the entire block, potentially leading to duplicates.
-        # Adding sequence numbers could help with this as well.
         begin
           client = api_client()
           request = client.generate_request({
@@ -226,7 +217,7 @@ module Fluent
     def init_api_client
       @client = Google::APIClient.new(
         :application_name => 'Fluentd Google Cloud Logging plugin',
-        :application_version => '0.1.0',
+        :application_version => '0.1.1',
         :retries => 1)
 
       if @auth_method == 'private_key'
