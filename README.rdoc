@@ -1,0 +1,35 @@
+= Google Cloud Platform plugin for {fluentd}[http://github.com/fluent/fluentd]
+
+fluent-plugin-google-cloud sends logs to the Google Cloud Platform logging API.
+
+== Installation
+
+The gem is hosted at {RubyGems.org}[http://rubygems.org]. You can install the gem as follows:
+
+    $ gem install fluent-plugin-google-cloud
+
+== Configuration
+
+    <match **>
+      type google_cloud
+      auth_method <method>
+      private_key_email <address>
+      private_key_path <path>
+    </match>
+
+Supported options:
+* auth_method: either 'compute_engine_service_account' or 'private_key' (default: compute_engine_service_account)
+* private_key_email: email address of your project's service account.
+* private_key_path: path to a file containing service account credentials.
+
+private_key_email and private_key_path are required if auth_method is
+'private_key', otherwise they are ignored.
+
+== Caveats
+
+This plugin currently only supports being run on a Google Compute Engine VM because it grabs its authentication token as well as important metadata from the VM metadata server.
+
+== Copyright
+
+Copyright:: Copyright 2014 Google Inc. All rights reserved.
+License::   Apache License, Version 2.0
