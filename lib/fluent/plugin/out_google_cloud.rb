@@ -19,6 +19,7 @@ module Fluent
     # Constants for Google service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
     COMPUTE_SERVICE = 'compute.googleapis.com'
+    DATAFLOW_SERVICE = 'dataflow.googleapis.com'
 
     # Legal values:
     # 'compute_engine_service_account' - Use the service account automatically
@@ -92,10 +93,6 @@ module Fluent
       @vm_id = fetch_metadata('instance/id')
       # TODO: Send instance tags and/or hostname with the logs as well?
       @common_labels = []
-      add_label(common_labels, "#{COMPUTE_SERVICE}/resource_type",
-                'strValue', 'instance')
-      add_label(common_labels, "#{COMPUTE_SERVICE}/resource_id",
-                'strValue', @vm_id)
 
       # If this is running on a Managed VM, grab the relevant App Engine
       # metadata as well.
@@ -114,9 +111,22 @@ module Fluent
                   'strValue', @gae_backend_name)
         add_label(common_labels, "#{APPENGINE_SERVICE}/version_id",
                   'strValue', @gae_backend_version)
+      elsif (attributes.include?('job_id'))
+        @running_on_managed_vm = false
+        @service_name = DATAFLOW_SERVICE
+        @dataflow_job_id = fetch_metadata('instance/attributes/job_id')
+        add_label(common_labels, "#{DATAFLOW_SERVICE}/job_id",
+                  'strValue', @dataflow_job_id)
       else
         @running_on_managed_vm = false
         @service_name = COMPUTE_SERVICE
+      end
+
+      if (@service_name != DATAFLOW_SERVICE)
+        add_label(common_labels, "#{COMPUTE_SERVICE}/resource_type",
+                  'strValue', 'instance')
+        add_label(common_labels, "#{COMPUTE_SERVICE}/resource_id",
+                  'strValue', @vm_id)
       end
     end
 
@@ -217,7 +227,7 @@ module Fluent
     def init_api_client
       @client = Google::APIClient.new(
         :application_name => 'Fluentd Google Cloud Logging plugin',
-        :application_version => '0.1.1',
+        :application_version => '0.1.2',
         :retries => 1)
 
       if @auth_method == 'private_key'
