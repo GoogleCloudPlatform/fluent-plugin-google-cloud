@@ -1,7 +1,7 @@
 Gem::Specification.new do |gem|
   gem.name          = 'fluent-plugin-google-cloud'
-  gem.description   = %q{Fluentd plugin to stream logs to the Google Cloud Platform's logs API, which will make them viewable in the Developer Console's log viewer and can optionally store them in Google Cloud Storage and/or BigQuery. This is an official Google Ruby gem.}
-  gem.summary       = %q{Fluentd plugin to stream logs to the Google Cloud Platform's logs API}
+  gem.description   = %q{Fluentd plugin to stream logs to the Google Cloud Platform's logging API, which will make them viewable in the Developer Console's log viewer and can optionally store them in Google Cloud Storage and/or BigQuery. This is an official Google Ruby gem.}
+  gem.summary       = %q{Fluentd plugin to stream logs to the Google Cloud Platform's logging API}
   gem.homepage      = 'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache 2.0'
   gem.version       = '0.1.2'
