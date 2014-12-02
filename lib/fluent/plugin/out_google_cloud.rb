@@ -208,6 +208,8 @@ module Fluent
           if (error.message == 'Invalid Credentials')
             raise error
           end
+          # fall through to next rescue clause
+        rescue JSON::GeneratorError => error
           dropped = write_log_entries_request['entries'].length
           $log.warn "Dropping #{dropped} log message(s)",
               :error_class=>error.class.to_s, :error=>error.to_s
@@ -227,7 +229,7 @@ module Fluent
     def init_api_client
       @client = Google::APIClient.new(
         :application_name => 'Fluentd Google Cloud Logging plugin',
-        :application_version => '0.1.2',
+        :application_version => '0.1.3',
         :retries => 1)
 
       if @auth_method == 'private_key'
