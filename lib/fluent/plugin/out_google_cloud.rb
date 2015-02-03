@@ -35,6 +35,10 @@ module Fluent
     config_param :private_key_email, :string, :default => nil
     config_param :private_key_path, :string, :default => nil
     config_param :private_key_passphrase, :string, :default => 'notasecret'
+    config_param :fetch_gce_metadata, :bool, :default => true
+    config_param :project_id, :string, :default => nil
+    config_param :zone, :string, :default => nil
+    config_param :vm_id, :string, :default => nil
 
     # TODO: Add a log_name config option rather than just using the tag?
 
@@ -79,6 +83,13 @@ module Fluent
             ('Unrecognized "auth_method" parameter. Please specify either ' +
              '"compute_engine_service_account" or "private_key".')
       end
+
+      unless @fetch_gce_metadata
+        unless @project_id && @zone && @vm_id
+          raise Fluent::ConfigError,
+              ('Please specify "project_id", "zone" and "vm_id" if you set "fetch_gce_metadata" to false')
+        end
+      end
     end
 
     def start
@@ -88,11 +99,13 @@ module Fluent
 
       @successful_call = false
 
-      # Grab metadata about the Google Compute Engine instance that we're on.
-      @project_id = fetch_metadata('project/project-id')
-      fully_qualified_zone = fetch_metadata('instance/zone')
-      @zone = fully_qualified_zone.rpartition('/')[2]
-      @vm_id = fetch_metadata('instance/id')
+      if @fetch_gce_metadata
+        # Grab metadata about the Google Compute Engine instance that we're on.
+        @project_id = fetch_metadata('project/project-id')
+        fully_qualified_zone = fetch_metadata('instance/zone')
+        @zone = fully_qualified_zone.rpartition('/')[2]
+        @vm_id = fetch_metadata('instance/id')
+      end
       # TODO: Send instance tags and/or hostname with the logs as well?
       @common_labels = {}
 

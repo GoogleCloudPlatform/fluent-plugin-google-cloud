@@ -51,6 +51,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   VM_ID = '9876543210'
 
+  CUSTOM_PROJECT_ID = 'test-custom-project-id'
+  CUSTOM_ZONE = 'us-custom-central1-b'
+  CUSTOM_FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
+  CUSTOM_VM_ID = 'C9876543210'
+
   MANAGED_VM_BACKEND_NAME = 'default'
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'
 
@@ -66,6 +71,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
   ]
 
+  CUSTOM_METADATA_CONFIG = %[
+    fetch_gce_metadata false
+    project_id #{CUSTOM_PROJECT_ID}
+    zone #{CUSTOM_ZONE}
+    vm_id #{CUSTOM_VM_ID}
+  ]
+
   INVALID_CONFIG1 = %[
     auth_method private_key
     private_key_email nobody@example.com
@@ -76,6 +88,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   ]
   INVALID_CONFIG3 = %[
     auth_method service_account
+  ]
+  INVALID_CONFIG4 = %[
+    fetch_gce_metadata false
+    project_id #{CUSTOM_PROJECT_ID}
+    zone #{CUSTOM_ZONE}
   ]
 
   COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
@@ -116,6 +133,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 'private_key', d.instance.auth_method
   end
 
+  def test_configure_custom_metadata
+    d = create_driver(CUSTOM_METADATA_CONFIG)
+    assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
+    assert_equal CUSTOM_ZONE, d.instance.zone
+    assert_equal CUSTOM_VM_ID, d.instance.vm_id
+  end
+
   def test_configure_invalid_configs
     begin
       d = create_driver(INVALID_CONFIG1)
@@ -134,6 +158,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert false
     rescue Fluent::ConfigError => error
       assert error.message.include? 'auth_method'
+    end
+    begin
+      d = create_driver(INVALID_CONFIG4)
+      assert false
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'fetch_gce_metadata'
     end
   end
 
@@ -156,6 +186,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal true, d.instance.running_on_managed_vm
     assert_equal MANAGED_VM_BACKEND_NAME, d.instance.gae_backend_name
     assert_equal MANAGED_VM_BACKEND_VERSION, d.instance.gae_backend_version
+  end
+
+  def test_gce_metadata_does_not_load_when_fetch_gce_metadata_is_false
+    d = create_driver(CUSTOM_METADATA_CONFIG)
+    d.run
+    assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
+    assert_equal CUSTOM_ZONE, d.instance.zone
+    assert_equal CUSTOM_VM_ID, d.instance.vm_id
+    assert_equal false, d.instance.running_on_managed_vm
   end
 
   def test_one_log
