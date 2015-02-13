@@ -84,8 +84,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'service_name' => COMPUTE_SERVICE_NAME,
     'log_name' => 'test',
     'labels' => {
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => ['strValue', 'instance'],
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => ['strValue', VM_ID]
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID
     }
   }
 
@@ -93,12 +93,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'service_name' => APPENGINE_SERVICE_NAME,
     'log_name' => "#{APPENGINE_SERVICE_NAME}%2Ftest",
     'labels' => {
-      "#{APPENGINE_SERVICE_NAME}/module_id" => [
-        'strValue', MANAGED_VM_BACKEND_NAME],
-      "#{APPENGINE_SERVICE_NAME}/version_id" => [
-        'strValue', MANAGED_VM_BACKEND_VERSION],
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => ['strValue', 'instance'],
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => ['strValue', VM_ID]
+      "#{APPENGINE_SERVICE_NAME}/module_id" => MANAGED_VM_BACKEND_NAME,
+      "#{APPENGINE_SERVICE_NAME}/version_id" => MANAGED_VM_BACKEND_VERSION,
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID
     }
   }
 
@@ -287,7 +285,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   private
 
   def uri_for_log(config)
-    'https://www.googleapis.com/logging/v1beta/projects/' + PROJECT_ID +
+    'https://logging.googleapis.com/v1beta3/projects/' + PROJECT_ID +
         '/logs/' + config['log_name'] + '/entries:write'
   end
 
@@ -312,16 +310,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def check_labels(entry, common_labels, expected_labels)
     # TODO(salty) test/handle overlap between common_labels and entry labels
-    all_labels = common_labels.to_a + entry['metadata']['labels'].to_a
-    all_labels.each do |label|
-      key = label['key']
-      assert expected_labels.has_key?(key), "Unexpected label #{label}"
-      expected_type = expected_labels[key][0]
-      expected_value = expected_labels[key][1]
-      assert label.has_key?(expected_type),
-          "Type mismatch - expected #{expected_type} in #{label}"
-      assert_equal label[expected_type], expected_value,
-          "Value mismatch - expected #{expected_value} in #{label}"
+    all_labels ||= common_labels
+    all_labels.merge!(entry['metadata']['labels'] || {})
+    all_labels.each do |key, value|
+      assert expected_labels.has_key?(key), "Unexpected label #{key} => #{value}"
+      assert_equal value, expected_labels[key],
+          "Value mismatch - expected #{expected_labels[key]} in #{key} => #{value}"
     end
     assert_equal expected_labels.length, all_labels.length,
         ("Expected #{expected_labels.length} labels, got " +
