@@ -190,7 +190,7 @@ module Fluent
             :http_method => 'POST',
             :authenticated => true
           })
-          client.execute!(request)
+          result = client.execute!(request)
         # Allow most exceptions to propagate, which will cause fluentd to
         # retry (with backoff). However, most ClientErrors indicate a problem
         # with the request itself and should not be retried - the exception
