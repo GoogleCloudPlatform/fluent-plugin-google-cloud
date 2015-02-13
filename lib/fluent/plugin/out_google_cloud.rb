@@ -92,7 +92,7 @@ module Fluent
       @zone = fully_qualified_zone.rpartition('/')[2]
       @vm_id = fetch_metadata('instance/id')
       # TODO: Send instance tags and/or hostname with the logs as well?
-      @common_labels = []
+      @common_labels = {}
 
       # If this is running on a Managed VM, grab the relevant App Engine
       # metadata as well.
@@ -107,26 +107,21 @@ module Fluent
         @gae_backend_version =
             fetch_metadata('instance/attributes/gae_backend_version')
         @service_name = APPENGINE_SERVICE
-        add_label(common_labels, "#{APPENGINE_SERVICE}/module_id",
-                  'strValue', @gae_backend_name)
-        add_label(common_labels, "#{APPENGINE_SERVICE}/version_id",
-                  'strValue', @gae_backend_version)
+        common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
+        common_labels["#{APPENGINE_SERVICE}/version_id"] = @gae_backend_version
       elsif (attributes.include?('job_id'))
         @running_on_managed_vm = false
         @service_name = DATAFLOW_SERVICE
         @dataflow_job_id = fetch_metadata('instance/attributes/job_id')
-        add_label(common_labels, "#{DATAFLOW_SERVICE}/job_id",
-                  'strValue', @dataflow_job_id)
+        common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
       else
         @running_on_managed_vm = false
         @service_name = COMPUTE_SERVICE
       end
 
       if (@service_name != DATAFLOW_SERVICE)
-        add_label(common_labels, "#{COMPUTE_SERVICE}/resource_type",
-                  'strValue', 'instance')
-        add_label(common_labels, "#{COMPUTE_SERVICE}/resource_id",
-                  'strValue', @vm_id)
+        common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
+        common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
       end
     end
 
@@ -136,10 +131,6 @@ module Fluent
 
     def format(tag, time, record)
       [tag, time, record].to_msgpack
-    end
-
-    def add_label(labels, key, type, value)
-      labels.push({'key' => key, type => value})
     end
 
     def write(chunk)
@@ -189,7 +180,7 @@ module Fluent
         # and also escape the log name.
         log_name = CGI::escape(@running_on_managed_vm ?
                                "#{APPENGINE_SERVICE}/#{tag}" : tag)
-        url = ('https://www.googleapis.com/logging/v1beta/projects/' +
+        url = ('https://logging.googleapis.com/v1beta3/projects/' +
                "#{@project_id}/logs/#{log_name}/entries:write")
         begin
           client = api_client()
@@ -199,7 +190,7 @@ module Fluent
             :http_method => 'POST',
             :authenticated => true
           })
-          client.execute!(request)
+          result = client.execute!(request)
         # Allow most exceptions to propagate, which will cause fluentd to
         # retry (with backoff). However, most ClientErrors indicate a problem
         # with the request itself and should not be retried - the exception
