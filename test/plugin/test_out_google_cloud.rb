@@ -223,21 +223,41 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
   end
 
-  def test_client_error_invalid_credentials
-    # we expect this to retry once, then throw the error.
+  # helper for the ClientError retriable special cases below.
+  def client_error_helper(message)
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
-        :status => 401, :body => "Invalid Credentials")
+        :status => 401, :body => message)
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
     exception_count = 0
     begin
       d.run
     rescue Google::APIClient::ClientError => error
-      assert_equal 'Invalid Credentials', error.message
+      assert_equal message, error.message
       exception_count += 1
     end
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
     assert_equal 1, exception_count
+  end
+
+  def test_client_error_invalid_credentials
+    client_error_helper("Invalid Credentials")
+  end
+
+  def test_client_error_caller_does_not_have_permission
+    client_error_helper("The caller does not have permission")
+  end
+
+  def test_client_error_request_had_invalid_credentials
+    client_error_helper("Request had invalid credentials.")
+  end
+
+  def test_client_error_project_has_not_enabled_the_api
+    client_error_helper("Project has not enabled the API. Please use Google Developers Console to activate the API for your project.")
+  end
+
+  def test_client_error_unable_to_fetch_accesss_token
+    client_error_helper("Unable to fetch access token (no scopes configured?)")
   end
 
   def test_server_error

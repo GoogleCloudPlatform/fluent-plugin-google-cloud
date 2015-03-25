@@ -192,15 +192,19 @@ module Fluent
           })
           client.execute!(request)
         # Allow most exceptions to propagate, which will cause fluentd to
-        # retry (with backoff). However, most ClientErrors indicate a problem
-        # with the request itself and should not be retried - the exception
-        # is 'Invalid Credentials' which we can retry.
+        # retry (with backoff), but in some cases we catch the error and
+        # drop the request (we will emit a log message in those cases).
         rescue Google::APIClient::ClientError => error
-          if (error.message == 'Invalid Credentials')
+          # Most ClientErrors indicate a problem with the request itself and
+          # should not be retried, unless it is an authentication issue, in
+          # which case we will retry the request via re-raising the exception.
+          if (is_retriable_client_error(error))
             raise error
           end
           log_write_failure(write_log_entries_request, error)
         rescue JSON::GeneratorError => error
+          # This happens if the request contains illegal characters;
+          # do not retry it because it will fail repeatedly.
           dropped = write_log_entries_request['entries'].length
           log_write_failure(write_log_entries_request, error)
         end
@@ -208,6 +212,17 @@ module Fluent
     end
 
     private
+
+    RETRIABLE_CLIENT_ERRORS = Set.new [
+      'Invalid Credentials',
+      'Request had invalid credentials.',
+      'The caller does not have permission',
+      'Project has not enabled the API. Please use Google Developers Console to activate the API for your project.',
+      'Unable to fetch access token (no scopes configured?)']
+
+    def is_retriable_client_error(error)
+      return RETRIABLE_CLIENT_ERRORS.include?(error.message)
+    end
 
     def log_write_failure(request, error)
       dropped = request['entries'].length
@@ -243,7 +258,14 @@ module Fluent
 
     def api_client
       if !@client.authorization.expired?
-        @client.authorization.fetch_access_token!
+        begin
+          @client.authorization.fetch_access_token!
+        rescue MultiJson::ParseError
+          # Workaround an issue in the API client; just re-raise a more
+          # descriptive error for the user (which will still cause a retry).
+          raise Google::APIClient::ClientError,
+            'Unable to fetch access token (no scopes configured?)'
+        end
       end
       return @client
     end
