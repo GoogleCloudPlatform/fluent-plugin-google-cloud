@@ -199,16 +199,21 @@ module Fluent
           if (error.message == 'Invalid Credentials')
             raise error
           end
-          # fall through to next rescue clause
+          log_write_failure(write_log_entries_request, error)
         rescue JSON::GeneratorError => error
           dropped = write_log_entries_request['entries'].length
-          $log.warn "Dropping #{dropped} log message(s)",
-              :error_class=>error.class.to_s, :error=>error.to_s
+          log_write_failure(write_log_entries_request, error)
         end
       end
     end
 
     private
+
+    def log_write_failure(request, error)
+      dropped = request['entries'].length
+      $log.warn "Dropping #{dropped} log message(s)",
+        :error_class=>error.class.to_s, :error=>error.to_s
+    end
 
     def fetch_metadata(metadata_path)
       open('http://metadata/computeMetadata/v1/' + metadata_path,
