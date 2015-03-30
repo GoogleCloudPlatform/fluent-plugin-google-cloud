@@ -31,7 +31,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
       to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
                 :status => 200,
-                :headers => {'Content-Length' => FAKE_AUTH_TOKEN})
+                :headers => {'Content-Length' => FAKE_AUTH_TOKEN,
+                             'Content-Type' => 'application/json' })
 
     @logs_sent = []
   end
@@ -211,16 +212,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_client_error
     # The API Client should not retry this and the plugin should consume
     # the exception.
-    # Note that the current release of the API client (0.7-1) does actually
-    # retry the request; this appears to be due to a bug which has since been
-    # fixed but not released (see below).
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
         :status => 400, :body => "Bad Request")
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
     d.run
-    # TODO(salty) times should be 1, change it when the API client is fixed.
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 1)
   end
 
   # helper for the ClientError retriable special cases below.
