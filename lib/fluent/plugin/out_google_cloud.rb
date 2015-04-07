@@ -86,6 +86,8 @@ module Fluent
 
       init_api_client()
 
+      @successful_call = false
+
       # Grab metadata about the Google Compute Engine instance that we're on.
       @project_id = fetch_metadata('project/project-id')
       fully_qualified_zone = fetch_metadata('instance/zone')
@@ -191,6 +193,12 @@ module Fluent
             :authenticated => true
           })
           client.execute!(request)
+          # Let the user explicitly know when the first call succeeded,
+          # to aid with verification and troubleshooting.
+          if (!@successful_call)
+            @successful_call = true
+            $log.info "Successfully sent to Google Cloud Logging API."
+          end
         # Allow most exceptions to propagate, which will cause fluentd to
         # retry (with backoff), but in some cases we catch the error and
         # drop the request (we will emit a log message in those cases).
@@ -205,7 +213,6 @@ module Fluent
         rescue JSON::GeneratorError => error
           # This happens if the request contains illegal characters;
           # do not retry it because it will fail repeatedly.
-          dropped = write_log_entries_request['entries'].length
           log_write_failure(write_log_entries_request, error)
         end
       end
