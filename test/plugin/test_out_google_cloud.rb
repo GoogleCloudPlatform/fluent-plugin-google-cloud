@@ -119,19 +119,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_configure_invalid_configs
     begin
       d = create_driver(INVALID_CONFIG1)
-      assert_false
+      assert false
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_path'
     end
     begin
       d = create_driver(INVALID_CONFIG2)
-      assert_false
+      assert false
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_email'
     end
     begin
       d = create_driver(INVALID_CONFIG3)
-      assert_false
+      assert false
     rescue Fluent::ConfigError => error
       assert error.message.include? 'auth_method'
     end
@@ -164,6 +164,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit({'message' => log_entry(0)})
     d.run
     verify_log_entries(1, COMPUTE_PARAMS)
+  end
+
+  def test_struct_payload_log
+    setup_logging_stubs
+    d = create_driver(PRIVATE_KEY_CONFIG)
+    d.emit({'msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000})
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      assert_equal 3, entry['structPayload'].size, entry
+      assert_equal "test log entry 0", entry['structPayload']['msg'], entry
+      assert_equal 'test', entry['structPayload']['tag2'], entry
+      assert_equal 5000, entry['structPayload']['data'], entry
+    end
   end
 
   def test_timestamps
@@ -340,11 +353,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params)
+  def verify_log_entries(n, params, payload_type='textPayload')
     i = 0
     @logs_sent.each do |batch|
       batch['entries'].each do |entry|
-        assert_equal "test log entry #{i}", entry['textPayload'], batch
+        assert entry.has_key?(payload_type)
+        if (payload_type == 'textPayload')
+          # Check the payload for textPayload, otherwise it is up to the caller.
+          assert_equal "test log entry #{i}", entry['textPayload'], batch
+        end
+
         assert_equal ZONE, entry['metadata']['zone']
         assert_equal params['service_name'], entry['metadata']['serviceName']
         check_labels entry, batch['commonLabels'], params['labels']
