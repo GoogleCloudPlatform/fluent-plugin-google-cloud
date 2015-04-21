@@ -154,6 +154,7 @@ module Fluent
           if (record.has_key?('timeNanos'))
             ts_secs = (record['timeNanos'] / 1000000000).to_i
             ts_nanos = record['timeNanos'] % 1000000000
+            record.delete('timeNanos')
           else
             timestamp = Time.at(time)
             ts_secs = timestamp.tv_sec
@@ -169,11 +170,19 @@ module Fluent
                 'nanos' => ts_nanos
               },
             },
-            'textPayload' => record['message']
-            # TODO: default severity?
           }
+          # TODO: default severity?
           if record.has_key?('severity')
             entry['metadata']['severity'] = record['severity']
+            record.delete('severity')
+          end
+
+          # use textPayload if the only remainaing key is 'message',
+          # otherwise use a struct.
+          if (record.size == 1 && record.has_key?('message'))
+            entry['textPayload'] = record['message']
+          else
+            entry['structPayload'] = record
           end
           write_log_entries_request['entries'].push(entry)
         end
