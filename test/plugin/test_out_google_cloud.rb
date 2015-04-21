@@ -207,6 +207,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_severities
+    setup_logging_stubs
+    d = create_driver(PRIVATE_KEY_CONFIG)
+    expected_severity = []
+    emit_index = 0
+    # Array of pairs of [parsed_severity, expected_severity]
+    [['INFO', 'INFO'], ['warn', 'WARNING'], ['E', 'ERROR'],
+     ['BLAH', 'DEFAULT'], ['105', 100], ['', 'DEFAULT']].each do |sev|
+      d.emit({'message' => log_entry(emit_index), 'severity' => sev[0]})
+      expected_severity.push(sev[1])
+      emit_index += 1
+    end
+    d.run
+    verify_index = 0
+    verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
+      assert_equal expected_severity[verify_index],
+        entry['metadata']['severity'], entry
+      verify_index += 1
+    end
+  end
+
   def test_multiple_logs
     setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
@@ -310,6 +331,69 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       d.run
       verify_log_entries(n, VMENGINE_PARAMS)
     end
+  end
+
+  # Make parse_severity public so we can test it.
+  class Fluent::GoogleCloudOutput
+    public :parse_severity
+  end
+
+  def test_parse_severity
+    test_obj = Fluent::GoogleCloudOutput.new
+
+    # known severities should translate to themselves, regardless of case
+    ['DEFAULT', 'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL',
+     'ALERT', 'EMERGENCY'].each do |severity|
+      assert_equal(severity, test_obj.parse_severity(severity))
+      assert_equal(severity, test_obj.parse_severity(severity.downcase))
+      assert_equal(severity, test_obj.parse_severity(severity.capitalize))
+    end
+
+    # numeric levels
+    assert_equal(0, test_obj.parse_severity('0'))
+    assert_equal(100, test_obj.parse_severity('100'))
+    assert_equal(200, test_obj.parse_severity('200'))
+    assert_equal(300, test_obj.parse_severity('300'))
+    assert_equal(400, test_obj.parse_severity('400'))
+    assert_equal(500, test_obj.parse_severity('500'))
+    assert_equal(600, test_obj.parse_severity('600'))
+    assert_equal(700, test_obj.parse_severity('700'))
+    assert_equal(800, test_obj.parse_severity('800'))
+
+    assert_equal(800, test_obj.parse_severity('900'))
+    assert_equal(0, test_obj.parse_severity('1'))
+    assert_equal(400, test_obj.parse_severity('420'))
+    assert_equal(700, test_obj.parse_severity('799'))
+
+    assert_equal('DEFAULT', test_obj.parse_severity('-100'))
+
+    # synonyms for existing log levels
+    assert_equal('ERROR', test_obj.parse_severity('ERR'))
+    assert_equal('WARNING', test_obj.parse_severity('WARN'))
+    assert_equal('CRITICAL', test_obj.parse_severity('FATAL'))
+    assert_equal('DEBUG', test_obj.parse_severity('TRACE'))
+    assert_equal('DEBUG', test_obj.parse_severity('TRACE_INT'))
+    assert_equal('DEBUG', test_obj.parse_severity('FINE'))
+    assert_equal('DEBUG', test_obj.parse_severity('FINER'))
+    assert_equal('DEBUG', test_obj.parse_severity('FINEST'))
+
+    # single letters.
+    assert_equal('DEBUG', test_obj.parse_severity('D'))
+    assert_equal('INFO', test_obj.parse_severity('I'))
+    assert_equal('NOTICE', test_obj.parse_severity('N'))
+    assert_equal('WARNING', test_obj.parse_severity('W'))
+    assert_equal('ERROR', test_obj.parse_severity('E'))
+    assert_equal('CRITICAL', test_obj.parse_severity('C'))
+    assert_equal('ALERT', test_obj.parse_severity('A'))
+    assert_equal('ERROR', test_obj.parse_severity('e'))
+
+    assert_equal('DEFAULT', test_obj.parse_severity('x'))
+    assert_equal('DEFAULT', test_obj.parse_severity('-'))
+
+    # anything else should translate to 'DEFAULT'
+    assert_equal('DEFAULT', test_obj.parse_severity(''))
+    assert_equal('DEFAULT', test_obj.parse_severity('garbage'))
+    assert_equal('DEFAULT', test_obj.parse_severity('er'))
   end
 
   private
