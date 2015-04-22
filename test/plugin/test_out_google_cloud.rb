@@ -362,10 +362,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
     assert_equal(800, test_obj.parse_severity('900'))
     assert_equal(0, test_obj.parse_severity('1'))
+    assert_equal(100, test_obj.parse_severity('105'))
     assert_equal(400, test_obj.parse_severity('420'))
     assert_equal(700, test_obj.parse_severity('799'))
 
+    assert_equal(100, test_obj.parse_severity('105 '))
+    assert_equal(100, test_obj.parse_severity('     105'))
+    assert_equal(100, test_obj.parse_severity('     105    '))
+
     assert_equal('DEFAULT', test_obj.parse_severity('-100'))
+    assert_equal('DEFAULT', test_obj.parse_severity('105 100'))
 
     # synonyms for existing log levels
     assert_equal('ERROR', test_obj.parse_severity('ERR'))
@@ -389,6 +395,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
     assert_equal('DEFAULT', test_obj.parse_severity('x'))
     assert_equal('DEFAULT', test_obj.parse_severity('-'))
+
+    # leading/trailing whitespace should be stripped
+    assert_equal('ERROR', test_obj.parse_severity('  ERROR'))
+    assert_equal('ERROR', test_obj.parse_severity('ERROR  '))
+    assert_equal('ERROR', test_obj.parse_severity('   ERROR  '))
+    assert_equal('ERROR', test_obj.parse_severity("\t  ERROR  "))
+
+    # space in the middle should not be stripped.
+    assert_equal('DEFAULT', test_obj.parse_severity('ER ROR'))
 
     # anything else should translate to 'DEFAULT'
     assert_equal('DEFAULT', test_obj.parse_severity(''))

@@ -261,7 +261,7 @@ module Fluent
 
     # Translates other severity strings to one of the valid values above.
     SEVERITY_TRANSLATIONS = {
-      'ERR' => 'ERROR',
+      # log4j levels (both current and obsolete).
       'WARN' => 'WARNING',
       'FATAL' => 'CRITICAL',
       'TRACE' => 'DEBUG',
@@ -269,6 +269,7 @@ module Fluent
       'FINE' => 'DEBUG',
       'FINER' => 'DEBUG',
       'FINEST' => 'DEBUG',
+      # single-letter levels.  Note E->ERROR and D->DEBUG.
       'D' => 'DEBUG',
       'I' => 'INFO',
       'N' => 'NOTICE',
@@ -276,21 +277,22 @@ module Fluent
       'E' => 'ERROR',
       'C' => 'CRITICAL',
       'A' => 'ALERT',
+      # other misc. translations.
+      'ERR' => 'ERROR',
     }
 
     def parse_severity(severity_str)
       # The API is case insensitive, but uppercase to make things simpler.
-      severity = severity_str.upcase
+      severity = severity_str.upcase.strip
 
       # If the severity is already valid, just return it.
       if (VALID_SEVERITIES.include?(severity))
         return severity
       end
 
-      # If the severity is an integer or a string containing an integer,
-      # return it as an integer, truncated to the closest valid value
-      # (multiples of 100 between 0-800).
-      if ((severity.is_a? Integer) || /\A\d+\z/.match(severity))
+      # If the severity is an integer (string) return it as an integer,
+      # truncated to the closest valid value (multiples of 100 between 0-800).
+      if (/\A\d+\z/.match(severity))
         begin
           numeric_severity = (severity.to_i / 100) * 100
           if (numeric_severity < 0)
