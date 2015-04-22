@@ -269,6 +269,13 @@ module Fluent
       'FINE' => 'DEBUG',
       'FINER' => 'DEBUG',
       'FINEST' => 'DEBUG',
+      'D' => 'DEBUG',
+      'I' => 'INFO',
+      'N' => 'NOTICE',
+      'W' => 'WARNING',
+      'E' => 'ERROR',
+      'C' => 'CRITICAL',
+      'A' => 'ALERT',
     }
 
     def parse_severity(severity_str)
@@ -301,27 +308,6 @@ module Fluent
       # Try to translate the severity.
       if (SEVERITY_TRANSLATIONS.has_key?(severity))
         return SEVERITY_TRANSLATIONS[severity]
-      end
-
-      # If the string is one character long, map it to a known severity if
-      # possible. Note that 'E' maps to 'ERROR' and 'D' to 'DEBUG'.
-      if severity.length == 1
-        case severity
-        when 'D'
-          return 'DEBUG'
-        when 'I'
-          return 'INFO'
-        when 'N'
-          return 'NOTICE'
-        when 'W'
-          return 'WARNING'
-        when 'E'
-          return 'ERROR'
-        when 'C'
-          return 'CRITICAL'
-        when 'A'
-          return 'ALERT'
-        end
       end
 
       # If all else fails, use 'DEFAULT'.
