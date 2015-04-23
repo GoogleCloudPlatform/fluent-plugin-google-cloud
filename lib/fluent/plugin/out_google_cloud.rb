@@ -171,10 +171,11 @@ module Fluent
               },
             },
           }
-          # TODO: default severity?
           if record.has_key?('severity')
-            entry['metadata']['severity'] = record['severity']
+            entry['metadata']['severity'] = parse_severity(record['severity'])
             record.delete('severity')
+          else
+            entry['metadata']['severity'] = 'DEFAULT'
           end
 
           # use textPayload if the only remainaing key is 'message',
@@ -251,6 +252,68 @@ module Fluent
            {'Metadata-Flavor' => 'Google'}) do |f|
         f.read
       end
+    end
+
+    # Values permitted by the API for 'severity' (which is an enum).
+    VALID_SEVERITIES = Set.new [
+      'DEFAULT', 'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL',
+      'ALERT', 'EMERGENCY']
+
+    # Translates other severity strings to one of the valid values above.
+    SEVERITY_TRANSLATIONS = {
+      # log4j levels (both current and obsolete).
+      'WARN' => 'WARNING',
+      'FATAL' => 'CRITICAL',
+      'TRACE' => 'DEBUG',
+      'TRACE_INT' => 'DEBUG',
+      'FINE' => 'DEBUG',
+      'FINER' => 'DEBUG',
+      'FINEST' => 'DEBUG',
+      # single-letter levels.  Note E->ERROR and D->DEBUG.
+      'D' => 'DEBUG',
+      'I' => 'INFO',
+      'N' => 'NOTICE',
+      'W' => 'WARNING',
+      'E' => 'ERROR',
+      'C' => 'CRITICAL',
+      'A' => 'ALERT',
+      # other misc. translations.
+      'ERR' => 'ERROR',
+    }
+
+    def parse_severity(severity_str)
+      # The API is case insensitive, but uppercase to make things simpler.
+      severity = severity_str.upcase.strip
+
+      # If the severity is already valid, just return it.
+      if (VALID_SEVERITIES.include?(severity))
+        return severity
+      end
+
+      # If the severity is an integer (string) return it as an integer,
+      # truncated to the closest valid value (multiples of 100 between 0-800).
+      if (/\A\d+\z/.match(severity))
+        begin
+          numeric_severity = (severity.to_i / 100) * 100
+          if (numeric_severity < 0)
+            return 0
+          elsif (numeric_severity > 800)
+            return 800
+          else
+            return numeric_severity
+          end
+        rescue
+          return 'DEFAULT'
+        end
+      end
+
+      # Try to translate the severity.
+      if (SEVERITY_TRANSLATIONS.has_key?(severity))
+        return SEVERITY_TRANSLATIONS[severity]
+      end
+
+      # If all else fails, use 'DEFAULT'.
+      return 'DEFAULT'
     end
 
     def init_api_client
