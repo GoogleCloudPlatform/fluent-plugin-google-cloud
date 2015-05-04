@@ -21,20 +21,28 @@ module Fluent
     COMPUTE_SERVICE = 'compute.googleapis.com'
     DATAFLOW_SERVICE = 'dataflow.googleapis.com'
 
-    # Legal values:
-    # 'compute_engine_service_account' - Use the service account automatically
-    #   available on Google Compute Engine VMs. Note that this requires that
-    #   the logs.writeonly API scope is enabled on the VM, and scopes can
-    #   only be enabled at the time that a VM is created.
-    # 'private_key' - Use the service account credentials (email, private key
-    #   local file path, and file passphrase) provided below.
-    config_param :auth_method, :string,
-        :default => 'compute_engine_service_account'
+    # Name of the the Google cloud logging write scope.
+    LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
 
-    # Parameters necessary to use the private_key auth_method.
+    # DEPRECATED: auth_method (and support for 'private_key') is deprecated in
+    # favor of Google Application Default Credentials as documented at:
+    # https://developers.google.com/identity/protocols/application-default-credentials
+    # 'private_key' is still accepted to support existing users; any other
+    # value is ignored.
+    config_param :auth_method, :string, :default => nil
+
+    # If set, this specifies the location of the credentials file, overriding
+    # the value of the GOOGLE_APPLICATION_CREDENTIALS environment variable.
+    config_param :application_default_credentials_path, :default => nil
+
+    # DEPRECATED: Parameters necessary to use the private_key auth_method.
     config_param :private_key_email, :string, :default => nil
     config_param :private_key_path, :string, :default => nil
     config_param :private_key_passphrase, :string, :default => 'notasecret'
+
+    # If fetch_gce_metadata is set to true, we obtain the project_id, zone,
+    # and vm_id from the GCE metadata service.  Otherwise, those parameters
+    # must be specified in the config file explicitly.
     config_param :fetch_gce_metadata, :bool, :default => true
     config_param :project_id, :string, :default => nil
     config_param :zone, :string, :default => nil
@@ -58,30 +66,28 @@ module Fluent
       require 'cgi'
       require 'google/api_client'
       require 'google/api_client/auth/compute_service_account'
+      require 'googleauth'
       require 'open-uri'
     end
 
     def configure(conf)
       super
 
-      case @auth_method
-      when 'private_key'
-        if !@private_key_email
-          raise Fluent::ConfigError, ('"private_key_email" must be ' +
-              'specified if auth_method is "private_key"')
-        elsif !@private_key_path
-          raise Fluent::ConfigError, ('"private_key_path" must be ' +
-              'specified if auth_method is "private_key"')
-        elsif !@private_key_passphrase
-          raise Fluent::ConfigError, ('"private_key_passphrase" must be ' +
-              'specified if auth_method is "private_key"')
+      if !@auth_method.nil?
+        $log.warn ('auth_method is deprecated; please migrate to using ' +
+                   'Application Default Credentials.')
+        if @auth_method == 'private_key'
+          if !@private_key_email
+            raise Fluent::ConfigError, ('"private_key_email" must be ' +
+                'specified if auth_method is "private_key"')
+          elsif !@private_key_path
+            raise Fluent::ConfigError, ('"private_key_path" must be ' +
+                'specified if auth_method is "private_key"')
+          elsif !@private_key_passphrase
+            raise Fluent::ConfigError, ('"private_key_passphrase" must be ' +
+                'specified if auth_method is "private_key"')
+          end
         end
-      when 'compute_engine_service_account'
-        # pass
-      else
-        raise Fluent::ConfigError,
-            ('Unrecognized "auth_method" parameter. Please specify either ' +
-             '"compute_engine_service_account" or "private_key".')
       end
 
       unless @fetch_gce_metadata
@@ -339,12 +345,16 @@ module Fluent
         key = Google::APIClient::PKCS12.load_key(@private_key_path,
                                                  @private_key_passphrase)
         jwt_asserter = Google::APIClient::JWTAsserter.new(
-          @private_key_email, 'https://www.googleapis.com/auth/logging.write',
-          key)
+          @private_key_email, LOGGING_SCOPE, key)
         @client.authorization = jwt_asserter.to_authorization
         @client.authorization.expiry = 3600  # 3600s is the max allowed value
       else
-        @client.authorization = Google::APIClient::ComputeServiceAccount.new
+        if !@application_default_credentials_path.nil?
+          ENV['GOOGLE_APPLICATION_CREDENTIALS'] =
+            @application_default_credentials_path
+        end
+        @client.authorization = Google::Auth.get_application_default(
+            LOGGING_SCOPE)
       end
     end
 

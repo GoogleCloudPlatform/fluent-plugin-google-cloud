@@ -14,6 +14,7 @@ Gem::Specification.new do |gem|
 
   gem.add_runtime_dependency 'fluentd', '>= 0.10'
   gem.add_runtime_dependency 'google-api-client', '>= 0.8'
+  gem.add_runtime_dependency 'googleauth', '~> 0.4'
   gem.add_development_dependency "rake", '>= 10.3.2'
   gem.add_development_dependency "webmock", '>= 1.17.0'
   gem.add_development_dependency "test-unit", "~> 3.0.2"
