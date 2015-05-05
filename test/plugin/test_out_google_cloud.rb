@@ -62,11 +62,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   ]
 
   JSON_CREDENTIALS_CONFIG = %[
-    application_default_credentials_path test/plugin/data/credentials.json
+    application_credentials_path test/plugin/data/credentials.json
   ]
 
   INVALID_JSON_CREDENTIALS_CONFIG = %[
-    application_default_credentials_path test/plugin/data/invalid_credentials.json
+    application_credentials_path test/plugin/data/invalid_credentials.json
   ]
 
   PRIVATE_KEY_CONFIG = %[

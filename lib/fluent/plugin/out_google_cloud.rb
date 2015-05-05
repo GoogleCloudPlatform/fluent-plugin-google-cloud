@@ -33,7 +33,7 @@ module Fluent
 
     # If set, this specifies the location of the credentials file, overriding
     # the value of the GOOGLE_APPLICATION_CREDENTIALS environment variable.
-    config_param :application_default_credentials_path, :default => nil
+    config_param :application_credentials_path, :default => nil
 
     # DEPRECATED: Parameters necessary to use the private_key auth_method.
     config_param :private_key_email, :string, :default => nil
@@ -349,9 +349,8 @@ module Fluent
         @client.authorization = jwt_asserter.to_authorization
         @client.authorization.expiry = 3600  # 3600s is the max allowed value
       else
-        if !@application_default_credentials_path.nil?
-          ENV['GOOGLE_APPLICATION_CREDENTIALS'] =
-            @application_default_credentials_path
+        if !@application_credentials_path.nil?
+          ENV['GOOGLE_APPLICATION_CREDENTIALS'] = @application_credentials_path
         end
         @client.authorization = Google::Auth.get_application_default(
             LOGGING_SCOPE)
