@@ -61,14 +61,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   APPLICATION_DEFAULT_CONFIG = %[
   ]
 
-  JSON_CREDENTIALS_CONFIG = %[
-    application_credentials_path test/plugin/data/credentials.json
-  ]
-
-  INVALID_JSON_CREDENTIALS_CONFIG = %[
-    application_credentials_path test/plugin/data/invalid_credentials.json
-  ]
-
   PRIVATE_KEY_CONFIG = %[
     auth_method private_key
     private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
@@ -202,7 +194,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_one_log_with_json_credentials
     setup_logging_stubs
-    d = create_driver(JSON_CREDENTIALS_CONFIG)
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
+    d = create_driver()
     d.emit({'message' => log_entry(0)})
     d.run
     verify_log_entries(1, COMPUTE_PARAMS)
@@ -210,7 +203,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_one_log_with_invalid_json_credentials
     setup_logging_stubs
-    d = create_driver(INVALID_JSON_CREDENTIALS_CONFIG)
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/invalid_credentials.json'
+    d = create_driver()
     d.emit({'message' => log_entry(0)})
     exception_count = 0
     begin
