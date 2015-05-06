@@ -133,25 +133,32 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_configure_invalid_configs
-    setup_gce_metadata_stubs
+    exception_count = 0
     begin
       d = create_driver(INVALID_CONFIG_MISSING_PRIVATE_KEY_PATH)
-      assert false
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_path'
+      exception_count += 1
     end
+    assert_equal 1, exception_count
+
+    exception_count = 0
     begin
       d = create_driver(INVALID_CONFIG_MISSING_PRIVATE_KEY_EMAIL)
-      assert false
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_email'
+      exception_count += 1
     end
+    assert_equal 1, exception_count
+
+    exception_count = 0
     begin
       d = create_driver(INVALID_CONFIG_MISSING_METADATA_VM_ID)
-      assert false
     rescue Fluent::ConfigError => error
       assert error.message.include? 'fetch_gce_metadata'
+      exception_count += 1
     end
+    assert_equal 1, exception_count
   end
 
   def test_metadata_loading
