@@ -14,32 +14,15 @@
 
 require 'helper'
 require 'json'
+require 'mocha/test_unit'
 require 'webmock/test_unit'
 
 class GoogleCloudOutputTest < Test::Unit::TestCase
   def setup
     Fluent::Test.setup
-
-    # Setup stubs used for authentication.
     ENV.delete('GOOGLE_APPLICATION_CREDENTIALS')
     setup_auth_stubs
-
-    # Create stubs for all the GCE metadata lookups the agent needs to make.
-    stub_metadata_request('project/project-id', PROJECT_ID)
-    stub_metadata_request('instance/zone', FULLY_QUALIFIED_ZONE)
-    stub_metadata_request('instance/id', VM_ID)
-    stub_metadata_request('instance/attributes/',
-                          "attribute1\nattribute2\nattribute3")
     @logs_sent = []
-  end
-
-  def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS].each do |params|
-      stub_request(:post, uri_for_log(params)).to_return do |request|
-        @logs_sent << JSON.parse(request.body)
-        {:body => ''}
-      end
-    end
   end
 
   PROJECT_ID = 'test-project-id'
@@ -94,6 +77,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   COMPUTE_PARAMS = {
     'service_name' => COMPUTE_SERVICE_NAME,
     'log_name' => 'test',
+    'project_id' => PROJECT_ID,
+    'zone' => ZONE,
     'labels' => {
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID
@@ -103,11 +88,24 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   VMENGINE_PARAMS = {
     'service_name' => APPENGINE_SERVICE_NAME,
     'log_name' => "#{APPENGINE_SERVICE_NAME}%2Ftest",
+    'project_id' => PROJECT_ID,
+    'zone' => ZONE,
     'labels' => {
       "#{APPENGINE_SERVICE_NAME}/module_id" => MANAGED_VM_BACKEND_NAME,
       "#{APPENGINE_SERVICE_NAME}/version_id" => MANAGED_VM_BACKEND_VERSION,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID
+    }
+  }
+
+  CUSTOM_PARAMS = {
+    'service_name' => COMPUTE_SERVICE_NAME,
+    'log_name' => 'test',
+    'project_id' => CUSTOM_PROJECT_ID,
+    'zone' => CUSTOM_ZONE,
+    'labels' => {
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => CUSTOM_VM_ID
     }
   }
 
@@ -117,11 +115,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_configure_service_account_application_default
+    setup_gce_metadata_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG)
     assert d.instance.auth_method.nil?
   end
 
   def test_configure_service_account_private_key
+    setup_gce_metadata_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     assert_equal 'private_key', d.instance.auth_method
   end
@@ -163,6 +163,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_metadata_loading
+    setup_gce_metadata_stubs
     d = create_driver()
     d.run
     assert_equal PROJECT_ID, d.instance.project_id
@@ -172,6 +173,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_managed_vm_metadata_loading
+    setup_gce_metadata_stubs
     setup_managed_vm_metadata_stubs
     d = create_driver()
     d.run
@@ -184,6 +186,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_gce_metadata_does_not_load_when_fetch_gce_metadata_is_false
+    Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
     d = create_driver(CUSTOM_METADATA_CONFIG)
     d.run
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
@@ -193,6 +196,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log
+    setup_gce_metadata_stubs
     setup_logging_stubs
     d = create_driver()
     d.emit({'message' => log_entry(0)})
@@ -201,6 +205,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_with_json_credentials
+    setup_gce_metadata_stubs
     setup_logging_stubs
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
     d = create_driver()
@@ -210,6 +215,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_with_invalid_json_credentials
+    setup_gce_metadata_stubs
     setup_logging_stubs
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/invalid_credentials.json'
     d = create_driver()
@@ -225,6 +231,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_private_key
+    setup_gce_metadata_stubs
     setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
@@ -232,7 +239,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_log_entries(1, COMPUTE_PARAMS)
   end
 
+  def test_one_log_custom_metadata
+    Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
+    setup_logging_stubs
+    d = create_driver(CUSTOM_METADATA_CONFIG)
+    d.emit({'message' => log_entry(0)})
+    d.run
+    verify_log_entries(1, CUSTOM_PARAMS)
+  end
+
   def test_struct_payload_log
+    setup_gce_metadata_stubs
     setup_logging_stubs
     d = create_driver()
     d.emit({'msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000})
@@ -246,6 +264,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_timestamps
+    setup_gce_metadata_stubs
     setup_logging_stubs
     d = create_driver()
     expected_ts = []
@@ -274,6 +293,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_severities
+    setup_gce_metadata_stubs
     setup_logging_stubs
     d = create_driver()
     expected_severity = []
@@ -295,6 +315,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_multiple_logs
+    setup_gce_metadata_stubs
     setup_logging_stubs
     d = create_driver()
     # Only test a few values because otherwise the test can take minutes.
@@ -310,6 +331,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_client_error
+    setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
@@ -322,6 +344,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # helper for the ClientError retriable special cases below.
   def client_error_helper(message)
+    setup_gce_metadata_stubs
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
         :status => 401, :body => message)
     d = create_driver()
@@ -358,6 +381,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_server_error
+    setup_gce_metadata_stubs
     # The API client should retry this once, then throw an exception which
     # gets propagated through the plugin.
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
@@ -376,6 +400,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_managed_vm_log
+    setup_gce_metadata_stubs
     setup_managed_vm_metadata_stubs
     setup_logging_stubs
     d = create_driver()
@@ -385,6 +410,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_multiple_managed_vm_logs
+    setup_gce_metadata_stubs
     setup_managed_vm_metadata_stubs
     setup_logging_stubs
     d = create_driver()
@@ -480,7 +506,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   private
 
   def uri_for_log(config)
-    'https://logging.googleapis.com/v1beta3/projects/' + PROJECT_ID +
+    'https://logging.googleapis.com/v1beta3/projects/' + config['project_id'] +
         '/logs/' + config['log_name'] + '/entries:write'
   end
 
@@ -490,7 +516,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                 :headers => {'Content-Length' => response_body.length})
   end
 
-  def setup_auth_stubs
+  def setup_gce_metadata_stubs
+    # Create stubs for all the GCE metadata lookups the agent needs to make.
+    stub_metadata_request('project/project-id', PROJECT_ID)
+    stub_metadata_request('instance/zone', FULLY_QUALIFIED_ZONE)
+    stub_metadata_request('instance/id', VM_ID)
+    stub_metadata_request('instance/attributes/',
+                          "attribute1\nattribute2\nattribute3")
+
     # Used by 'googleauth' to test whether we're running on GCE.
     # It only cares about the request succeeding with Metdata-Flavor: Google.
     stub_request(:get, 'http://169.254.169.254').
@@ -502,7 +535,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                 :status => 200,
                 :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
                              'Content-Type' => 'application/json' })
+  end
 
+  def setup_logging_stubs
+    [COMPUTE_PARAMS, VMENGINE_PARAMS, CUSTOM_PARAMS].each do |params|
+      stub_request(:post, uri_for_log(params)).to_return do |request|
+        @logs_sent << JSON.parse(request.body)
+        {:body => ''}
+      end
+    end
+  end
+
+  def setup_auth_stubs
     # Used when loading credentials from a JSON file.
     stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token').
       with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
@@ -557,7 +601,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
           assert_equal "test log entry #{i}", entry['textPayload'], batch
         end
 
-        assert_equal ZONE, entry['metadata']['zone']
+        assert_equal params['zone'], entry['metadata']['zone']
         assert_equal params['service_name'], entry['metadata']['serviceName']
         check_labels entry, batch['commonLabels'], params['labels']
         if (block_given?)
