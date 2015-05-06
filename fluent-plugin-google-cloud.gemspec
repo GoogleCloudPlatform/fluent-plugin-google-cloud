@@ -18,4 +18,5 @@ Gem::Specification.new do |gem|
   gem.add_development_dependency "rake", '>= 10.3.2'
   gem.add_development_dependency "webmock", '>= 1.17.0'
   gem.add_development_dependency "test-unit", "~> 3.0.2"
+  gem.add_development_dependency "mocha", "~> 1.1"
 end

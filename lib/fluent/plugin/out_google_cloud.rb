@@ -114,7 +114,8 @@ module Fluent
       # If this is running on a Managed VM, grab the relevant App Engine
       # metadata as well.
       # TODO: Add config options for these to allow for running outside GCE?
-      attributes_string = fetch_metadata('instance/attributes/')
+      attributes_string = @fetch_gce_metadata ?
+          fetch_metadata('instance/attributes/') : ""
       attributes = attributes_string.split
       if (attributes.include?('gae_backend_name') &&
           attributes.include?('gae_backend_version'))
