@@ -20,20 +20,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def setup
     Fluent::Test.setup
 
+    # Setup stubs used for authentication.
+    ENV.delete('GOOGLE_APPLICATION_CREDENTIALS')
+    setup_auth_stubs
+
     # Create stubs for all the GCE metadata lookups the agent needs to make.
     stub_metadata_request('project/project-id', PROJECT_ID)
     stub_metadata_request('instance/zone', FULLY_QUALIFIED_ZONE)
     stub_metadata_request('instance/id', VM_ID)
     stub_metadata_request('instance/attributes/',
                           "attribute1\nattribute2\nattribute3")
-
-    stub_request(:post, 'https://accounts.google.com/o/oauth2/token').
-      with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
-      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
-                :status => 200,
-                :headers => {'Content-Length' => FAKE_AUTH_TOKEN,
-                             'Content-Type' => 'application/json' })
-
     @logs_sent = []
   end
 
@@ -62,7 +58,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
   FAKE_AUTH_TOKEN = 'abc123'
 
-  COMPUTE_ENGINE_SERVICE_ACCOUNT_CONFIG = %[
+  APPLICATION_DEFAULT_CONFIG = %[
   ]
 
   PRIVATE_KEY_CONFIG = %[
@@ -78,18 +74,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     vm_id #{CUSTOM_VM_ID}
   ]
 
-  INVALID_CONFIG1 = %[
+  INVALID_CONFIG_MISSING_PRIVATE_KEY_PATH = %[
     auth_method private_key
     private_key_email nobody@example.com
   ]
-  INVALID_CONFIG2 = %[
+  INVALID_CONFIG_MISSING_PRIVATE_KEY_EMAIL = %[
     auth_method private_key
     private_key_path /fake/path/to/key
   ]
-  INVALID_CONFIG3 = %[
-    auth_method service_account
-  ]
-  INVALID_CONFIG4 = %[
+  INVALID_CONFIG_MISSING_METADATA_VM_ID = %[
     fetch_gce_metadata false
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
@@ -118,17 +111,17 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
-  def create_driver(conf=PRIVATE_KEY_CONFIG)
+  def create_driver(conf=APPLICATION_DEFAULT_CONFIG)
     Fluent::Test::BufferedOutputTestDriver.new(
         Fluent::GoogleCloudOutput).configure(conf)
   end
 
-  def test_configure_service_account
-    d = create_driver(COMPUTE_ENGINE_SERVICE_ACCOUNT_CONFIG)
-    assert_equal 'compute_engine_service_account', d.instance.auth_method
+  def test_configure_service_account_application_default
+    d = create_driver(APPLICATION_DEFAULT_CONFIG)
+    assert d.instance.auth_method.nil?
   end
 
-  def test_configure_service_account
+  def test_configure_service_account_private_key
     d = create_driver(PRIVATE_KEY_CONFIG)
     assert_equal 'private_key', d.instance.auth_method
   end
@@ -141,34 +134,36 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_configure_invalid_configs
+    exception_count = 0
     begin
-      d = create_driver(INVALID_CONFIG1)
-      assert false
+      d = create_driver(INVALID_CONFIG_MISSING_PRIVATE_KEY_PATH)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_path'
+      exception_count += 1
     end
+    assert_equal 1, exception_count
+
+    exception_count = 0
     begin
-      d = create_driver(INVALID_CONFIG2)
-      assert false
+      d = create_driver(INVALID_CONFIG_MISSING_PRIVATE_KEY_EMAIL)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_email'
+      exception_count += 1
     end
+    assert_equal 1, exception_count
+
+    exception_count = 0
     begin
-      d = create_driver(INVALID_CONFIG3)
-      assert false
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'auth_method'
-    end
-    begin
-      d = create_driver(INVALID_CONFIG4)
-      assert false
+      d = create_driver(INVALID_CONFIG_MISSING_METADATA_VM_ID)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'fetch_gce_metadata'
+      exception_count += 1
     end
+    assert_equal 1, exception_count
   end
 
   def test_metadata_loading
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     d.run
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
@@ -178,7 +173,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_managed_vm_metadata_loading
     setup_managed_vm_metadata_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     d.run
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
@@ -199,6 +194,38 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_one_log
     setup_logging_stubs
+    d = create_driver()
+    d.emit({'message' => log_entry(0)})
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS)
+  end
+
+  def test_one_log_with_json_credentials
+    setup_logging_stubs
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
+    d = create_driver()
+    d.emit({'message' => log_entry(0)})
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS)
+  end
+
+  def test_one_log_with_invalid_json_credentials
+    setup_logging_stubs
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/invalid_credentials.json'
+    d = create_driver()
+    d.emit({'message' => log_entry(0)})
+    exception_count = 0
+    begin
+      d.run
+    rescue RuntimeError => error
+      assert error.message.include? 'Unable to read the credential file'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
+  end
+
+  def test_one_log_private_key
+    setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
     d.emit({'message' => log_entry(0)})
     d.run
@@ -207,7 +234,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_struct_payload_log
     setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     d.emit({'msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000})
     d.run
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
@@ -220,7 +247,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_timestamps
     setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     expected_ts = []
     emit_index = 0
     [Time.at(123456.789), Time.at(0), Time.now].each do |ts|
@@ -248,7 +275,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_severities
     setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     expected_severity = []
     emit_index = 0
     # Array of pairs of [parsed_severity, expected_severity]
@@ -269,7 +296,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_multiple_logs
     setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     # Only test a few values because otherwise the test can take minutes.
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
@@ -287,7 +314,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     # the exception.
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
         :status => 400, :body => "Bad Request")
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     d.emit({'message' => log_entry(0)})
     d.run
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 1)
@@ -297,7 +324,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def client_error_helper(message)
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
         :status => 401, :body => message)
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     d.emit({'message' => log_entry(0)})
     exception_count = 0
     begin
@@ -335,7 +362,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     # gets propagated through the plugin.
     stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
         :status => 500, :body => "Server Error")
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     d.emit({'message' => log_entry(0)})
     exception_count = 0
     begin
@@ -351,7 +378,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_one_managed_vm_log
     setup_managed_vm_metadata_stubs
     setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     d.emit({'message' => log_entry(0)})
     d.run
     verify_log_entries(1, VMENGINE_PARAMS)
@@ -360,7 +387,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_multiple_managed_vm_logs
     setup_managed_vm_metadata_stubs
     setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
+    d = create_driver()
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
@@ -461,6 +488,35 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     stub_request(:get, 'http://metadata/computeMetadata/v1/' + metadata_path).
       to_return(:body => response_body, :status => 200,
                 :headers => {'Content-Length' => response_body.length})
+  end
+
+  def setup_auth_stubs
+    # Used by 'googleauth' to test whether we're running on GCE.
+    # It only cares about the request succeeding with Metdata-Flavor: Google.
+    stub_request(:get, 'http://169.254.169.254').
+      to_return(:status => 200, :headers => {'Metadata-Flavor' => 'Google'})
+
+    # Used by 'googleauth' to fetch the default service account credentials.
+    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token').
+      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
+                :status => 200,
+                :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
+                             'Content-Type' => 'application/json' })
+
+    # Used when loading credentials from a JSON file.
+    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token').
+      with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
+      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
+                :status => 200,
+                :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
+                             'Content-Type' => 'application/json' })
+    # Used for 'private_key' auth.
+    stub_request(:post, 'https://accounts.google.com/o/oauth2/token').
+      with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
+      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
+                :status => 200,
+                :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
+                             'Content-Type' => 'application/json' })
   end
 
   def setup_managed_vm_metadata_stubs
