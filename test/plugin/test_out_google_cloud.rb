@@ -178,7 +178,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_gce_metadata_does_not_load_when_fetch_gce_metadata_is_false
-    setup_gce_metadata_stubs
     d = create_driver(CUSTOM_METADATA_CONFIG)
     d.run
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
