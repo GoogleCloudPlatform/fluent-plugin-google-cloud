@@ -14,6 +14,7 @@
 
 require 'helper'
 require 'json'
+require 'mocha/test_unit'
 require 'webmock/test_unit'
 
 class GoogleCloudOutputTest < Test::Unit::TestCase
@@ -185,6 +186,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_gce_metadata_does_not_load_when_fetch_gce_metadata_is_false
+    Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
     d = create_driver(CUSTOM_METADATA_CONFIG)
     d.run
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
@@ -238,6 +240,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_custom_metadata
+    Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
     setup_logging_stubs
     d = create_driver(CUSTOM_METADATA_CONFIG)
