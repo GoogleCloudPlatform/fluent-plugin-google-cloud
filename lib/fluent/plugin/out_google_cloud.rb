@@ -36,10 +36,10 @@ module Fluent
     config_param :private_key_path, :string, :default => nil
     config_param :private_key_passphrase, :string, :default => 'notasecret'
 
-    # If fetch_gce_metadata is set to true, we obtain the project_id, zone,
+    # If use_metadata_service is set to true, we obtain the project_id, zone,
     # and vm_id from the GCE metadata service.  Otherwise, those parameters
     # must be specified in the config file explicitly.
-    config_param :fetch_gce_metadata, :bool, :default => true
+    config_param :use_metadata_service, :bool, :default => true
     config_param :project_id, :string, :default => nil
     config_param :zone, :string, :default => nil
     config_param :vm_id, :string, :default => nil
@@ -86,10 +86,10 @@ module Fluent
         end
       end
 
-      unless @fetch_gce_metadata
+      unless @use_metadata_service
         unless @project_id && @zone && @vm_id
           raise Fluent::ConfigError,
-              ('Please specify "project_id", "zone" and "vm_id" if you set "fetch_gce_metadata" to false')
+              ('Please specify "project_id", "zone" and "vm_id" if you set "use_metadata_service" to false')
         end
       end
     end
@@ -101,7 +101,7 @@ module Fluent
 
       @successful_call = false
 
-      if @fetch_gce_metadata
+      if @use_metadata_service
         # Grab metadata about the Google Compute Engine instance that we're on.
         @project_id = fetch_metadata('project/project-id')
         fully_qualified_zone = fetch_metadata('instance/zone')
@@ -114,7 +114,7 @@ module Fluent
       # If this is running on a Managed VM, grab the relevant App Engine
       # metadata as well.
       # TODO: Add config options for these to allow for running outside GCE?
-      attributes_string = @fetch_gce_metadata ?
+      attributes_string = @use_metadata_service ?
           fetch_metadata('instance/attributes/') : ""
       attributes = attributes_string.split
       if (attributes.include?('gae_backend_name') &&
