@@ -51,7 +51,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   ]
 
   CUSTOM_METADATA_CONFIG = %[
-    fetch_gce_metadata false
+    use_metadata_service false
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
@@ -66,7 +66,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     private_key_path /fake/path/to/key
   ]
   INVALID_CONFIG_MISSING_METADATA_VM_ID = %[
-    fetch_gce_metadata false
+    use_metadata_service false
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
   ]
@@ -156,7 +156,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     begin
       d = create_driver(INVALID_CONFIG_MISSING_METADATA_VM_ID)
     rescue Fluent::ConfigError => error
-      assert error.message.include? 'fetch_gce_metadata'
+      assert error.message.include? 'use_metadata_service'
       exception_count += 1
     end
     assert_equal 1, exception_count
@@ -185,7 +185,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal MANAGED_VM_BACKEND_VERSION, d.instance.gae_backend_version
   end
 
-  def test_gce_metadata_does_not_load_when_fetch_gce_metadata_is_false
+  def test_gce_metadata_does_not_load_when_use_metadata_service_is_false
     Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
     d = create_driver(CUSTOM_METADATA_CONFIG)
     d.run
