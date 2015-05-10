@@ -167,7 +167,21 @@ module Fluent
           'entries' => [],
         }
         arr.each do |time, record|
-          if (record.has_key?('timeNanos'))
+          if (record.has_key?('timestamp') &&
+              record['timestamp'].has_key?('seconds') &&
+              record['timestamp'].has_key?('nanos'))
+            ts_secs = record['timestamp']['seconds']
+            ts_nanos = record['timestamp']['nanos']
+            record.delete('timestamp')
+          elsif (record.has_key?('timestampSeconds') &&
+                 record.has_key?('timestampNanos'))
+            ts_secs = record['timestampSeconds']
+            ts_nanos = record['timestampNanos']
+            record.delete('timestampSeconds')
+            record.delete('timestampNanos')
+          elsif (record.has_key?('timeNanos'))
+            # This is deprecated since the precision is insufficient.
+            # Use timestampSeconds/timestampNanos instead
             ts_secs = (record['timeNanos'] / 1000000000).to_i
             ts_nanos = record['timeNanos'] % 1000000000
             record.delete('timeNanos')
