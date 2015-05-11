@@ -100,6 +100,7 @@ module Fluent
       init_api_client()
 
       @successful_call = false
+      @timenanos_warning = false
 
       if @use_metadata_service
         # Grab metadata about the Google Compute Engine instance that we're on.
@@ -185,6 +186,12 @@ module Fluent
             ts_secs = (record['timeNanos'] / 1000000000).to_i
             ts_nanos = record['timeNanos'] % 1000000000
             record.delete('timeNanos')
+            if (!@timenanos_warning)
+              # Warn the user this is deprecated, but only once to avoid spam.
+              @timenanos_warning = true
+              $log.warn ("timeNanos is deprecated - please use " +
+                         "timestampSeconds and timestampNanos instead.")
+            end
           else
             timestamp = Time.at(time)
             ts_secs = timestamp.tv_sec
