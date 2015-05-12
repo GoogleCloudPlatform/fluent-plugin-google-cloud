@@ -270,7 +270,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     expected_ts = []
     emit_index = 0
     [Time.at(123456.789), Time.at(0), Time.now].each do |ts|
-      # Test both the "native" fluentd timestamp and timeNanos.
+      # Test the "native" fluentd timestamp as well as our nanosecond tags.
       d.emit({'message' => log_entry(emit_index)}, ts.to_f)
       # The native timestamp currently only supports second granularity
       # (fluentd issue #461), so strip nanoseconds from the expected value.
@@ -278,6 +278,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       emit_index += 1
       d.emit({'message' => log_entry(emit_index),
               'timeNanos' => ts.tv_sec * 1000000000 + ts.tv_nsec})
+      expected_ts.push(ts)
+      emit_index += 1
+      d.emit({'message' => log_entry(emit_index),
+              'timestamp' => {'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec}})
+      expected_ts.push(ts)
+      emit_index += 1
+      d.emit({'message' => log_entry(emit_index),
+              'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec})
       expected_ts.push(ts)
       emit_index += 1
     end

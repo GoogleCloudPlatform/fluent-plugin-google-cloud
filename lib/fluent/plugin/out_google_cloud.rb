@@ -100,6 +100,7 @@ module Fluent
       init_api_client()
 
       @successful_call = false
+      @timenanos_warning = false
 
       if @use_metadata_service
         # Grab metadata about the Google Compute Engine instance that we're on.
@@ -167,10 +168,30 @@ module Fluent
           'entries' => [],
         }
         arr.each do |time, record|
-          if (record.has_key?('timeNanos'))
+          if (record.has_key?('timestamp') &&
+              record['timestamp'].has_key?('seconds') &&
+              record['timestamp'].has_key?('nanos'))
+            ts_secs = record['timestamp']['seconds']
+            ts_nanos = record['timestamp']['nanos']
+            record.delete('timestamp')
+          elsif (record.has_key?('timestampSeconds') &&
+                 record.has_key?('timestampNanos'))
+            ts_secs = record['timestampSeconds']
+            ts_nanos = record['timestampNanos']
+            record.delete('timestampSeconds')
+            record.delete('timestampNanos')
+          elsif (record.has_key?('timeNanos'))
+            # This is deprecated since the precision is insufficient.
+            # Use timestampSeconds/timestampNanos instead
             ts_secs = (record['timeNanos'] / 1000000000).to_i
             ts_nanos = record['timeNanos'] % 1000000000
             record.delete('timeNanos')
+            if (!@timenanos_warning)
+              # Warn the user this is deprecated, but only once to avoid spam.
+              @timenanos_warning = true
+              $log.warn ("timeNanos is deprecated - please use " +
+                         "timestampSeconds and timestampNanos instead.")
+            end
           else
             timestamp = Time.at(time)
             ts_secs = timestamp.tv_sec
