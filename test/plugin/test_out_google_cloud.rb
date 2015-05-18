@@ -529,7 +529,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def stub_metadata_request(metadata_path, response_body)
-    stub_request(:get, 'http://metadata/computeMetadata/v1/' + metadata_path).
+    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' + metadata_path).
       to_return(:body => response_body, :status => 200,
                 :headers => {'Content-Length' => response_body.length})
   end
