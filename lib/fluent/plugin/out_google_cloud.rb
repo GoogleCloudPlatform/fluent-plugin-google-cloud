@@ -168,6 +168,7 @@ module Fluent
           'entries' => [],
         }
         arr.each do |time, record|
+          next unless record.is_a? Hash
           if (record.has_key?('timestamp') &&
               record['timestamp'].has_key?('seconds') &&
               record['timestamp'].has_key?('nanos'))
@@ -224,6 +225,8 @@ module Fluent
           end
           write_log_entries_request['entries'].push(entry)
         end
+        # Don't send an empty request if we rejected all the entries.
+        next if write_log_entries_request['entries'].empty?
 
         # Add a prefix to VMEngines logs to prevent namespace collisions,
         # and also escape the log name.

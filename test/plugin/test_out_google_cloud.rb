@@ -338,6 +338,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_malformed_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver()
+    # if the entry is not a hash, the plugin should silently drop it.
+    d.emit("a string is not a valid message")
+    d.run
+    assert @logs_sent.empty?
+  end
+
   def test_client_error
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
