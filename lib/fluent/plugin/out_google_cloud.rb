@@ -288,6 +288,7 @@ module Fluent
     end
 
     def fetch_metadata(metadata_path)
+      # Fetch GCE metadata - see https://cloud.google.com/compute/docs/metadata
       open('http://169.254.169.254/computeMetadata/v1/' + metadata_path,
            {'Metadata-Flavor' => 'Google'}) do |f|
         f.read
