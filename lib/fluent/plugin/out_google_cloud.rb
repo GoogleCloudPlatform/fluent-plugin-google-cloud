@@ -149,6 +149,10 @@ module Fluent
     end
 
     def format(tag, time, record)
+      if record.has_key?('tag')
+        tag = record['tag']
+        record.delete('tag')
+      end
       [tag, time, record].to_msgpack
     end
 
