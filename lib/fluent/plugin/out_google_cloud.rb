@@ -24,6 +24,9 @@ module Fluent
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
 
+    # Address of the metadata service.
+    METADATA_SERVICE_ADDR = '169.254.169.254'
+
     # DEPRECATED: auth_method (and support for 'private_key') is deprecated in
     # favor of Google Application Default Credentials as documented at:
     # https://developers.google.com/identity/protocols/application-default-credentials
@@ -92,29 +95,25 @@ module Fluent
         end
       end
 
-      if @use_metadata_service
+      @platform = detect_platform
+
+      # set attributes from metadata (unless overriden by static config)
+      case @platform
+      when Platform::GCE
         if @project_id.nil?
-          begin
-            @project_id = fetch_metadata('project/project-id')
-          rescue
-            @project_id = nil
-          end
+          @project_id = fetch_gce_metadata('project/project-id')
         end
         if @zone.nil?
-          begin
-            fully_qualified_zone = fetch_metadata('instance/zone')
-            @zone = fully_qualified_zone.rpartition('/')[2]
-          rescue
-            @zone = nil
-          end
+          # this returns "projects/<number>/zones/<zone>"; we only want
+          # the part after the final slash.
+          fully_qualified_zone = fetch_gce_metadata('instance/zone')
+          @zone = fully_qualified_zone.rpartition('/')[2]
         end
         if @vm_id.nil?
-          begin
-            @vm_id = fetch_metadata('instance/id')
-          rescue
-            vm_id = nil
-          end
+          @vm_id = fetch_gce_metadata('instance/id')
         end
+      when Platform::OTHER
+        # Do nothing
       end
 
       # all metadata parameters must now be set
@@ -127,39 +126,36 @@ module Fluent
           ('Unable to obtain metadata parameters: ' + missing.join(' '))
       end
 
-      # TODO: Send instance tags and/or hostname with the logs as well?
+      # TODO: Send instance tags and/or hostname as labels as well?
       @common_labels = {}
 
-      # If this is running on a Managed VM, grab the relevant App Engine
-      # metadata as well.
+      # Use "generic" COMPUTE_SERVICE as the default environment.
+      @service_name = COMPUTE_SERVICE
+      @running_on_managed_vm = false
+
+      # Check for specialized GCE environments (Managed VM or Dataflow).
       # TODO: Add config options for these to allow for running outside GCE?
-      attributes_string = ""
-      if (@use_metadata_service)
-        begin
-          attributes_string = fetch_metadata('instance/attributes/')
-        rescue
-          attributes_string = ""
+      if @platform == Platform::GCE
+        attributes = fetch_gce_metadata('instance/attributes/').split
+        if (attributes.include?('gae_backend_name') &&
+            attributes.include?('gae_backend_version'))
+          # Managed VM
+          @running_on_managed_vm = true
+          @gae_backend_name =
+              fetch_gce_metadata('instance/attributes/gae_backend_name')
+          @gae_backend_version =
+              fetch_gce_metadata('instance/attributes/gae_backend_version')
+          @service_name = APPENGINE_SERVICE
+          common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
+          common_labels["#{APPENGINE_SERVICE}/version_id"] =
+            @gae_backend_version
+        elsif (attributes.include?('job_id'))
+          # Dataflow
+          @running_on_managed_vm = false
+          @service_name = DATAFLOW_SERVICE
+          @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
+          common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
         end
-      end
-      attributes = attributes_string.split
-      if (attributes.include?('gae_backend_name') &&
-          attributes.include?('gae_backend_version'))
-        @running_on_managed_vm = true
-        @gae_backend_name =
-            fetch_metadata('instance/attributes/gae_backend_name')
-        @gae_backend_version =
-            fetch_metadata('instance/attributes/gae_backend_version')
-        @service_name = APPENGINE_SERVICE
-        common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
-        common_labels["#{APPENGINE_SERVICE}/version_id"] = @gae_backend_version
-      elsif (attributes.include?('job_id'))
-        @running_on_managed_vm = false
-        @service_name = DATAFLOW_SERVICE
-        @dataflow_job_id = fetch_metadata('instance/attributes/job_id')
-        common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
-      else
-        @running_on_managed_vm = false
-        @service_name = COMPUTE_SERVICE
       end
 
       if (@service_name != DATAFLOW_SERVICE)
@@ -320,10 +316,41 @@ module Fluent
         :error_class=>error.class.to_s, :error=>error.to_s
     end
 
-    def fetch_metadata(metadata_path)
-      # Fetch GCE metadata - see https://cloud.google.com/compute/docs/metadata
-      open('http://169.254.169.254/computeMetadata/v1/' + metadata_path,
-           {'Metadata-Flavor' => 'Google'}) do |f|
+    # "enum" of Platform values
+    module Platform
+      OTHER = 0  # Other/unkown platform
+      GCE = 1    # Google Compute Engine
+    end
+
+    # Determine what platform we are running on by consulting the metadata
+    # service (unless the user has explicitly disabled using that).
+    def detect_platform
+      if !@use_metadata_service
+        $log.info "use_metadata_service is false; not detecting platform"
+        return Platform::OTHER
+      end
+
+      begin
+        open('http://' + METADATA_SERVICE_ADDR) do |f|
+          if (f.meta['metadata-flavor'] == 'Google')
+            $log.info 'Detected GCE platform'
+            return Platform::GCE
+          end
+        end
+      rescue Exception => e
+        $log.debug "Failed to access metadata service: ", :error=>e
+      end
+
+      $log.info 'Unable to determine platform'
+      return Platform::OTHER
+    end
+
+    def fetch_gce_metadata(metadata_path)
+      raise "Called fetch_gce_metadata with platform=#{@platform}" unless
+        @platform == Platform::GCE
+      # See https://cloud.google.com/compute/docs/metadata
+      open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
+           metadata_path, {'Metadata-Flavor' => 'Google'}) do |f|
         f.read
       end
     end
