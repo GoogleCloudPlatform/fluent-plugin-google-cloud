@@ -25,7 +25,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     @logs_sent = []
   end
 
-  # attributes used for the metadata service
+  # attributes used for the GCE metadata service
   PROJECT_ID = 'test-project-id'
   ZONE = 'us-central1-b'
   FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
@@ -36,6 +36,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CUSTOM_ZONE = 'us-custom-central1-b'
   CUSTOM_FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   CUSTOM_VM_ID = 'C9876543210'
+
+  # attributes used for the EC2 metadata service
+  EC2_PROJECT_ID = 'test-ec2-project-id'
+  EC2_ZONE = 'us-west-2b'
+  EC2_PREFIXED_ZONE = 'aws:' + EC2_ZONE
+  EC2_VM_ID = 'i-81c16767'
+  EC2_ACCOUNT_ID = '123456789012'
+
+  # The formatting here matches the format used on the VM.
+  EC2_IDENTITY_DOCUMENT = %[{
+  "accountId" : "#{EC2_ACCOUNT_ID}",
+  "availabilityZone" : "#{EC2_ZONE}",
+  "instanceId" : "#{EC2_VM_ID}"
+}]
 
   # Managed VMs specific labels
   MANAGED_VM_BACKEND_NAME = 'default'
@@ -88,9 +102,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONFIG_MISSING_METADATA_ALL = %[
   ]
 
+  CONFIG_EC2_PROJECT_ID = %[
+    project_id #{EC2_PROJECT_ID}
+  ]
+
   # Service configurations for various services
   COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
   APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
+  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
 
   COMPUTE_PARAMS = {
     'service_name' => COMPUTE_SERVICE_NAME,
@@ -124,6 +143,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'labels' => {
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => CUSTOM_VM_ID
+    }
+  }
+
+  EC2_PARAMS = {
+    'service_name' => EC2_SERVICE_NAME,
+    'log_name' => 'test',
+    'project_id' => EC2_PROJECT_ID,
+    'zone' => EC2_PREFIXED_ZONE,
+    'labels' => {
+      "#{EC2_SERVICE_NAME}/resource_type" => 'instance',
+      "#{EC2_SERVICE_NAME}/resource_id" => EC2_VM_ID,
+      "#{EC2_SERVICE_NAME}/account_id" => EC2_ACCOUNT_ID
     }
   }
 
@@ -274,6 +305,29 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal false, d.instance.running_on_managed_vm
   end
 
+  def test_ec2_metadata_loading
+    setup_ec2_metadata_stubs
+    d = create_driver(CONFIG_EC2_PROJECT_ID)
+    d.run
+    assert_equal EC2_PROJECT_ID, d.instance.project_id
+    assert_equal EC2_PREFIXED_ZONE, d.instance.zone
+    assert_equal EC2_VM_ID, d.instance.vm_id
+    assert_equal false, d.instance.running_on_managed_vm
+  end
+
+  def test_ec2_metadata_requires_project_id
+    setup_ec2_metadata_stubs
+    exception_count = 0
+    begin
+      d = create_driver()
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Unable to obtain metadata parameters:'
+      assert error.message.include? 'project_id'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
+  end
+
   def test_one_log
     setup_gce_metadata_stubs
     setup_logging_stubs
@@ -328,6 +382,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit({'message' => log_entry(0)})
     d.run
     verify_log_entries(1, CUSTOM_PARAMS)
+  end
+
+  def test_one_log_ec2
+    setup_ec2_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(CONFIG_EC2_PROJECT_ID)
+    d.emit({'message' => log_entry(0)})
+    d.run
+    verify_log_entries(1, EC2_PARAMS)
   end
 
   def test_struct_payload_log
@@ -622,17 +685,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def setup_gce_metadata_stubs
+    # Stub the root, used for platform detection by the plugin and 'googleauth'.
+    stub_request(:get, 'http://169.254.169.254').
+      to_return(:status => 200, :headers => {'Metadata-Flavor' => 'Google'})
+
     # Create stubs for all the GCE metadata lookups the agent needs to make.
     stub_metadata_request('project/project-id', PROJECT_ID)
     stub_metadata_request('instance/zone', FULLY_QUALIFIED_ZONE)
     stub_metadata_request('instance/id', VM_ID)
     stub_metadata_request('instance/attributes/',
                           "attribute1\nattribute2\nattribute3")
-
-    # Used by 'googleauth' to test whether we're running on GCE.
-    # It only cares about the request succeeding with Metdata-Flavor: Google.
-    stub_request(:get, 'http://169.254.169.254').
-      to_return(:status => 200, :headers => {'Metadata-Flavor' => 'Google'})
 
     # Used by 'googleauth' to fetch the default service account credentials.
     stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token').
@@ -642,8 +704,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                              'Content-Type' => 'application/json' })
   end
 
+  def setup_ec2_metadata_stubs
+    # Stub the root, used for platform detection
+    stub_request(:get, 'http://169.254.169.254').
+      to_return(:status => 200, :headers => {'Server' => 'EC2ws'})
+
+    # Stub the identity document lookup made by the agent.
+    stub_request(:get, 'http://169.254.169.254/latest/dynamic/instance-identity/document').
+      to_return(:body => EC2_IDENTITY_DOCUMENT, :status => 200,
+                :headers => {'Content-Length' => EC2_IDENTITY_DOCUMENT.length})
+  end
+
   def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS, CUSTOM_PARAMS].each do |params|
+    [COMPUTE_PARAMS, VMENGINE_PARAMS, CUSTOM_PARAMS, EC2_PARAMS].
+        each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
         {:body => ''}
