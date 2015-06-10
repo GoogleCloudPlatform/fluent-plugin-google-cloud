@@ -25,22 +25,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     @logs_sent = []
   end
 
+  # attributes used for the metadata service
   PROJECT_ID = 'test-project-id'
   ZONE = 'us-central1-b'
   FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   VM_ID = '9876543210'
 
+  # attributes used for custom (overridden) configs
   CUSTOM_PROJECT_ID = 'test-custom-project-id'
   CUSTOM_ZONE = 'us-custom-central1-b'
   CUSTOM_FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   CUSTOM_VM_ID = 'C9876543210'
 
+  # Managed VMs specific labels
   MANAGED_VM_BACKEND_NAME = 'default'
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'
 
+  # Parameters used for authentication
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
   FAKE_AUTH_TOKEN = 'abc123'
 
+  # Configuration files for various test scenarios
   APPLICATION_DEFAULT_CONFIG = %[
   ]
 
@@ -50,27 +55,40 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
   ]
 
-  CUSTOM_METADATA_CONFIG = %[
+  NO_METADATA_SERVICE_CONFIG = %[
     use_metadata_service false
+  ]
+
+  CUSTOM_METADATA_CONFIG = %[
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
   ]
 
-  INVALID_CONFIG_MISSING_PRIVATE_KEY_PATH = %[
+  CONFIG_MISSING_PRIVATE_KEY_PATH = %[
     auth_method private_key
     private_key_email nobody@example.com
   ]
-  INVALID_CONFIG_MISSING_PRIVATE_KEY_EMAIL = %[
+  CONFIG_MISSING_PRIVATE_KEY_EMAIL = %[
     auth_method private_key
     private_key_path /fake/path/to/key
   ]
-  INVALID_CONFIG_MISSING_METADATA_VM_ID = %[
-    use_metadata_service false
+  CONFIG_MISSING_METADATA_PROJECT_ID = %[
+    zone #{CUSTOM_ZONE}
+    vm_id #{CUSTOM_VM_ID}
+  ]
+  CONFIG_MISSING_METADATA_ZONE = %[
+    project_id #{CUSTOM_PROJECT_ID}
+    vm_id #{CUSTOM_VM_ID}
+  ]
+  CONFIG_MISSING_METADATA_VM_ID = %[
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
   ]
+  CONFIG_MISSING_METADATA_ALL = %[
+  ]
 
+  # Service configurations for various services
   COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
   APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
 
@@ -127,16 +145,17 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_configure_custom_metadata
+    setup_no_metadata_service_stubs
     d = create_driver(CUSTOM_METADATA_CONFIG)
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
   end
 
-  def test_configure_invalid_configs
+  def test_configure_invalid_private_key_configs
     exception_count = 0
     begin
-      d = create_driver(INVALID_CONFIG_MISSING_PRIVATE_KEY_PATH)
+      d = create_driver(CONFIG_MISSING_PRIVATE_KEY_PATH)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_path'
       exception_count += 1
@@ -145,18 +164,54 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
     exception_count = 0
     begin
-      d = create_driver(INVALID_CONFIG_MISSING_PRIVATE_KEY_EMAIL)
+      d = create_driver(CONFIG_MISSING_PRIVATE_KEY_EMAIL)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_email'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
+  end
+
+  def test_configure_invalid_metadata_configs_no_metadata_service
+    setup_no_metadata_service_stubs
+    exception_count = 0
+    begin
+      d = create_driver(CONFIG_MISSING_METADATA_PROJECT_ID)
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Unable to obtain metadata parameters:'
+      assert error.message.include? 'project_id'
       exception_count += 1
     end
     assert_equal 1, exception_count
 
     exception_count = 0
     begin
-      d = create_driver(INVALID_CONFIG_MISSING_METADATA_VM_ID)
+      d = create_driver(CONFIG_MISSING_METADATA_ZONE)
     rescue Fluent::ConfigError => error
-      assert error.message.include? 'use_metadata_service'
+      assert error.message.include? 'Unable to obtain metadata parameters:'
+      assert error.message.include? 'zone'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
+
+    exception_count = 0
+    begin
+      d = create_driver(CONFIG_MISSING_METADATA_VM_ID)
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Unable to obtain metadata parameters:'
+      assert error.message.include? 'vm_id'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
+
+    exception_count = 0
+    begin
+      d = create_driver(CONFIG_MISSING_METADATA_ALL)
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Unable to obtain metadata parameters:'
+      assert error.message.include? 'project_id'
+      assert error.message.include? 'zone'
+      assert error.message.include? 'vm_id'
       exception_count += 1
     end
     assert_equal 1, exception_count
@@ -187,9 +242,33 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_gce_metadata_does_not_load_when_use_metadata_service_is_false
     Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
+    d = create_driver(NO_METADATA_SERVICE_CONFIG + CUSTOM_METADATA_CONFIG)
+    d.run
+    assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
+    assert_equal CUSTOM_ZONE, d.instance.zone
+    assert_equal CUSTOM_VM_ID, d.instance.vm_id
+    assert_equal false, d.instance.running_on_managed_vm
+  end
+
+  def test_metadata_overrides_on_gce
+    # In this case we are overriding all configured parameters so we should
+    # see all "custom" values rather than the ones from the metadata server.
+    setup_gce_metadata_stubs
     d = create_driver(CUSTOM_METADATA_CONFIG)
     d.run
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
+    assert_equal CUSTOM_ZONE, d.instance.zone
+    assert_equal CUSTOM_VM_ID, d.instance.vm_id
+    assert_equal false, d.instance.running_on_managed_vm
+  end
+
+  def test_metadata_partial_overrides_on_gce
+    # Similar to above, but we are not overriding project_id in this config
+    # so we should see the metadata value for project_id and "custom" otherwise.
+    setup_gce_metadata_stubs
+    d = create_driver(CONFIG_MISSING_METADATA_PROJECT_ID)
+    d.run
+    assert_equal PROJECT_ID, d.instance.project_id
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
     assert_equal false, d.instance.running_on_managed_vm
@@ -240,10 +319,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_custom_metadata
+    # don't set up any metadata stubs, so the test will fail if we try to
+    # fetch metadata (and explicitly check this as well).
     Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
     setup_logging_stubs
-    d = create_driver(CUSTOM_METADATA_CONFIG)
+    d = create_driver(NO_METADATA_SERVICE_CONFIG + CUSTOM_METADATA_CONFIG)
     d.emit({'message' => log_entry(0)})
     d.run
     verify_log_entries(1, CUSTOM_PARAMS)
@@ -532,6 +613,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' + metadata_path).
       to_return(:body => response_body, :status => 200,
                 :headers => {'Content-Length' => response_body.length})
+  end
+
+  def setup_no_metadata_service_stubs
+    # Simulate a machine with no metadata service present
+    stub_request(:any, /http:\/\/169.254.169.254\/.*/).
+      to_raise Errno::EHOSTUNREACH;
   end
 
   def setup_gce_metadata_stubs
