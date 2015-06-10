@@ -251,6 +251,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_metadata_overrides_on_gce
+    # In this case we are overriding all configured parameters so we should
+    # see all "custom" values rather than the ones from the metadata server.
     setup_gce_metadata_stubs
     d = create_driver(CUSTOM_METADATA_CONFIG)
     d.run
@@ -261,6 +263,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_metadata_partial_overrides_on_gce
+    # Similar to above, but we are not overriding project_id in this config
+    # so we should see the metadata value for project_id and "custom" otherwise.
     setup_gce_metadata_stubs
     d = create_driver(CONFIG_MISSING_METADATA_PROJECT_ID)
     d.run

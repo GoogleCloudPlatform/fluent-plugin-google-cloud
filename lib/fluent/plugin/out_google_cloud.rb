@@ -313,7 +313,7 @@ module Fluent
     def log_write_failure(request, error)
       dropped = request['entries'].length
       $log.warn "Dropping #{dropped} log message(s)",
-        :error_class=>error.class.to_s, :error=>error.to_s
+        :error_class => error.class.to_s, :error => error.to_s
     end
 
     # "enum" of Platform values
@@ -338,7 +338,7 @@ module Fluent
           end
         end
       rescue Exception => e
-        $log.debug "Failed to access metadata service: ", :error=>e
+        $log.debug "Failed to access metadata service: ", :error => e
       end
 
       $log.info 'Unable to determine platform'
