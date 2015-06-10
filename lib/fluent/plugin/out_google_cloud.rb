@@ -16,10 +16,11 @@ module Fluent
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
 
-    # Constants for Google service names.
+    # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
     COMPUTE_SERVICE = 'compute.googleapis.com'
     DATAFLOW_SERVICE = 'dataflow.googleapis.com'
+    EC2_SERVICE = 'ec2.amazonaws.com'
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
@@ -72,6 +73,7 @@ module Fluent
       require 'google/api_client'
       require 'google/api_client/auth/compute_service_account'
       require 'googleauth'
+      require 'json'
       require 'open-uri'
     end
 
@@ -95,11 +97,15 @@ module Fluent
         end
       end
 
-      @platform = detect_platform
+      # TODO: Send instance tags and/or hostname as labels as well?
+      @common_labels = {}
+      @running_on_managed_vm = false
 
       # set attributes from metadata (unless overriden by static config)
+      @platform = detect_platform
       case @platform
       when Platform::GCE
+      # Use "generic" COMPUTE_SERVICE as the default environment.
         if @project_id.nil?
           @project_id = fetch_gce_metadata('project/project-id')
         end
@@ -112,8 +118,21 @@ module Fluent
         if @vm_id.nil?
           @vm_id = fetch_gce_metadata('instance/id')
         end
+      when Platform::EC2
+        metadata = fetch_ec2_metadata
+        if @zone.nil? && metadata.has_key?('availabilityZone')
+          @zone = 'aws:' + metadata['availabilityZone']
+        end
+        if @vm_id.nil? && metadata.has_key?('instanceId')
+          @vm_id = metadata['instanceId']
+        end
+        if metadata.has_key?('accountId')
+          common_labels["#{EC2_SERVICE}/account_id"] = metadata['accountId']
+        end
       when Platform::OTHER
-        # Do nothing
+        # do nothing
+      else
+        raise Fluent::ConfigError, 'Unknown platform ' + @platform
       end
 
       # all metadata parameters must now be set
@@ -126,16 +145,12 @@ module Fluent
           ('Unable to obtain metadata parameters: ' + missing.join(' '))
       end
 
-      # TODO: Send instance tags and/or hostname as labels as well?
-      @common_labels = {}
-
-      # Use "generic" COMPUTE_SERVICE as the default environment.
-      @service_name = COMPUTE_SERVICE
-      @running_on_managed_vm = false
-
-      # Check for specialized GCE environments (Managed VM or Dataflow).
-      # TODO: Add config options for these to allow for running outside GCE?
-      if @platform == Platform::GCE
+      # Set labels, etc. based on the config
+      case @platform
+      when Platform::GCE
+        @service_name = COMPUTE_SERVICE
+        # Check for specialized GCE environments (Managed VM or Dataflow).
+        # TODO: Add config options for these to allow for running outside GCE?
         attributes = fetch_gce_metadata('instance/attributes/').split
         if (attributes.include?('gae_backend_name') &&
             attributes.include?('gae_backend_version'))
@@ -156,9 +171,17 @@ module Fluent
           @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
           common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
         end
-      end
-
-      if (@service_name != DATAFLOW_SERVICE)
+        # dataflow only uses their own labels; otherwise include GCE labels.
+        if (@service_name != DATAFLOW_SERVICE)
+          common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
+          common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
+        end
+      when Platform::EC2
+        @service_name = EC2_SERVICE
+        common_labels["#{EC2_SERVICE}/resource_type"] = 'instance'
+        common_labels["#{EC2_SERVICE}/resource_id"] = @vm_id
+      when Platform::OTHER
+        @service_name = COMPUTE_SERVICE
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
         common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
       end
@@ -320,6 +343,7 @@ module Fluent
     module Platform
       OTHER = 0  # Other/unkown platform
       GCE = 1    # Google Compute Engine
+      EC2 = 2    # Amazon EC2
     end
 
     # Determine what platform we are running on by consulting the metadata
@@ -335,6 +359,10 @@ module Fluent
           if (f.meta['metadata-flavor'] == 'Google')
             $log.info 'Detected GCE platform'
             return Platform::GCE
+          end
+          if (f.meta['server'] == 'EC2ws')
+            $log.info 'Detected EC2 platform'
+            return Platform::EC2
           end
         end
       rescue Exception => e
@@ -352,6 +380,17 @@ module Fluent
       open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
            metadata_path, {'Metadata-Flavor' => 'Google'}) do |f|
         f.read
+      end
+    end
+
+    def fetch_ec2_metadata
+      raise "Called fetch_ec2_metadata with platform=#{@platform}" unless
+        @platform == Platform::EC2
+      # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
+      open('http://' + METADATA_SERVICE_ADDR +
+           '/latest/dynamic/instance-identity/document') do |f|
+        contents = f.read()
+        return JSON.parse(contents)
       end
     end
 
