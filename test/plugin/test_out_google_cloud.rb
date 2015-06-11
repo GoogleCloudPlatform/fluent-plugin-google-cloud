@@ -106,6 +106,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     project_id #{EC2_PROJECT_ID}
   ]
 
+  CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID = %[
+    project_id #{EC2_PROJECT_ID}
+    vm_id #{CUSTOM_VM_ID}
+  ]
+
   # Service configurations for various services
   COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
   APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
@@ -312,6 +317,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal EC2_PROJECT_ID, d.instance.project_id
     assert_equal EC2_PREFIXED_ZONE, d.instance.zone
     assert_equal EC2_VM_ID, d.instance.vm_id
+    assert_equal false, d.instance.running_on_managed_vm
+  end
+
+  def test_ec2_metadata_partial_override
+    setup_ec2_metadata_stubs
+    d = create_driver(CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID)
+    d.run
+    assert_equal EC2_PROJECT_ID, d.instance.project_id
+    assert_equal EC2_PREFIXED_ZONE, d.instance.zone
+    assert_equal CUSTOM_VM_ID, d.instance.vm_id
     assert_equal false, d.instance.running_on_managed_vm
   end
 

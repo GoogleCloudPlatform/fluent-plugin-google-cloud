@@ -99,13 +99,11 @@ module Fluent
 
       # TODO: Send instance tags and/or hostname as labels as well?
       @common_labels = {}
-      @running_on_managed_vm = false
 
       # set attributes from metadata (unless overriden by static config)
       @platform = detect_platform
       case @platform
       when Platform::GCE
-      # Use "generic" COMPUTE_SERVICE as the default environment.
         if @project_id.nil?
           @project_id = fetch_gce_metadata('project/project-id')
         end
@@ -145,6 +143,9 @@ module Fluent
           ('Unable to obtain metadata parameters: ' + missing.join(' '))
       end
 
+      # Default this to false; it is only overwritten if we detect Managed VM.
+      @running_on_managed_vm = false
+
       # Set labels, etc. based on the config
       case @platform
       when Platform::GCE
@@ -166,12 +167,12 @@ module Fluent
             @gae_backend_version
         elsif (attributes.include?('job_id'))
           # Dataflow
-          @running_on_managed_vm = false
           @service_name = DATAFLOW_SERVICE
           @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
           common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
         end
-        # dataflow only uses their own labels; otherwise include GCE labels.
+        # include GCE labels unless we're running on dataflow, which
+        # uses their own labels exclusively.
         if (@service_name != DATAFLOW_SERVICE)
           common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
           common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
@@ -181,6 +182,7 @@ module Fluent
         common_labels["#{EC2_SERVICE}/resource_type"] = 'instance'
         common_labels["#{EC2_SERVICE}/resource_id"] = @vm_id
       when Platform::OTHER
+        # Use COMPUTE_SERVICE as the default environment.
         @service_name = COMPUTE_SERVICE
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
         common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
