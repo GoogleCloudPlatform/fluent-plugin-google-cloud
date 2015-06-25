@@ -459,6 +459,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_malformed_timestamp
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver()
+    # if timestamp is not a hash it is passed through to the struct payload.
+    d.emit({'message' => log_entry(0), 'timestamp' => 'not-a-hash'})
+    d.run
+    verify_index = 0
+    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      assert_equal 2, entry['structPayload'].size, entry
+      assert_equal "not-a-hash", entry['structPayload']['timestamp'], entry
+    end
+  end
+
   def test_severities
     setup_gce_metadata_stubs
     setup_logging_stubs
