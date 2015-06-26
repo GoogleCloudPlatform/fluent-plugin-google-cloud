@@ -222,8 +222,9 @@ module Fluent
           'entries' => [],
         }
         arr.each do |time, record|
-          next unless record.is_a? Hash
+          next unless record.is_a?(Hash)
           if (record.has_key?('timestamp') &&
+              record['timestamp'].is_a?(Hash) &&
               record['timestamp'].has_key?('seconds') &&
               record['timestamp'].has_key?('nanos'))
             ts_secs = record['timestamp']['seconds']
