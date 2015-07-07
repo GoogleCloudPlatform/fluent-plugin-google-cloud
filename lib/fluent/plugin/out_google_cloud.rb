@@ -54,16 +54,24 @@ module Fluent
     config_param :zone, :string, :default => nil
     config_param :vm_id, :string, :default => nil
 
-    # List of parsed fields whose values are sent as labels instead of
-    # becoming part of the struct payload.
+    # label_map (specified as a JSON object) is an unordered set of fluent
+    # field names whose values are sent as labels rather than as part of the
+    # struct payload.
     #
-    # This is specified as a JSON array where the 'name' is the field name
-    # parsed by fluentd and the 'value' is the name of the label to send.
+    # Each entry in the map is a {"field_name": "label_name"} pair.  When
+    # the "field_name" (as parsed by the input plugin) is encountered, a label
+    # with the corresponding "label_name" is added to the log entry.  The
+    # value of the field is used as the value of the label.
     #
-    # label_map {
-    #   "parsed_field_name_1": "sent_label_name_1",
-    #   "parsed_field_name_2": "sent_label_name_2"
-    # }
+    # The map gives the user additional flexibility in specifying label
+    # names, including the ability to use characters which would not be
+    # legal as part of fluent field names.
+    #
+    # Example:
+    #   label_map {
+    #     "field_name_1": "sent_label_name_1",
+    #     "field_name_2": "some.prefix/sent_label_name_2"
+    #   }
     config_param :label_map, :hash, :default => nil
 
     # TODO: Add a log_name config option rather than just using the tag?
