@@ -165,7 +165,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def create_driver(conf=APPLICATION_DEFAULT_CONFIG)
     Fluent::Test::BufferedOutputTestDriver.new(
-        Fluent::GoogleCloudOutput).configure(conf)
+        Fluent::GoogleCloudOutput).configure(conf, use_v1_config: true)
   end
 
   def test_configure_service_account_application_default
@@ -492,6 +492,59 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal expected_severity[verify_index],
         entry['metadata']['severity'], entry
       verify_index += 1
+    end
+  end
+
+  def test_label_map_without_field_present
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %[label_map { "label_field": "sent_label" }]
+    d = create_driver(config)
+    d.emit({'message' => log_entry(0)})
+    d.run
+    # No additional labels should be present
+    verify_log_entries(1, COMPUTE_PARAMS)
+  end
+
+  def test_label_map_with_field_present
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %[label_map { "label_field": "sent_label" }]
+    d = create_driver(config)
+    d.emit({'message' => log_entry(0), 'label_field' => 'label_value'})
+    d.run
+    # make a deep copy of COMPUTE_PARAMS and add the parsed label.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params['labels']['sent_label'] = 'label_value'
+    verify_log_entries(1, params)
+  end
+
+  def test_label_map_with_multiple_fields
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %[
+      label_map {
+        "label1": "sent_label_1",
+        "label_number_two": "foo.googleapis.com/bar",
+        "label3": "label3"
+      }]
+    d = create_driver(config)
+    # not_a_label passes through to the struct payload
+    d.emit({'message' => log_entry(0),
+            'label1' => 'value1',
+            'label_number_two' => 'value2',
+            'not_a_label' => 'value4',
+            'label3' => 'value3'})
+    d.run
+    # make a deep copy of COMPUTE_PARAMS and add the parsed labels.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params['labels']['sent_label_1'] = 'value1'
+    params['labels']['foo.googleapis.com/bar'] = 'value2'
+    params['labels']['label3'] = 'value3'
+    verify_log_entries(1, params, 'structPayload') do |entry|
+      assert_equal 2, entry['structPayload'].size, entry
+      assert_equal "test log entry 0", entry['structPayload']['message'], entry
+      assert_equal 'value4', entry['structPayload']['not_a_label'], entry
     end
   end
 
