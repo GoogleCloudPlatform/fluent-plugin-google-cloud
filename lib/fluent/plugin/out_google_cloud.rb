@@ -54,6 +54,26 @@ module Fluent
     config_param :zone, :string, :default => nil
     config_param :vm_id, :string, :default => nil
 
+    # label_map (specified as a JSON object) is an unordered set of fluent
+    # field names whose values are sent as labels rather than as part of the
+    # struct payload.
+    #
+    # Each entry in the map is a {"field_name": "label_name"} pair.  When
+    # the "field_name" (as parsed by the input plugin) is encountered, a label
+    # with the corresponding "label_name" is added to the log entry.  The
+    # value of the field is used as the value of the label.
+    #
+    # The map gives the user additional flexibility in specifying label
+    # names, including the ability to use characters which would not be
+    # legal as part of fluent field names.
+    #
+    # Example:
+    #   label_map {
+    #     "field_name_1": "sent_label_name_1",
+    #     "field_name_2": "some.prefix/sent_label_name_2"
+    #   }
+    config_param :label_map, :hash, :default => nil
+
     # TODO: Add a log_name config option rather than just using the tag?
 
     # Expose attr_readers to make testing of metadata more direct than only
@@ -269,6 +289,22 @@ module Fluent
             record.delete('severity')
           else
             entry['metadata']['severity'] = 'DEFAULT'
+          end
+
+          # If a field is present in the label_map, send its value as a label
+          # (mapping the field name to label name as specified in the config)
+          # and do not send that field as part of the payload.
+          if !label_map.nil?
+            labels = {}
+            @label_map.each do |field, label|
+              if record.has_key?(field)
+                labels[label] = record[field]
+                record.delete(field)
+              end
+            end
+            if !labels.empty?
+              entry['metadata']['labels'] = labels
+            end
           end
 
           # use textPayload if the only remainaing key is 'message',
