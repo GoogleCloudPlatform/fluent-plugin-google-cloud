@@ -4,7 +4,7 @@ Gem::Specification.new do |gem|
   gem.summary       = %q{Fluentd plugin to stream logs to the Google Cloud Platform's logging API}
   gem.homepage      = 'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache 2.0'
-  gem.version       = '0.4.1'
+  gem.version       = '0.4.2'
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
 
