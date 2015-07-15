@@ -1,7 +1,9 @@
-= Google Cloud Logging output plugin for {fluentd}[http://github.com/fluent/fluentd]
+= Google Cloud Logging plugin for {fluentd}[http://github.com/fluent/fluentd]
 
-fluent-plugin-google-cloud is an output plugin for fluents which sends logs to
-the {Google Cloud Logging API}[https://cloud.google.com/logging/docs/api/].
+fluent-plugin-google-cloud is an
+{output plugin for fluentd}[http://docs.fluentd.org/articles/output-plugin-overview]
+which sends logs to the
+{Google Cloud Logging API}[https://cloud.google.com/logging/docs/api/].
 
 This is an official Google Ruby gem.
 
@@ -23,8 +25,8 @@ will also install and configure the gem.
 
 To send logs to Google Cloud Logging, specify <code>type_google_cloud</code>
 in a
-{<code>match</code> clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
-in your fluentd configuration file, for example:
+{match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
+of your fluentd configuration file, for example:
 
     <match **>
       type google_cloud
@@ -32,8 +34,7 @@ in your fluentd configuration file, for example:
 
 No further configuration is required. The plugin uses
 {Google Application Default Credentials}[https://developers.google.com/identity/protocols/application-default-credentials]
-for authorization.
-Additional documentation on using Application Default Credentials can be found
+for authorization - for additional information see 
 {here}[https://cloud.google.com/logging/docs/agent/authorization].
 
 <em>The previously documented parameters auth_method, private_key_email,
