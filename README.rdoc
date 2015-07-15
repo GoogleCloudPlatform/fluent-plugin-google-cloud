@@ -2,8 +2,8 @@
 
 fluent-plugin-google-cloud sends logs to the Google Cloud Platform logging API.
 
-{<img src="https://badge.fury.io/rb/fluent-plugin-google-cloug.svg" alt="Gem Version" />}[http://badge.fury.io/rb/fluent-plugin-google-cloud]
-{<img src="https://travis-ci.org/myGrid/fluent-plugin-google-cloud.svg?branch=master" alt="Build Status" />}[https://travis-ci.org/myGrid/fluent-plugin-google-cloud]
+{<img src="https://badge.fury.io/rb/fluent-plugin-google-cloud.svg" alt="Gem Version" />}[http://badge.fury.io/rb/fluent-plugin-google-cloud]
+{<img src="https://secure.travis-ci.org/google/google-auth-library-ruby.png" alt="Build Status" />}[https://travis-ci.org/GoogleCloudPlatform/fluent-plugin-google-cloud]
 
 == Installation
 
