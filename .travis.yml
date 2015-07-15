@@ -1,0 +1,17 @@
+nguage: ruby
+rvm:
+  - 2.2
+  - 2.0.0
+  - 2.1
+  - 1.9.3
+script: "bundle exec rake test"
+before_install:
+ - gem update bundler
+ - sudo apt-get update
+ - sudo apt-get install idn
+notifications:
+  email:
+    recipients:
+      - salty@google.com
+    on_success: change
+    on_failure: change
