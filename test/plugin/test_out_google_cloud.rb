@@ -17,6 +17,10 @@ require 'json'
 require 'mocha/test_unit'
 require 'webmock/test_unit'
 
+# This trips for many tests due to the use of conditionals.
+# rubocop:disable Metrics/AbcSize
+
+# Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
   def setup
     Fluent::Test.setup
@@ -45,11 +49,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   EC2_ACCOUNT_ID = '123456789012'
 
   # The formatting here matches the format used on the VM.
-  EC2_IDENTITY_DOCUMENT = %[{
+  EC2_IDENTITY_DOCUMENT = %({
   "accountId" : "#{EC2_ACCOUNT_ID}",
   "availabilityZone" : "#{EC2_ZONE}",
   "instanceId" : "#{EC2_VM_ID}"
-}]
+})
 
   # Managed VMs specific labels
   MANAGED_VM_BACKEND_NAME = 'default'
@@ -60,56 +64,58 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   FAKE_AUTH_TOKEN = 'abc123'
 
   # Configuration files for various test scenarios
-  APPLICATION_DEFAULT_CONFIG = %[
-  ]
+  APPLICATION_DEFAULT_CONFIG = %(
+  )
 
-  PRIVATE_KEY_CONFIG = %[
+  # rubocop:disable Metrics/LineLength
+  PRIVATE_KEY_CONFIG = %(
     auth_method private_key
     private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
     private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
-  ]
+  )
+  # rubocop:enable Metrics/LineLength
 
-  NO_METADATA_SERVICE_CONFIG = %[
+  NO_METADATA_SERVICE_CONFIG = %(
     use_metadata_service false
-  ]
+  )
 
-  CUSTOM_METADATA_CONFIG = %[
+  CUSTOM_METADATA_CONFIG = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
-  ]
+  )
 
-  CONFIG_MISSING_PRIVATE_KEY_PATH = %[
+  CONFIG_MISSING_PRIVATE_KEY_PATH = %(
     auth_method private_key
     private_key_email nobody@example.com
-  ]
-  CONFIG_MISSING_PRIVATE_KEY_EMAIL = %[
+  )
+  CONFIG_MISSING_PRIVATE_KEY_EMAIL = %(
     auth_method private_key
     private_key_path /fake/path/to/key
-  ]
-  CONFIG_MISSING_METADATA_PROJECT_ID = %[
+  )
+  CONFIG_MISSING_METADATA_PROJECT_ID = %(
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
-  ]
-  CONFIG_MISSING_METADATA_ZONE = %[
+  )
+  CONFIG_MISSING_METADATA_ZONE = %(
     project_id #{CUSTOM_PROJECT_ID}
     vm_id #{CUSTOM_VM_ID}
-  ]
-  CONFIG_MISSING_METADATA_VM_ID = %[
+  )
+  CONFIG_MISSING_METADATA_VM_ID = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
-  ]
-  CONFIG_MISSING_METADATA_ALL = %[
-  ]
+  )
+  CONFIG_MISSING_METADATA_ALL = %(
+  )
 
-  CONFIG_EC2_PROJECT_ID = %[
+  CONFIG_EC2_PROJECT_ID = %(
     project_id #{EC2_PROJECT_ID}
-  ]
+  )
 
-  CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID = %[
+  CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID = %(
     project_id #{EC2_PROJECT_ID}
     vm_id #{CUSTOM_VM_ID}
-  ]
+  )
 
   # Service configurations for various services
   COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
@@ -163,9 +169,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
-  def create_driver(conf=APPLICATION_DEFAULT_CONFIG)
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG)
     Fluent::Test::BufferedOutputTestDriver.new(
-        Fluent::GoogleCloudOutput).configure(conf, use_v1_config: true)
+      Fluent::GoogleCloudOutput).configure(conf, use_v1_config: true)
   end
 
   def test_configure_service_account_application_default
@@ -188,19 +194,21 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
   end
 
-  def test_configure_invalid_private_key_configs
+  def test_configure_invalid_private_key_missing_path
     exception_count = 0
     begin
-      d = create_driver(CONFIG_MISSING_PRIVATE_KEY_PATH)
+      _d = create_driver(CONFIG_MISSING_PRIVATE_KEY_PATH)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_path'
       exception_count += 1
     end
     assert_equal 1, exception_count
+  end
 
+  def test_configure_invalid_private_key_missing_email
     exception_count = 0
     begin
-      d = create_driver(CONFIG_MISSING_PRIVATE_KEY_EMAIL)
+      _d = create_driver(CONFIG_MISSING_PRIVATE_KEY_EMAIL)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'private_key_email'
       exception_count += 1
@@ -208,41 +216,50 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
-  def test_configure_invalid_metadata_configs_no_metadata_service
+  def test_configure_invalid_metadata_missing_project_id_no_metadata_service
     setup_no_metadata_service_stubs
     exception_count = 0
     begin
-      d = create_driver(CONFIG_MISSING_METADATA_PROJECT_ID)
+      _d = create_driver(CONFIG_MISSING_METADATA_PROJECT_ID)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'Unable to obtain metadata parameters:'
       assert error.message.include? 'project_id'
       exception_count += 1
     end
     assert_equal 1, exception_count
+  end
 
+  def test_configure_invalid_metadata_missing_zone_no_metadata_service
+    setup_no_metadata_service_stubs
     exception_count = 0
     begin
-      d = create_driver(CONFIG_MISSING_METADATA_ZONE)
+      _d = create_driver(CONFIG_MISSING_METADATA_ZONE)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'Unable to obtain metadata parameters:'
       assert error.message.include? 'zone'
       exception_count += 1
     end
     assert_equal 1, exception_count
+  end
 
+  def test_configure_invalid_metadata_missing_vm_id_no_metadata_service
+    setup_no_metadata_service_stubs
     exception_count = 0
     begin
-      d = create_driver(CONFIG_MISSING_METADATA_VM_ID)
+      _d = create_driver(CONFIG_MISSING_METADATA_VM_ID)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'Unable to obtain metadata parameters:'
       assert error.message.include? 'vm_id'
       exception_count += 1
     end
     assert_equal 1, exception_count
+  end
 
+  def test_configure_invalid_metadata_missing_all_no_metadata_service
+    setup_no_metadata_service_stubs
     exception_count = 0
     begin
-      d = create_driver(CONFIG_MISSING_METADATA_ALL)
+      _d = create_driver(CONFIG_MISSING_METADATA_ALL)
     rescue Fluent::ConfigError => error
       assert error.message.include? 'Unable to obtain metadata parameters:'
       assert error.message.include? 'project_id'
@@ -255,7 +272,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_metadata_loading
     setup_gce_metadata_stubs
-    d = create_driver()
+    d = create_driver
     d.run
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
@@ -266,7 +283,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_managed_vm_metadata_loading
     setup_gce_metadata_stubs
     setup_managed_vm_metadata_stubs
-    d = create_driver()
+    d = create_driver
     d.run
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
@@ -334,7 +351,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_ec2_metadata_stubs
     exception_count = 0
     begin
-      d = create_driver()
+      _d = create_driver
     rescue Fluent::ConfigError => error
       assert error.message.include? 'Unable to obtain metadata parameters:'
       assert error.message.include? 'project_id'
@@ -346,8 +363,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_one_log
     setup_gce_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
-    d.emit({'message' => log_entry(0)})
+    d = create_driver
+    d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, COMPUTE_PARAMS)
   end
@@ -356,8 +373,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_logging_stubs
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
-    d = create_driver()
-    d.emit({'message' => log_entry(0)})
+    d = create_driver
+    d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, COMPUTE_PARAMS)
   end
@@ -365,9 +382,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_one_log_with_invalid_json_credentials
     setup_gce_metadata_stubs
     setup_logging_stubs
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/invalid_credentials.json'
-    d = create_driver()
-    d.emit({'message' => log_entry(0)})
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = \
+      'test/plugin/data/invalid_credentials.json'
+    d = create_driver
+    d.emit('message' => log_entry(0))
     exception_count = 0
     begin
       d.run
@@ -382,7 +400,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_logging_stubs
     d = create_driver(PRIVATE_KEY_CONFIG)
-    d.emit({'message' => log_entry(0)})
+    d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, COMPUTE_PARAMS)
   end
@@ -394,7 +412,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
     setup_logging_stubs
     d = create_driver(NO_METADATA_SERVICE_CONFIG + CUSTOM_METADATA_CONFIG)
-    d.emit({'message' => log_entry(0)})
+    d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, CUSTOM_PARAMS)
   end
@@ -403,7 +421,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_ec2_metadata_stubs
     setup_logging_stubs
     d = create_driver(CONFIG_EC2_PROJECT_ID)
-    d.emit({'message' => log_entry(0)})
+    d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, EC2_PARAMS)
   end
@@ -411,12 +429,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_struct_payload_log
     setup_gce_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
-    d.emit({'msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000})
+    d = create_driver
+    d.emit('msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000)
     d.run
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
       assert_equal 3, entry['structPayload'].size, entry
-      assert_equal "test log entry 0", entry['structPayload']['msg'], entry
+      assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
       assert_equal 'test', entry['structPayload']['tag2'], entry
       assert_equal 5000, entry['structPayload']['data'], entry
     end
@@ -425,26 +443,26 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_timestamps
     setup_gce_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
+    d = create_driver
     expected_ts = []
     emit_index = 0
-    [Time.at(123456.789), Time.at(0), Time.now].each do |ts|
+    [Time.at(123_456.789), Time.at(0), Time.now].each do |ts|
       # Test the "native" fluentd timestamp as well as our nanosecond tags.
-      d.emit({'message' => log_entry(emit_index)}, ts.to_f)
+      d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
       # The native timestamp currently only supports second granularity
       # (fluentd issue #461), so strip nanoseconds from the expected value.
       expected_ts.push(Time.at(ts.tv_sec))
       emit_index += 1
-      d.emit({'message' => log_entry(emit_index),
-              'timeNanos' => ts.tv_sec * 1000000000 + ts.tv_nsec})
+      d.emit('message' => log_entry(emit_index),
+             'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
       expected_ts.push(ts)
       emit_index += 1
-      d.emit({'message' => log_entry(emit_index),
-              'timestamp' => {'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec}})
+      d.emit('message' => log_entry(emit_index),
+             'timestamp' => { 'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec })
       expected_ts.push(ts)
       emit_index += 1
-      d.emit({'message' => log_entry(emit_index),
-              'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec})
+      d.emit('message' => log_entry(emit_index),
+             'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec)
       expected_ts.push(ts)
       emit_index += 1
     end
@@ -452,9 +470,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
       assert_equal expected_ts[verify_index].tv_sec,
-        entry['metadata']['timestamp']['seconds'], entry
+                   entry['metadata']['timestamp']['seconds'], entry
       assert_equal expected_ts[verify_index].tv_nsec,
-        entry['metadata']['timestamp']['nanos'], entry
+                   entry['metadata']['timestamp']['nanos'], entry
       verify_index += 1
     end
   end
@@ -462,27 +480,26 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_malformed_timestamp
     setup_gce_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
+    d = create_driver
     # if timestamp is not a hash it is passed through to the struct payload.
-    d.emit({'message' => log_entry(0), 'timestamp' => 'not-a-hash'})
+    d.emit('message' => log_entry(0), 'timestamp' => 'not-a-hash')
     d.run
-    verify_index = 0
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
       assert_equal 2, entry['structPayload'].size, entry
-      assert_equal "not-a-hash", entry['structPayload']['timestamp'], entry
+      assert_equal 'not-a-hash', entry['structPayload']['timestamp'], entry
     end
   end
 
   def test_severities
     setup_gce_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
+    d = create_driver
     expected_severity = []
     emit_index = 0
     # Array of pairs of [parsed_severity, expected_severity]
-    [['INFO', 'INFO'], ['warn', 'WARNING'], ['E', 'ERROR'],
-     ['BLAH', 'DEFAULT'], ['105', 100], ['', 'DEFAULT']].each do |sev|
-      d.emit({'message' => log_entry(emit_index), 'severity' => sev[0]})
+    [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
+     ['105', 100], ['', 'DEFAULT']].each do |sev|
+      d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
       expected_severity.push(sev[1])
       emit_index += 1
     end
@@ -490,7 +507,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
       assert_equal expected_severity[verify_index],
-        entry['metadata']['severity'], entry
+                   entry['metadata']['severity'], entry
       verify_index += 1
     end
   end
@@ -498,9 +515,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_label_map_without_field_present
     setup_gce_metadata_stubs
     setup_logging_stubs
-    config = %[label_map { "label_field": "sent_label" }]
+    config = %(label_map { "label_field": "sent_label" })
     d = create_driver(config)
-    d.emit({'message' => log_entry(0)})
+    d.emit('message' => log_entry(0))
     d.run
     # No additional labels should be present
     verify_log_entries(1, COMPUTE_PARAMS)
@@ -509,9 +526,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_label_map_with_field_present
     setup_gce_metadata_stubs
     setup_logging_stubs
-    config = %[label_map { "label_field": "sent_label" }]
+    config = %(label_map { "label_field": "sent_label" })
     d = create_driver(config)
-    d.emit({'message' => log_entry(0), 'label_field' => 'label_value'})
+    d.emit('message' => log_entry(0), 'label_field' => 'label_value')
     d.run
     # make a deep copy of COMPUTE_PARAMS and add the parsed label.
     params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
@@ -522,19 +539,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_label_map_with_multiple_fields
     setup_gce_metadata_stubs
     setup_logging_stubs
-    config = %[
+    config = %(
       label_map {
         "label1": "sent_label_1",
         "label_number_two": "foo.googleapis.com/bar",
         "label3": "label3"
-      }]
+      }
+    )
     d = create_driver(config)
     # not_a_label passes through to the struct payload
-    d.emit({'message' => log_entry(0),
-            'label1' => 'value1',
-            'label_number_two' => 'value2',
-            'not_a_label' => 'value4',
-            'label3' => 'value3'})
+    d.emit('message' => log_entry(0),
+           'label1' => 'value1',
+           'label_number_two' => 'value2',
+           'not_a_label' => 'value4',
+           'label3' => 'value3')
     d.run
     # make a deep copy of COMPUTE_PARAMS and add the parsed labels.
     params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
@@ -543,7 +561,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     params['labels']['label3'] = 'value3'
     verify_log_entries(1, params, 'structPayload') do |entry|
       assert_equal 2, entry['structPayload'].size, entry
-      assert_equal "test log entry 0", entry['structPayload']['message'], entry
+      assert_equal 'test log entry 0', entry['structPayload']['message'], entry
       assert_equal 'value4', entry['structPayload']['not_a_label'], entry
     end
   end
@@ -551,14 +569,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_multiple_logs
     setup_gce_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
+    d = create_driver
     # Only test a few values because otherwise the test can take minutes.
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
       d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit({'message' => log_entry(i)}) }
+      n.times { |i| d.emit('message' => log_entry(i)) }
       d.run
       verify_log_entries(n, COMPUTE_PARAMS)
     end
@@ -567,9 +585,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_malformed_log
     setup_gce_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
+    d = create_driver
     # if the entry is not a hash, the plugin should silently drop it.
-    d.emit("a string is not a valid message")
+    d.emit('a string is not a valid message')
     d.run
     assert @logs_sent.empty?
   end
@@ -578,21 +596,21 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
-        :status => 400, :body => "Bad Request")
-    d = create_driver()
-    d.emit({'message' => log_entry(0)})
+    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+      .to_return(status: 400, body: 'Bad Request')
+    d = create_driver
+    d.emit('message' => log_entry(0))
     d.run
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 1)
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
   end
 
   # helper for the ClientError retriable special cases below.
   def client_error_helper(message)
     setup_gce_metadata_stubs
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
-        :status => 401, :body => message)
-    d = create_driver()
-    d.emit({'message' => log_entry(0)})
+    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+      .to_return(status: 401, body: message)
+    d = create_driver
+    d.emit('message' => log_entry(0))
     exception_count = 0
     begin
       d.run
@@ -600,38 +618,39 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal message, error.message
       exception_count += 1
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
     assert_equal 1, exception_count
   end
 
   def test_client_error_invalid_credentials
-    client_error_helper("Invalid Credentials")
+    client_error_helper('Invalid Credentials')
   end
 
   def test_client_error_caller_does_not_have_permission
-    client_error_helper("The caller does not have permission")
+    client_error_helper('The caller does not have permission')
   end
 
   def test_client_error_request_had_invalid_credentials
-    client_error_helper("Request had invalid credentials.")
+    client_error_helper('Request had invalid credentials.')
   end
 
   def test_client_error_project_has_not_enabled_the_api
-    client_error_helper("Project has not enabled the API. Please use Google Developers Console to activate the API for your project.")
+    client_error_helper('Project has not enabled the API. Please use ' \
+      'Google Developers Console to activate the API for your project.')
   end
 
   def test_client_error_unable_to_fetch_accesss_token
-    client_error_helper("Unable to fetch access token (no scopes configured?)")
+    client_error_helper('Unable to fetch access token (no scopes configured?)')
   end
 
   def test_server_error
     setup_gce_metadata_stubs
     # The API client should retry this once, then throw an exception which
     # gets propagated through the plugin.
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS)).to_return(
-        :status => 500, :body => "Server Error")
-    d = create_driver()
-    d.emit({'message' => log_entry(0)})
+    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+      .to_return(status: 500, body: 'Server Error')
+    d = create_driver
+    d.emit('message' => log_entry(0))
     exception_count = 0
     begin
       d.run
@@ -639,7 +658,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal 'Server Error', error.message
       exception_count += 1
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), :times => 2)
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
     assert_equal 1, exception_count
   end
 
@@ -647,8 +666,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_managed_vm_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
-    d.emit({'message' => log_entry(0)})
+    d = create_driver
+    d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, VMENGINE_PARAMS)
   end
@@ -657,20 +676,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_managed_vm_metadata_stubs
     setup_logging_stubs
-    d = create_driver()
+    d = create_driver
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
       d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit({'message' => log_entry(i)}) }
+      n.times { |i| d.emit('message' => log_entry(i)) }
       d.run
       verify_log_entries(n, VMENGINE_PARAMS)
     end
   end
 
   # Make parse_severity public so we can test it.
-  class Fluent::GoogleCloudOutput
+  class Fluent::GoogleCloudOutput # rubocop:disable Style/ClassAndModuleChildren
     public :parse_severity
   end
 
@@ -678,8 +697,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     test_obj = Fluent::GoogleCloudOutput.new
 
     # known severities should translate to themselves, regardless of case
-    ['DEFAULT', 'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL',
-     'ALERT', 'EMERGENCY'].each do |severity|
+    %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY).each \
+      do |severity|
       assert_equal(severity, test_obj.parse_severity(severity))
       assert_equal(severity, test_obj.parse_severity(severity.downcase))
       assert_equal(severity, test_obj.parse_severity(severity.capitalize))
@@ -751,25 +770,26 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def uri_for_log(config)
     'https://logging.googleapis.com/v1beta3/projects/' + config['project_id'] +
-        '/logs/' + config['log_name'] + '/entries:write'
+      '/logs/' + config['log_name'] + '/entries:write'
   end
 
   def stub_metadata_request(metadata_path, response_body)
-    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' + metadata_path).
-      to_return(:body => response_body, :status => 200,
-                :headers => {'Content-Length' => response_body.length})
+    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' +
+                 metadata_path)
+      .to_return(body: response_body, status: 200,
+                 headers: { 'Content-Length' => response_body.length })
   end
 
   def setup_no_metadata_service_stubs
     # Simulate a machine with no metadata service present
-    stub_request(:any, /http:\/\/169.254.169.254\/.*/).
-      to_raise Errno::EHOSTUNREACH;
+    stub_request(:any, %r{http://169.254.169.254/.*})
+      .to_raise(Errno::EHOSTUNREACH)
   end
 
   def setup_gce_metadata_stubs
     # Stub the root, used for platform detection by the plugin and 'googleauth'.
-    stub_request(:get, 'http://169.254.169.254').
-      to_return(:status => 200, :headers => {'Metadata-Flavor' => 'Google'})
+    stub_request(:get, 'http://169.254.169.254')
+      .to_return(status: 200, headers: { 'Metadata-Flavor' => 'Google' })
 
     # Create stubs for all the GCE metadata lookups the agent needs to make.
     stub_metadata_request('project/project-id', PROJECT_ID)
@@ -779,57 +799,60 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                           "attribute1\nattribute2\nattribute3")
 
     # Used by 'googleauth' to fetch the default service account credentials.
-    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token').
-      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
-                :status => 200,
-                :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
-                             'Content-Type' => 'application/json' })
+    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' \
+                 'instance/service-accounts/default/token')
+      .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
+                 status: 200,
+                 headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
+                            'Content-Type' => 'application/json' })
   end
 
   def setup_ec2_metadata_stubs
     # Stub the root, used for platform detection
-    stub_request(:get, 'http://169.254.169.254').
-      to_return(:status => 200, :headers => {'Server' => 'EC2ws'})
+    stub_request(:get, 'http://169.254.169.254')
+      .to_return(status: 200, headers: { 'Server' => 'EC2ws' })
 
     # Stub the identity document lookup made by the agent.
-    stub_request(:get, 'http://169.254.169.254/latest/dynamic/instance-identity/document').
-      to_return(:body => EC2_IDENTITY_DOCUMENT, :status => 200,
-                :headers => {'Content-Length' => EC2_IDENTITY_DOCUMENT.length})
+    stub_request(:get, 'http://169.254.169.254/latest/dynamic/' \
+                 'instance-identity/document')
+      .to_return(body: EC2_IDENTITY_DOCUMENT, status: 200,
+                 headers: { 'Content-Length' => EC2_IDENTITY_DOCUMENT.length })
   end
 
   def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS, CUSTOM_PARAMS, EC2_PARAMS].
-        each do |params|
-      stub_request(:post, uri_for_log(params)).to_return do |request|
-        @logs_sent << JSON.parse(request.body)
-        {:body => ''}
+    [COMPUTE_PARAMS, VMENGINE_PARAMS, CUSTOM_PARAMS, EC2_PARAMS]
+      .each do |params|
+        stub_request(:post, uri_for_log(params))
+          .to_return do |request|
+            @logs_sent << JSON.parse(request.body)
+            { body: '' }
+          end
       end
-    end
   end
 
   def setup_auth_stubs
     # Used when loading credentials from a JSON file.
-    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token').
-      with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
-      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
-                :status => 200,
-                :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
-                             'Content-Type' => 'application/json' })
+    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
+      .with(body: hash_including(grant_type: AUTH_GRANT_TYPE))
+      .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
+                 status: 200,
+                 headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
+                            'Content-Type' => 'application/json' })
 
-    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token').
-      with(:body => hash_including({:grant_type => 'refresh_token'})).
-      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
-                :status => 200,
-                :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
-                             'Content-Type' => 'application/json' })
+    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
+      .with(body: hash_including(grant_type: 'refresh_token'))
+      .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
+                 status: 200,
+                 headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
+                            'Content-Type' => 'application/json' })
 
     # Used for 'private_key' auth.
-    stub_request(:post, 'https://accounts.google.com/o/oauth2/token').
-      with(:body => hash_including({:grant_type => AUTH_GRANT_TYPE})).
-      to_return(:body => "{\"access_token\": \"#{FAKE_AUTH_TOKEN}\"}",
-                :status => 200,
-                :headers => {'Content-Length' => FAKE_AUTH_TOKEN.length,
-                             'Content-Type' => 'application/json' })
+    stub_request(:post, 'https://accounts.google.com/o/oauth2/token')
+      .with(body: hash_including(grant_type: AUTH_GRANT_TYPE))
+      .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
+                 status: 200,
+                 headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
+                            'Content-Type' => 'application/json' })
   end
 
   def setup_managed_vm_metadata_stubs
@@ -850,21 +873,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     all_labels ||= common_labels
     all_labels.merge!(entry['metadata']['labels'] || {})
     all_labels.each do |key, value|
-      assert expected_labels.has_key?(key), "Unexpected label #{key} => #{value}"
-      assert_equal value, expected_labels[key],
-          "Value mismatch - expected #{expected_labels[key]} in #{key} => #{value}"
+      assert expected_labels.key?(key), "Unexpected label #{key} => #{value}"
+      assert_equal value, expected_labels[key], 'Value mismatch - expected ' \
+        "#{expected_labels[key]} in #{key} => #{value}"
     end
-    assert_equal expected_labels.length, all_labels.length,
-        ("Expected #{expected_labels.length} labels, got " +
-         "#{all_labels.length}")
+    assert_equal expected_labels.length, all_labels.length, 'Expected ' \
+      "#{expected_labels.length} labels, got #{all_labels.length}"
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type='textPayload')
+  def verify_log_entries(n, params, payload_type = 'textPayload')
     i = 0
     @logs_sent.each do |batch|
       batch['entries'].each do |entry|
-        assert entry.has_key?(payload_type)
+        assert entry.key?(payload_type)
         if (payload_type == 'textPayload')
           # Check the payload for textPayload, otherwise it is up to the caller.
           assert_equal "test log entry #{i}", entry['textPayload'], batch
@@ -873,9 +895,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         assert_equal params['zone'], entry['metadata']['zone']
         assert_equal params['service_name'], entry['metadata']['serviceName']
         check_labels entry, batch['commonLabels'], params['labels']
-        if (block_given?)
-          yield(entry)
-        end
+        yield(entry) if block_given?
         i += 1
         assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
       end
