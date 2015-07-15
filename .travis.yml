@@ -1,4 +1,5 @@
-nguage: ruby
+language: ruby
+sudo: false
 rvm:
   - 2.2
   - 2.0.0
@@ -7,8 +8,6 @@ rvm:
 script: "bundle exec rake test"
 before_install:
  - gem update bundler
- - sudo apt-get update
- - sudo apt-get install idn
 notifications:
   email:
     recipients:
