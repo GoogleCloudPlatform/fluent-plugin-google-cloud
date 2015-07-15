@@ -13,6 +13,7 @@
 # limitations under the License.
 
 module Fluent
+  # fluentd output plugin for the Google Cloud Logging API
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
 
@@ -27,6 +28,9 @@ module Fluent
 
     # Address of the metadata service.
     METADATA_SERVICE_ADDR = '169.254.169.254'
+
+    # Disable this warning to conform to fluentd config_param conventions.
+    # rubocop:disable Style/HashSyntax
 
     # DEPRECATED: auth_method (and support for 'private_key') is deprecated in
     # favor of Google Application Default Credentials as documented at:
@@ -74,6 +78,8 @@ module Fluent
     #   }
     config_param :label_map, :hash, :default => nil
 
+    # rubocop:enable Style/HashSyntax
+
     # TODO: Add a log_name config option rather than just using the tag?
 
     # Expose attr_readers to make testing of metadata more direct than only
@@ -95,24 +101,27 @@ module Fluent
       require 'googleauth'
       require 'json'
       require 'open-uri'
+
+      # use the global logger
+      @log = $log # rubocop:disable Style/GlobalVars
     end
 
     def configure(conf)
       super
 
-      if !@auth_method.nil?
-        $log.warn ('auth_method is deprecated; please migrate to using ' +
-                   'Application Default Credentials.')
+      unless @auth_method.nil?
+        @log.warn 'auth_method is deprecated; please migrate to using ' \
+          'Application Default Credentials.'
         if @auth_method == 'private_key'
           if !@private_key_email
-            raise Fluent::ConfigError, ('"private_key_email" must be ' +
-                'specified if auth_method is "private_key"')
+            fail Fluent::ConfigError, '"private_key_email" must be ' \
+              'specified if auth_method is "private_key"'
           elsif !@private_key_path
-            raise Fluent::ConfigError, ('"private_key_path" must be ' +
-                'specified if auth_method is "private_key"')
+            fail Fluent::ConfigError, '"private_key_path" must be ' \
+              'specified if auth_method is "private_key"'
           elsif !@private_key_passphrase
-            raise Fluent::ConfigError, ('"private_key_passphrase" must be ' +
-                'specified if auth_method is "private_key"')
+            fail Fluent::ConfigError, '"private_key_passphrase" must be ' \
+              'specified if auth_method is "private_key"'
           end
         end
       end
@@ -133,34 +142,32 @@ module Fluent
           fully_qualified_zone = fetch_gce_metadata('instance/zone')
           @zone = fully_qualified_zone.rpartition('/')[2]
         end
-        if @vm_id.nil?
-          @vm_id = fetch_gce_metadata('instance/id')
-        end
+        @vm_id = fetch_gce_metadata('instance/id') if @vm_id.nil?
       when Platform::EC2
         metadata = fetch_ec2_metadata
-        if @zone.nil? && metadata.has_key?('availabilityZone')
+        if @zone.nil? && metadata.key?('availabilityZone')
           @zone = 'aws:' + metadata['availabilityZone']
         end
-        if @vm_id.nil? && metadata.has_key?('instanceId')
+        if @vm_id.nil? && metadata.key?('instanceId')
           @vm_id = metadata['instanceId']
         end
-        if metadata.has_key?('accountId')
+        if metadata.key?('accountId')
           common_labels["#{EC2_SERVICE}/account_id"] = metadata['accountId']
         end
       when Platform::OTHER
         # do nothing
       else
-        raise Fluent::ConfigError, 'Unknown platform ' + @platform
+        fail Fluent::ConfigError, 'Unknown platform ' + @platform
       end
 
       # all metadata parameters must now be set
       unless @project_id && @zone && @vm_id
         missing = []
-        missing << "project_id" unless @project_id
-        missing << "zone" unless @zone
-        missing << "vm_id" unless @vm_id
-        raise Fluent::ConfigError,
-          ('Unable to obtain metadata parameters: ' + missing.join(' '))
+        missing << 'project_id' unless @project_id
+        missing << 'zone' unless @zone
+        missing << 'vm_id' unless @vm_id
+        fail Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
+          missing.join(' ')
       end
 
       # Default this to false; it is only overwritten if we detect Managed VM.
@@ -173,8 +180,8 @@ module Fluent
         # Check for specialized GCE environments (Managed VM or Dataflow).
         # TODO: Add config options for these to allow for running outside GCE?
         attributes = fetch_gce_metadata('instance/attributes/').split
-        if (attributes.include?('gae_backend_name') &&
-            attributes.include?('gae_backend_version'))
+        if attributes.include?('gae_backend_name') &&
+           attributes.include?('gae_backend_version')
           # Managed VM
           @running_on_managed_vm = true
           @gae_backend_name =
@@ -185,7 +192,7 @@ module Fluent
           common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
           common_labels["#{APPENGINE_SERVICE}/version_id"] =
             @gae_backend_version
-        elsif (attributes.include?('job_id'))
+        elsif attributes.include?('job_id')
           # Dataflow
           @service_name = DATAFLOW_SERVICE
           @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
@@ -212,7 +219,7 @@ module Fluent
     def start
       super
 
-      init_api_client()
+      init_api_client
 
       @successful_call = false
       @timenanos_warning = false
@@ -230,43 +237,41 @@ module Fluent
       # Group the entries since we have to make one call per tag.
       grouped_entries = {}
       chunk.msgpack_each do |tag, *arr|
-        if !grouped_entries.has_key?(tag)
-          grouped_entries[tag] = []
-        end
+        grouped_entries[tag] = [] unless grouped_entries.key?(tag)
         grouped_entries[tag].push(arr)
       end
 
       grouped_entries.each do |tag, arr|
         write_log_entries_request = {
           'commonLabels' => @common_labels,
-          'entries' => [],
+          'entries' => []
         }
         arr.each do |time, record|
           next unless record.is_a?(Hash)
-          if (record.has_key?('timestamp') &&
-              record['timestamp'].is_a?(Hash) &&
-              record['timestamp'].has_key?('seconds') &&
-              record['timestamp'].has_key?('nanos'))
+          if record.key?('timestamp') &&
+             record['timestamp'].is_a?(Hash) &&
+             record['timestamp'].key?('seconds') &&
+             record['timestamp'].key?('nanos')
             ts_secs = record['timestamp']['seconds']
             ts_nanos = record['timestamp']['nanos']
             record.delete('timestamp')
-          elsif (record.has_key?('timestampSeconds') &&
-                 record.has_key?('timestampNanos'))
+          elsif record.key?('timestampSeconds') &&
+                record.key?('timestampNanos')
             ts_secs = record['timestampSeconds']
             ts_nanos = record['timestampNanos']
             record.delete('timestampSeconds')
             record.delete('timestampNanos')
-          elsif (record.has_key?('timeNanos'))
+          elsif record.key?('timeNanos')
             # This is deprecated since the precision is insufficient.
             # Use timestampSeconds/timestampNanos instead
-            ts_secs = (record['timeNanos'] / 1000000000).to_i
-            ts_nanos = record['timeNanos'] % 1000000000
+            ts_secs = (record['timeNanos'] / 1_000_000_000).to_i
+            ts_nanos = record['timeNanos'] % 1_000_000_000
             record.delete('timeNanos')
-            if (!@timenanos_warning)
+            unless @timenanos_warning
               # Warn the user this is deprecated, but only once to avoid spam.
               @timenanos_warning = true
-              $log.warn ("timeNanos is deprecated - please use " +
-                         "timestampSeconds and timestampNanos instead.")
+              @log.warn 'timeNanos is deprecated - please use ' \
+                'timestampSeconds and timestampNanos instead.'
             end
           else
             timestamp = Time.at(time)
@@ -281,10 +286,10 @@ module Fluent
               'timestamp' => {
                 'seconds' => ts_secs,
                 'nanos' => ts_nanos
-              },
-            },
+              }
+            }
           }
-          if record.has_key?('severity')
+          if record.key?('severity')
             entry['metadata']['severity'] = parse_severity(record['severity'])
             record.delete('severity')
           else
@@ -294,22 +299,20 @@ module Fluent
           # If a field is present in the label_map, send its value as a label
           # (mapping the field name to label name as specified in the config)
           # and do not send that field as part of the payload.
-          if !label_map.nil?
+          unless label_map.nil?
             labels = {}
             @label_map.each do |field, label|
-              if record.has_key?(field)
+              if record.key?(field)
                 labels[label] = record[field]
                 record.delete(field)
               end
             end
-            if !labels.empty?
-              entry['metadata']['labels'] = labels
-            end
+            entry['metadata']['labels'] = labels unless labels.empty?
           end
 
           # use textPayload if the only remainaing key is 'message',
           # otherwise use a struct.
-          if (record.size == 1 && record.has_key?('message'))
+          if record.size == 1 && record.key?('message')
             entry['textPayload'] = record['message']
           else
             entry['structPayload'] = record
@@ -321,24 +324,24 @@ module Fluent
 
         # Add a prefix to VMEngines logs to prevent namespace collisions,
         # and also escape the log name.
-        log_name = CGI::escape(@running_on_managed_vm ?
-                               "#{APPENGINE_SERVICE}/#{tag}" : tag)
-        url = ('https://logging.googleapis.com/v1beta3/projects/' +
-               "#{@project_id}/logs/#{log_name}/entries:write")
+        log_name = CGI.escape(
+          @running_on_managed_vm ? "#{APPENGINE_SERVICE}/#{tag}" : tag)
+        url = 'https://logging.googleapis.com/v1beta3/projects/' \
+          "#{@project_id}/logs/#{log_name}/entries:write"
         begin
-          client = api_client()
-          request = client.generate_request({
-            :uri => url,
-            :body_object => write_log_entries_request,
-            :http_method => 'POST',
-            :authenticated => true
-          })
+          client = api_client
+          request = client.generate_request(
+            uri: url,
+            body_object: write_log_entries_request,
+            http_method: 'POST',
+            authenticated: true
+          )
           client.execute!(request)
           # Let the user explicitly know when the first call succeeded,
           # to aid with verification and troubleshooting.
-          if (!@successful_call)
+          unless @successful_call
             @successful_call = true
-            $log.info "Successfully sent to Google Cloud Logging API."
+            @log.info 'Successfully sent to Google Cloud Logging API.'
           end
         # Allow most exceptions to propagate, which will cause fluentd to
         # retry (with backoff), but in some cases we catch the error and
@@ -347,9 +350,7 @@ module Fluent
           # Most ClientErrors indicate a problem with the request itself and
           # should not be retried, unless it is an authentication issue, in
           # which case we will retry the request via re-raising the exception.
-          if (is_retriable_client_error(error))
-            raise error
-          end
+          raise error if retriable_client_error?(error)
           log_write_failure(write_log_entries_request, error)
         rescue JSON::GeneratorError => error
           # This happens if the request contains illegal characters;
@@ -365,17 +366,18 @@ module Fluent
       'Invalid Credentials',
       'Request had invalid credentials.',
       'The caller does not have permission',
-      'Project has not enabled the API. Please use Google Developers Console to activate the API for your project.',
+      'Project has not enabled the API. Please use Google Developers ' \
+        'Console to activate the API for your project.',
       'Unable to fetch access token (no scopes configured?)']
 
-    def is_retriable_client_error(error)
-      return RETRIABLE_CLIENT_ERRORS.include?(error.message)
+    def retriable_client_error?(error)
+      RETRIABLE_CLIENT_ERRORS.include?(error.message)
     end
 
     def log_write_failure(request, error)
       dropped = request['entries'].length
-      $log.warn "Dropping #{dropped} log message(s)",
-        :error_class => error.class.to_s, :error => error.to_s
+      @log.warn "Dropping #{dropped} log message(s)",
+                error_class: error.class.to_s, error: error.to_s
     end
 
     # "enum" of Platform values
@@ -388,55 +390,54 @@ module Fluent
     # Determine what platform we are running on by consulting the metadata
     # service (unless the user has explicitly disabled using that).
     def detect_platform
-      if !@use_metadata_service
-        $log.info "use_metadata_service is false; not detecting platform"
+      unless @use_metadata_service
+        @log.info 'use_metadata_service is false; not detecting platform'
         return Platform::OTHER
       end
 
       begin
         open('http://' + METADATA_SERVICE_ADDR) do |f|
           if (f.meta['metadata-flavor'] == 'Google')
-            $log.info 'Detected GCE platform'
+            @log.info 'Detected GCE platform'
             return Platform::GCE
           end
           if (f.meta['server'] == 'EC2ws')
-            $log.info 'Detected EC2 platform'
+            @log.info 'Detected EC2 platform'
             return Platform::EC2
           end
         end
-      rescue Exception => e
-        $log.debug "Failed to access metadata service: ", :error => e
+      rescue StandardError => e
+        @log.debug 'Failed to access metadata service: ', error: e
       end
 
-      $log.info 'Unable to determine platform'
-      return Platform::OTHER
+      @log.info 'Unable to determine platform'
+      Platform::OTHER
     end
 
     def fetch_gce_metadata(metadata_path)
-      raise "Called fetch_gce_metadata with platform=#{@platform}" unless
+      fail "Called fetch_gce_metadata with platform=#{@platform}" unless
         @platform == Platform::GCE
       # See https://cloud.google.com/compute/docs/metadata
       open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
-           metadata_path, {'Metadata-Flavor' => 'Google'}) do |f|
+           metadata_path, 'Metadata-Flavor' => 'Google') do |f|
         f.read
       end
     end
 
     def fetch_ec2_metadata
-      raise "Called fetch_ec2_metadata with platform=#{@platform}" unless
+      fail "Called fetch_ec2_metadata with platform=#{@platform}" unless
         @platform == Platform::EC2
       # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
       open('http://' + METADATA_SERVICE_ADDR +
            '/latest/dynamic/instance-identity/document') do |f|
-        contents = f.read()
+        contents = f.read
         return JSON.parse(contents)
       end
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
-    VALID_SEVERITIES = Set.new [
-      'DEFAULT', 'DEBUG', 'INFO', 'NOTICE', 'WARNING', 'ERROR', 'CRITICAL',
-      'ALERT', 'EMERGENCY']
+    VALID_SEVERITIES = Set.new(
+      %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY))
 
     # Translates other severity strings to one of the valid values above.
     SEVERITY_TRANSLATIONS = {
@@ -457,7 +458,7 @@ module Fluent
       'C' => 'CRITICAL',
       'A' => 'ALERT',
       # other misc. translations.
-      'ERR' => 'ERROR',
+      'ERR' => 'ERROR'
     }
 
     def parse_severity(severity_str)
@@ -465,18 +466,16 @@ module Fluent
       severity = severity_str.upcase.strip
 
       # If the severity is already valid, just return it.
-      if (VALID_SEVERITIES.include?(severity))
-        return severity
-      end
+      return severity if VALID_SEVERITIES.include?(severity)
 
       # If the severity is an integer (string) return it as an integer,
       # truncated to the closest valid value (multiples of 100 between 0-800).
-      if (/\A\d+\z/.match(severity))
+      if /\A\d+\z/.match(severity)
         begin
           numeric_severity = (severity.to_i / 100) * 100
-          if (numeric_severity < 0)
+          if numeric_severity < 0
             return 0
-          elsif (numeric_severity > 800)
+          elsif numeric_severity > 800
             return 800
           else
             return numeric_severity
@@ -487,19 +486,19 @@ module Fluent
       end
 
       # Try to translate the severity.
-      if (SEVERITY_TRANSLATIONS.has_key?(severity))
+      if SEVERITY_TRANSLATIONS.key?(severity)
         return SEVERITY_TRANSLATIONS[severity]
       end
 
       # If all else fails, use 'DEFAULT'.
-      return 'DEFAULT'
+      'DEFAULT'
     end
 
     def init_api_client
       @client = Google::APIClient.new(
-        :application_name => 'Fluentd Google Cloud Logging plugin',
-        :application_version => '0.4.2',
-        :retries => 1)
+        application_name: 'Fluentd Google Cloud Logging plugin',
+        application_version: '0.4.2',
+        retries: 1)
 
       if @auth_method == 'private_key'
         key = Google::APIClient::PKCS12.load_key(@private_key_path,
@@ -510,22 +509,22 @@ module Fluent
         @client.authorization.expiry = 3600  # 3600s is the max allowed value
       else
         @client.authorization = Google::Auth.get_application_default(
-            LOGGING_SCOPE)
+          LOGGING_SCOPE)
       end
     end
 
     def api_client
-      if !@client.authorization.expired?
+      unless @client.authorization.expired?
         begin
           @client.authorization.fetch_access_token!
         rescue MultiJson::ParseError
           # Workaround an issue in the API client; just re-raise a more
           # descriptive error for the user (which will still cause a retry).
-          raise Google::APIClient::ClientError,
-            'Unable to fetch access token (no scopes configured?)'
+          raise Google::APIClient::ClientError, 'Unable to fetch access ' \
+            'token (no scopes configured?)'
         end
       end
-      return @client
+      @client
     end
   end
 end
