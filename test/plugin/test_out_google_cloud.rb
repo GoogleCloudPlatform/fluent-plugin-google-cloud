@@ -400,6 +400,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_ec2
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
     setup_ec2_metadata_stubs
     setup_logging_stubs
     d = create_driver(CONFIG_EC2_PROJECT_ID)
