@@ -23,7 +23,7 @@ will also install and configure the gem.
 
 == Configuration
 
-To send logs to Google Cloud Logging, specify <code>type_google_cloud</code>
+To send logs to Google Cloud Logging, specify <code>type google_cloud</code>
 in a
 {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
 of your fluentd configuration file, for example:
