@@ -2,6 +2,9 @@
 
 fluent-plugin-google-cloud sends logs to the Google Cloud Platform logging API.
 
+{<img src="https://badge.fury.io/rb/fluent-plugin-google-cloug.svg" alt="Gem Version" />}[http://badge.fury.io/rb/fluent-plugin-google-cloud]
+{<img src="https://travis-ci.org/myGrid/fluent-plugin-google-cloud.svg?branch=master" alt="Build Status" />}[https://travis-ci.org/myGrid/fluent-plugin-google-cloud]
+
 == Installation
 
 The gem is hosted at {RubyGems.org}[http://rubygems.org]. You can install the gem as follows:
