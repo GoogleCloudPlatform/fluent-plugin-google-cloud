@@ -1,36 +1,43 @@
-= Google Cloud Platform plugin for {fluentd}[http://github.com/fluent/fluentd]
+= Google Cloud Logging output plugin for {fluentd}[http://github.com/fluent/fluentd]
 
-fluent-plugin-google-cloud sends logs to the Google Cloud Platform logging API.
+fluent-plugin-google-cloud is an output plugin for fluents which sends logs to
+the {Google Cloud Logging API}[https://cloud.google.com/logging/docs/api/].
+
+This is an official Google Ruby gem.
 
 {<img src="https://badge.fury.io/rb/fluent-plugin-google-cloud.svg" alt="Gem Version" />}[http://badge.fury.io/rb/fluent-plugin-google-cloud]
 {<img src="https://secure.travis-ci.org/google/google-auth-library-ruby.png" alt="Build Status" />}[https://travis-ci.org/GoogleCloudPlatform/fluent-plugin-google-cloud]
 
 == Installation
 
-The gem is hosted at {RubyGems.org}[http://rubygems.org]. You can install the gem as follows:
+This gem is hosted at
+{RubyGems.org}[https://rubygems.org/gems/fluent-plugin-google-cloud]
+and can be installed using:
 
     $ gem install fluent-plugin-google-cloud
 
+Installing {google-fluentd}[https://cloud.google.com/logging/docs/agent/]
+will also install and configure the gem.
+
 == Configuration
+
+To send logs to Google Cloud Logging, specify <code>type_google_cloud</code>
+in a
+{<code>match</code> clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
+in your fluentd configuration file, for example:
 
     <match **>
       type google_cloud
-      auth_method <method>
-      private_key_email <address>
-      private_key_path <path>
     </match>
 
-Supported options:
-* auth_method: either 'compute_engine_service_account' or 'private_key' (default: compute_engine_service_account)
-* private_key_email: email address of your project's service account.
-* private_key_path: path to a file containing service account credentials.
+No further configuration is required. The plugin uses
+{Google Application Default Credentials}[https://developers.google.com/identity/protocols/application-default-credentials]
+for authorization.
+Additional documentation on using Application Default Credentials can be found
+{here}[https://cloud.google.com/logging/docs/agent/authorization].
 
-private_key_email and private_key_path are required if auth_method is
-'private_key', otherwise they are ignored.
-
-== Caveats
-
-This plugin currently only supports being run on a Google Compute Engine VM because it grabs its authentication token as well as important metadata from the VM metadata server.
+<em>The previously documented parameters auth_method, private_key_email,
+and private_key_path are deprecated and should no longer be used.</em>
 
 == Copyright
 
