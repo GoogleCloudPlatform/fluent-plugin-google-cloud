@@ -497,7 +497,7 @@ module Fluent
     def init_api_client
       @client = Google::APIClient.new(
         application_name: 'Fluentd Google Cloud Logging plugin',
-        application_version: '0.4.2',
+        application_version: '0.4.3',
         retries: 1)
 
       if @auth_method == 'private_key'
