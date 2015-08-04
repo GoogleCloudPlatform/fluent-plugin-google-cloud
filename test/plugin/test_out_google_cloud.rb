@@ -550,6 +550,22 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_log_entries(1, params)
   end
 
+  def test_label_map_with_hash_field
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %(label_map { "label_field": "sent_label" })
+    d = create_driver(config)
+    # I'm not sure this actually makes sense for a user to do, but make
+    # sure that it works if they try it.
+    d.emit('message' => log_entry(0),
+           'label_field' => { 'k1' => 10, 'k2' => 'val' })
+    d.run
+    # make a deep copy of COMPUTE_PARAMS and add the parsed label.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params['labels']['sent_label'] = '{"k1"=>10, "k2"=>"val"}'
+    verify_log_entries(1, params)
+  end
+
   def test_label_map_with_multiple_fields
     setup_gce_metadata_stubs
     setup_logging_stubs
