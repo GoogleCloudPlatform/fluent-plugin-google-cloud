@@ -537,6 +537,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_log_entries(1, params)
   end
 
+  def test_label_map_with_numeric_field
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %(label_map { "label_field": "sent_label" })
+    d = create_driver(config)
+    d.emit('message' => log_entry(0), 'label_field' => 123_456_789)
+    d.run
+    # make a deep copy of COMPUTE_PARAMS and add the parsed label.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params['labels']['sent_label'] = '123456789'
+    verify_log_entries(1, params)
+  end
+
   def test_label_map_with_multiple_fields
     setup_gce_metadata_stubs
     setup_logging_stubs
@@ -874,6 +887,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     all_labels ||= common_labels
     all_labels.merge!(entry['metadata']['labels'] || {})
     all_labels.each do |key, value|
+      assert value.is_a?(String), "Value #{value} for label #{key} " \
+        'is not a string: ' + value.class.name
       assert expected_labels.key?(key), "Unexpected label #{key} => #{value}"
       assert_equal value, expected_labels[key], 'Value mismatch - expected ' \
         "#{expected_labels[key]} in #{key} => #{value}"
