@@ -302,10 +302,10 @@ module Fluent
           unless label_map.nil?
             labels = {}
             @label_map.each do |field, label|
-              if record.key?(field)
-                labels[label] = record[field]
-                record.delete(field)
-              end
+              next unless record.key?(field)
+              # label values are required to be strings.
+              labels[label] = record[field].to_s
+              record.delete(field)
             end
             entry['metadata']['labels'] = labels unless labels.empty?
           end
