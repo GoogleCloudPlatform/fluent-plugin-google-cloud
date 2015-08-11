@@ -57,6 +57,7 @@ module Fluent
     config_param :project_id, :string, :default => nil
     config_param :zone, :string, :default => nil
     config_param :vm_id, :string, :default => nil
+    config_param :vm_name, :string, :default => nil
 
     # label_map (specified as a JSON object) is an unordered set of fluent
     # field names whose values are sent as labels rather than as part of the
@@ -101,6 +102,7 @@ module Fluent
       require 'googleauth'
       require 'json'
       require 'open-uri'
+      require 'socket'
 
       # use the global logger
       @log = $log # rubocop:disable Style/GlobalVars
@@ -130,6 +132,7 @@ module Fluent
       @common_labels = {}
 
       # set attributes from metadata (unless overriden by static config)
+      @vm_name = Socket.gethostname if @vm_name.nil?
       @platform = detect_platform
       case @platform
       when Platform::GCE
@@ -203,16 +206,19 @@ module Fluent
         if (@service_name != DATAFLOW_SERVICE)
           common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
           common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
+          common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
         end
       when Platform::EC2
         @service_name = EC2_SERVICE
         common_labels["#{EC2_SERVICE}/resource_type"] = 'instance'
         common_labels["#{EC2_SERVICE}/resource_id"] = @vm_id
+        common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
       when Platform::OTHER
         # Use COMPUTE_SERVICE as the default environment.
         @service_name = COMPUTE_SERVICE
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
         common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
+        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
       end
     end
 
