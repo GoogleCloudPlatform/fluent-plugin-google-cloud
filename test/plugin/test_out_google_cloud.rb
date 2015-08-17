@@ -26,6 +26,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     @logs_sent = []
   end
 
+  # generic attributes
+  HOSTNAME = Socket.gethostname
+
   # attributes used for the GCE metadata service
   PROJECT_ID = 'test-project-id'
   ZONE = 'us-central1-b'
@@ -37,6 +40,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CUSTOM_ZONE = 'us-custom-central1-b'
   CUSTOM_FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   CUSTOM_VM_ID = 'C9876543210'
+  CUSTOM_HOSTNAME = 'custom.hostname.org'
 
   # attributes used for the EC2 metadata service
   EC2_PROJECT_ID = 'test-ec2-project-id'
@@ -80,6 +84,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
+    vm_name #{CUSTOM_HOSTNAME}
   )
 
   CONFIG_MISSING_PRIVATE_KEY_PATH = %(
@@ -126,7 +131,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'zone' => ZONE,
     'labels' => {
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
 
@@ -139,7 +145,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{APPENGINE_SERVICE_NAME}/module_id" => MANAGED_VM_BACKEND_NAME,
       "#{APPENGINE_SERVICE_NAME}/version_id" => MANAGED_VM_BACKEND_VERSION,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
 
@@ -150,7 +157,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'zone' => CUSTOM_ZONE,
     'labels' => {
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => CUSTOM_VM_ID
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => CUSTOM_VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => CUSTOM_HOSTNAME
     }
   }
 
@@ -162,7 +170,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'labels' => {
       "#{EC2_SERVICE_NAME}/resource_type" => 'instance',
       "#{EC2_SERVICE_NAME}/resource_id" => EC2_VM_ID,
-      "#{EC2_SERVICE_NAME}/account_id" => EC2_ACCOUNT_ID
+      "#{EC2_SERVICE_NAME}/account_id" => EC2_ACCOUNT_ID,
+      "#{EC2_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
 
