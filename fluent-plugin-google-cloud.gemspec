@@ -6,7 +6,7 @@ Gem::Specification.new do |gem|
    store them in Google Cloud Storage and/or BigQuery.
    This is an official Google Ruby gem.
 eos
-  gem.summary       =  'fluentd output plugin for the Google Cloud Logging API'
+  gem.summary       = 'fluentd output plugin for the Google Cloud Logging API'
   gem.homepage      = \
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache 2.0'
@@ -25,7 +25,7 @@ eos
 
   gem.add_development_dependency 'mocha', '~> 1.1'
   gem.add_development_dependency 'rake', '>= 10.3.2'
-  gem.add_development_dependency 'rubocop', '~> 0.30'
+  gem.add_development_dependency 'rubocop', '~> 0.33.0'
   gem.add_development_dependency 'webmock', '>= 1.17.0'
   gem.add_development_dependency 'test-unit', '~> 3.0.2'
 end

@@ -512,7 +512,7 @@ module Fluent
         jwt_asserter = Google::APIClient::JWTAsserter.new(
           @private_key_email, LOGGING_SCOPE, key)
         @client.authorization = jwt_asserter.to_authorization
-        @client.authorization.expiry = 3600  # 3600s is the max allowed value
+        @client.authorization.expiry = 3600 # 3600s is the max allowed value
       else
         @client.authorization = Google::Auth.get_application_default(
           LOGGING_SCOPE)

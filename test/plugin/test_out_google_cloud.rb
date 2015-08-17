@@ -17,9 +17,6 @@ require 'json'
 require 'mocha/test_unit'
 require 'webmock/test_unit'
 
-# This trips for many tests due to the use of conditionals.
-# rubocop:disable Metrics/AbcSize
-
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
   def setup
