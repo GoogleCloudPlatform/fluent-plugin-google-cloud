@@ -8,7 +8,7 @@ which sends logs to the
 This is an official Google Ruby gem.
 
 {<img src="https://badge.fury.io/rb/fluent-plugin-google-cloud.svg" alt="Gem Version" />}[http://badge.fury.io/rb/fluent-plugin-google-cloud]
-{<img src="https://secure.travis-ci.org/google/google-auth-library-ruby.png" alt="Build Status" />}[https://travis-ci.org/GoogleCloudPlatform/fluent-plugin-google-cloud]
+{<img src="https://secure.travis-ci.org/GoogleCloudPlatform/fluent-plugin-google-cloud.png" alt="Build Status" />}[https://travis-ci.org/GoogleCloudPlatform/fluent-plugin-google-cloud]
 
 == Installation
 
