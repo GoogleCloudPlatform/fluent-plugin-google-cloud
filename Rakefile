@@ -16,7 +16,7 @@ Rake::TestTask.new(:test) do |test|
   test.verbose = true
 end
 
-desc 'Does rubocop lint and runs tests'
-task all: [:rubocop, :test]
+desc 'Run unit tests and RuboCop to check for style violations'
+task all: [:test, :rubocop]
 
 task default: :all
