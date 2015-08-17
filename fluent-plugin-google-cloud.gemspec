@@ -10,7 +10,7 @@ eos
   gem.homepage      = \
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache 2.0'
-  gem.version       = '0.4.3'
+  gem.version       = '0.4.4'
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
 
