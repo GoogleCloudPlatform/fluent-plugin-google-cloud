@@ -42,7 +42,7 @@ module Fluent
     # DEPRECATED: Parameters necessary to use the private_key auth_method.
     config_param :private_key_email, :string, :default => nil
     config_param :private_key_path, :string, :default => nil
-    config_param :private_key_passphrase, :string, :default => 'notasecret'
+    config_param :private_key_passphrase, :string, :default => 'notasecret', :secret => true
 
     # Specify project/instance metadata.
     #
