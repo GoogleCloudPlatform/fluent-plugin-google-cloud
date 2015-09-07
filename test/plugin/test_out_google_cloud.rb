@@ -60,6 +60,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   MANAGED_VM_BACKEND_NAME = 'default'
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'
 
+  # Container Engine / Kubernetes specific labels
+  CONTAINER_CLUSTER_NAME = 'cluster-1'
+  CONTAINER_NAMESPACE_ID = '898268c8-4a36-11e5-9d81-42010af0194c'
+  CONTAINER_NAMESPACE_NAME = 'kube-system'
+  CONTAINER_POD_ID = 'cad3c3c4-4b9c-11e5-9d81-42010af0194c'
+  CONTAINER_POD_NAME = 'redis-master-c0l82'
+  CONTAINER_CONTAINER_NAME = 'redis'
+
   # Parameters used for authentication
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
   FAKE_AUTH_TOKEN = 'abc123'
@@ -122,6 +130,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Service configurations for various services
   COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
   APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
+  CONTAINER_SERVICE_NAME = 'container.googleapis.com'
   EC2_SERVICE_NAME = 'ec2.amazonaws.com'
 
   COMPUTE_PARAMS = {
@@ -144,6 +153,25 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'labels' => {
       "#{APPENGINE_SERVICE_NAME}/module_id" => MANAGED_VM_BACKEND_NAME,
       "#{APPENGINE_SERVICE_NAME}/version_id" => MANAGED_VM_BACKEND_VERSION,
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+    }
+  }
+
+  CONTAINER_PARAMS = {
+    'service_name' => CONTAINER_SERVICE_NAME,
+    'log_name' => "#{CONTAINER_SERVICE_NAME}%2Ftest",
+    'project_id' => PROJECT_ID,
+    'zone' => ZONE,
+    'labels' => {
+      "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
+      "#{CONTAINER_SERVICE_NAME}/cluster_name" => CONTAINER_CLUSTER_NAME,
+      "#{CONTAINER_SERVICE_NAME}/namespace_id" => CONTAINER_NAMESPACE_ID,
+      "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
+      "#{CONTAINER_SERVICE_NAME}/pod_id" => CONTAINER_POD_ID,
+      "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
+      "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
@@ -724,6 +752,32 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_one_container_log
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver
+    d.emit(container_log_entry(0))
+    d.run
+    verify_log_entries(1, CONTAINER_PARAMS)
+  end
+
+  def test_multiple_container_logs
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver
+    [2, 3, 5, 11, 50].each do |n|
+      # The test driver doesn't clear its buffer of entries after running, so
+      # do it manually here.
+      d.instance_variable_get('@entries').clear
+      @logs_sent = []
+      n.times { |i| d.emit(container_log_entry(i)) }
+      d.run
+      verify_log_entries(n, CONTAINER_PARAMS)
+    end
+  end
+
   # Make parse_severity public so we can test it.
   class Fluent::GoogleCloudOutput # rubocop:disable Style/ClassAndModuleChildren
     public :parse_severity
@@ -856,14 +910,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS, CUSTOM_PARAMS, EC2_PARAMS]
-      .each do |params|
-        stub_request(:post, uri_for_log(params))
-          .to_return do |request|
-            @logs_sent << JSON.parse(request.body)
-            { body: '' }
-          end
+    [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_PARAMS, CUSTOM_PARAMS,
+     EC2_PARAMS].each do |params|
+      stub_request(:post, uri_for_log(params)).to_return do |request|
+        @logs_sent << JSON.parse(request.body)
+        { body: '' }
       end
+    end
   end
 
   def setup_auth_stubs
@@ -898,6 +951,29 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     stub_metadata_request('instance/attributes/gae_backend_name', 'default')
     stub_metadata_request('instance/attributes/gae_backend_version',
                           'guestbook2.0')
+  end
+
+  def setup_container_metadata_stubs
+    stub_metadata_request(
+      'instance/attributes/',
+      "attribute1\nkube-env\nlast_attribute")
+    stub_metadata_request('instance/attributes/kube-env',
+                          "ENABLE_NODE_LOGGING: \"true\"\n"\
+                          "INSTANCE_PREFIX: gke-cluster-1-740fdafa\n"\
+                          'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
+  end
+
+  def container_log_entry(i)
+    {
+      message: log_entry(i),
+      kubernetes: {
+        namespace_id: CONTAINER_NAMESPACE_ID,
+        namespace_name: CONTAINER_NAMESPACE_NAME,
+        pod_id: CONTAINER_POD_ID,
+        pod_name: CONTAINER_POD_NAME,
+        container_name: CONTAINER_CONTAINER_NAME
+      }
+    }
   end
 
   def log_entry(i)
