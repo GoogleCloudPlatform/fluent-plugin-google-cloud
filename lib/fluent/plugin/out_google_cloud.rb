@@ -20,6 +20,7 @@ module Fluent
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
     COMPUTE_SERVICE = 'compute.googleapis.com'
+    CONTAINER_SERVICE = 'container.googleapis.com'
     DATAFLOW_SERVICE = 'dataflow.googleapis.com'
     EC2_SERVICE = 'ec2.amazonaws.com'
 
@@ -105,6 +106,7 @@ module Fluent
       require 'json'
       require 'open-uri'
       require 'socket'
+      require 'yaml'
 
       # use the global logger
       @log = $log # rubocop:disable Style/GlobalVars
@@ -202,6 +204,14 @@ module Fluent
           @service_name = DATAFLOW_SERVICE
           @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
           common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
+        elsif attributes.include?('kube-env')
+          # Kubernetes/Container Engine
+          @service_name = CONTAINER_SERVICE
+          common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
+          @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
+          @kube_env = YAML.load(@raw_kube_env)
+          common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
+            cluster_name_from_kube_env(@kube_env)
         end
         # include GCE labels unless we're running on dataflow, which
         # uses their own labels exclusively.
@@ -304,16 +314,22 @@ module Fluent
             entry['metadata']['severity'] = 'DEFAULT'
           end
 
+          # TODO(a-robinson): Consider falling back to parsing the namespace,
+          # pod, and container names out of the log name if we don't have this
+          # information, which depends on the kubernetes_metadata_filter
+          # filter plugin.
+          if @service_name == CONTAINER_SERVICE && record['kubernetes']
+            handle_container_metadata(record, entry)
+          end
+
           # If a field is present in the label_map, send its value as a label
           # (mapping the field name to label name as specified in the config)
           # and do not send that field as part of the payload.
-          unless @label_map.nil?
+          if @label_map
             labels = {}
+            labels = entry['metadata']['labels'] if entry['metadata']['labels']
             @label_map.each do |field, label|
-              next unless record.key?(field)
-              # label values are required to be strings.
-              labels[label] = record[field].to_s
-              record.delete(field)
+              field_to_label(record, field, labels, label)
             end
             entry['metadata']['labels'] = labels unless labels.empty?
           end
@@ -443,6 +459,15 @@ module Fluent
       end
     end
 
+    def cluster_name_from_kube_env(kube_env)
+      return kube_env['CLUSTER_NAME'] if kube_env.key?('CLUSTER_NAME')
+      instance_prefix = kube_env['INSTANCE_PREFIX']
+      gke_name_match = /^gke-(.+)-[0-9a-f]{8}$/.match(instance_prefix)
+      return gke_name_match.captures[0] if gke_name_match &&
+                                           !gke_name_match.captures.empty?
+      instance_prefix
+    end
+
     # Values permitted by the API for 'severity' (which is an enum).
     VALID_SEVERITIES = Set.new(
       %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY))
@@ -500,6 +525,34 @@ module Fluent
 
       # If all else fails, use 'DEFAULT'.
       'DEFAULT'
+    end
+
+    # Requires that record has a 'kubernetes' field.
+    def handle_container_metadata(record, entry)
+      labels = {}
+      fields = %w(namespace_id namespace_name pod_id pod_name container_name)
+      fields.each do |field|
+        field_to_label(record['kubernetes'], field, labels,
+                       "#{CONTAINER_SERVICE}/#{field}")
+      end
+      # Prepend label/ to all user-defined labels' keys.
+      if record.key?('labels')
+        record['kubernetes']['labels'].each do |key, value|
+          labels["label/#{key}"] = value
+        end
+      end
+      # We've explicitly consumed all the fields we care about -- don't litter
+      # the log entries with the remaining fields that the kubernetes metadata
+      # filter plugin includes (or an empty 'kubernetes' field).
+      record.delete('kubernetes')
+      record.delete('docker')
+      entry['metadata']['labels'] = labels unless labels.empty?
+    end
+
+    def field_to_label(record, field, labels, label)
+      return unless record.key?(field)
+      labels[label] = record[field].to_s
+      record.delete(field)
     end
 
     def init_api_client
