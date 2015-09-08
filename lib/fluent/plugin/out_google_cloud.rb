@@ -307,7 +307,7 @@ module Fluent
           # If a field is present in the label_map, send its value as a label
           # (mapping the field name to label name as specified in the config)
           # and do not send that field as part of the payload.
-          unless label_map.nil?
+          unless @label_map.nil?
             labels = {}
             @label_map.each do |field, label|
               next unless record.key?(field)
