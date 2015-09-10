@@ -132,7 +132,7 @@ module Fluent
         end
       end
 
-      # TODO: Send instance tags and/or hostname as labels as well?
+      # TODO: Send instance tags as labels as well?
       @common_labels = {}
 
       # set attributes from metadata (unless overriden by static config)
@@ -304,7 +304,8 @@ module Fluent
               'timestamp' => {
                 'seconds' => ts_secs,
                 'nanos' => ts_nanos
-              }
+              },
+              'labels' => {}
             }
           }
           if record.key?('severity')
@@ -326,12 +327,9 @@ module Fluent
           # (mapping the field name to label name as specified in the config)
           # and do not send that field as part of the payload.
           if @label_map
-            labels = {}
-            labels = entry['metadata']['labels'] if entry['metadata']['labels']
             @label_map.each do |field, label|
-              field_to_label(record, field, labels, label)
+              field_to_label(record, field, entry['metadata']['labels'], label)
             end
-            entry['metadata']['labels'] = labels unless labels.empty?
           end
 
           # use textPayload if the only remainaing key is 'message',
@@ -341,6 +339,12 @@ module Fluent
           else
             entry['structPayload'] = record
           end
+
+          # Remove the labels metadata if we didn't populate it with anything.
+          if entry['metadata']['labels'].empty?
+            entry['metadata'].delete('labels')
+          end
+
           write_log_entries_request['entries'].push(entry)
         end
         # Don't send an empty request if we rejected all the entries.
@@ -529,16 +533,15 @@ module Fluent
 
     # Requires that record has a 'kubernetes' field.
     def handle_container_metadata(record, entry)
-      labels = {}
       fields = %w(namespace_id namespace_name pod_id pod_name container_name)
       fields.each do |field|
-        field_to_label(record['kubernetes'], field, labels,
+        field_to_label(record['kubernetes'], field, entry['metadata']['labels'],
                        "#{CONTAINER_SERVICE}/#{field}")
       end
       # Prepend label/ to all user-defined labels' keys.
       if record.key?('labels')
         record['kubernetes']['labels'].each do |key, value|
-          labels["label/#{key}"] = value
+          entry['metadata']['labels']["label/#{key}"] = value
         end
       end
       # We've explicitly consumed all the fields we care about -- don't litter
@@ -546,7 +549,6 @@ module Fluent
       # filter plugin includes (or an empty 'kubernetes' field).
       record.delete('kubernetes')
       record.delete('docker')
-      entry['metadata']['labels'] = labels unless labels.empty?
     end
 
     def field_to_label(record, field, labels, label)
