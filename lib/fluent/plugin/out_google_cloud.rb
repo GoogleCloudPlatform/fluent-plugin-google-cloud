@@ -134,6 +134,8 @@ module Fluent
 
       # TODO: Send instance tags and/or hostname as labels as well?
       @common_labels = {}
+      @tag_to_kubernetes_labels_regexp =
+        /\.(?<pod_name>[^\._]+)_(?<namespace_name>[^_]+)_(?<container_name>.+)$/
 
       # set attributes from metadata (unless overriden by static config)
       @vm_name = Socket.gethostname if @vm_name.nil?
@@ -264,6 +266,18 @@ module Fluent
           'commonLabels' => @common_labels,
           'entries' => []
         }
+        if @service_name == CONTAINER_SERVICE
+          # Container logs in Kubernetes are tagged based on where they came
+          # from, so we can extract useful metadata from the tag.
+          # Do this here to avoid having to repeat it for each record.
+          match_data = @tag_to_kubernetes_labels_regexp.match(tag)
+          if match_data
+            labels = write_log_entries_request['commonLabels']
+            %w(namespace_name pod_name container_name).each do |field|
+              labels["#{CONTAINER_SERVICE}/#{field}"] = match_data[field]
+            end
+          end
+        end
         arr.each do |time, record|
           next unless record.is_a?(Hash)
           if record.key?('timestamp') &&
@@ -314,10 +328,9 @@ module Fluent
             entry['metadata']['severity'] = 'DEFAULT'
           end
 
-          # TODO(a-robinson): Consider falling back to parsing the namespace,
-          # pod, and container names out of the log name if we don't have this
-          # information, which depends on the kubernetes_metadata_filter
-          # filter plugin.
+          # If the record has been annotated by the kubernetes_metadata_filter
+          # plugin, then use that metadata. Otherwise, rely on commonLabels
+          # populated at the grouped_entries level from the group's tag.
           if @service_name == CONTAINER_SERVICE && record['kubernetes']
             handle_container_metadata(record, entry)
           end

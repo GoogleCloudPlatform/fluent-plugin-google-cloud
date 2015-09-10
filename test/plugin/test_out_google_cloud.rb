@@ -159,17 +159,38 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
-  CONTAINER_PARAMS = {
+  CONTAINER_LOG_NAME = "kubernetes.#{CONTAINER_POD_NAME}_" \
+                       "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
+
+  CONTAINER_FROM_METADATA_PARAMS = {
     'service_name' => CONTAINER_SERVICE_NAME,
-    'log_name' => "#{CONTAINER_SERVICE_NAME}%2Ftest",
+    'log_name' => CONTAINER_LOG_NAME,
     'project_id' => PROJECT_ID,
     'zone' => ZONE,
     'labels' => {
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CONTAINER_CLUSTER_NAME,
-      "#{CONTAINER_SERVICE_NAME}/namespace_id" => CONTAINER_NAMESPACE_ID,
       "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
+      "#{CONTAINER_SERVICE_NAME}/namespace_id" => CONTAINER_NAMESPACE_ID,
+      "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
       "#{CONTAINER_SERVICE_NAME}/pod_id" => CONTAINER_POD_ID,
+      "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+    }
+  }
+
+  # Almost the same as from metadata, but missing namespace_id and pod_id.
+  CONTAINER_FROM_TAG_PARAMS = {
+    'service_name' => CONTAINER_SERVICE_NAME,
+    'log_name' => CONTAINER_LOG_NAME,
+    'project_id' => PROJECT_ID,
+    'zone' => ZONE,
+    'labels' => {
+      "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
+      "#{CONTAINER_SERVICE_NAME}/cluster_name" => CONTAINER_CLUSTER_NAME,
+      "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
       "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
       "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
@@ -203,9 +224,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
-  def create_driver(conf = APPLICATION_DEFAULT_CONFIG)
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
     Fluent::Test::BufferedOutputTestDriver.new(
-      Fluent::GoogleCloudOutput).configure(conf, use_v1_config: true)
+      Fluent::GoogleCloudOutput, tag).configure(conf, use_v1_config: true)
   end
 
   def test_configure_service_account_application_default
@@ -752,29 +773,55 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  def test_one_container_log
+  def test_one_container_log_metadata_from_plugin
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver
-    d.emit(container_log_entry(0))
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d.emit(container_log_entry_with_metadata(0))
     d.run
-    verify_log_entries(1, CONTAINER_PARAMS)
+    verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS)
   end
 
-  def test_multiple_container_logs
+  def test_multiple_container_logs_metadata_from_plugin
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
       d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit(container_log_entry(i)) }
+      n.times { |i| d.emit(container_log_entry_with_metadata(i)) }
       d.run
-      verify_log_entries(n, CONTAINER_PARAMS)
+      verify_log_entries(n, CONTAINER_FROM_METADATA_PARAMS)
+    end
+  end
+
+  def test_one_container_log_metadata_from_tag
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d.emit('message' => log_entry(0))
+    d.run
+    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS)
+  end
+
+  def test_multiple_container_logs_metadata_from_tag
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    [2, 3, 5, 11, 50].each do |n|
+      # The test driver doesn't clear its buffer of entries after running, so
+      # do it manually here.
+      d.instance_variable_get('@entries').clear
+      @logs_sent = []
+      n.times { |i| d.emit('message' => log_entry(i)) }
+      d.run
+      verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS)
     end
   end
 
@@ -910,8 +957,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_PARAMS, CUSTOM_PARAMS,
-     EC2_PARAMS].each do |params|
+    [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
+     CONTAINER_FROM_METADATA_PARAMS, CUSTOM_PARAMS, EC2_PARAMS].each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
         { body: '' }
@@ -963,7 +1010,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
   end
 
-  def container_log_entry(i)
+  def container_log_entry_with_metadata(i)
     {
       message: log_entry(i),
       kubernetes: {
