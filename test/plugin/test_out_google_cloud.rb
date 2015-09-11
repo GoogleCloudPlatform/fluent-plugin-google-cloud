@@ -88,6 +88,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     use_metadata_service false
   )
 
+  NO_DETECT_SUBSERVICE_CONFIG = %(
+    detect_subservice false
+  )
+
   CUSTOM_METADATA_CONFIG = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
@@ -356,6 +360,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
     assert_equal false, d.instance.running_on_managed_vm
+  end
+
+  def test_gce_used_when_detect_subservice_is_false
+    setup_gce_metadata_stubs
+    # This would cause the service to be container.googleapis.com if not for the
+    # detect_subservice=false config.
+    setup_container_metadata_stubs
+    d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
+    d.run
+    assert_equal COMPUTE_SERVICE_NAME, d.instance.service_name
   end
 
   def test_metadata_overrides_on_gce
