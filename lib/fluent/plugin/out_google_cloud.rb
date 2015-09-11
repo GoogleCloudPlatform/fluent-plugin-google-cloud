@@ -215,13 +215,9 @@ module Fluent
           common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
             cluster_name_from_kube_env(@kube_env)
         end
-        # include GCE labels unless we're running on dataflow, which
-        # uses their own labels exclusively.
-        if (@service_name != DATAFLOW_SERVICE)
-          common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
-          common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
-          common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
-        end
+        common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
+        common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
+        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
       when Platform::EC2
         @service_name = EC2_SERVICE
         common_labels["#{EC2_SERVICE}/resource_type"] = 'instance'
