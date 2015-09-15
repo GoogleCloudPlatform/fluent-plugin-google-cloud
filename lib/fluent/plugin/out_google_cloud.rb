@@ -62,6 +62,14 @@ module Fluent
     config_param :vm_id, :string, :default => nil
     config_param :vm_name, :string, :default => nil
 
+    # Whether to try to detect of the VM is owned by a "subservice" such as App
+    # Engine of Kubernetes, rather than just associating the logs with the
+    # compute service of the platform. This currently only has any effect when
+    # running on GCE.
+    # The initial motivation for this is to separate out Kubernetes node
+    # component (Docker, Kubelet, etc.) logs from container logs.
+    config_param :detect_subservice, :bool, :default => true
+
     # label_map (specified as a JSON object) is an unordered set of fluent
     # field names whose values are sent as labels rather than as part of the
     # struct payload.
@@ -186,34 +194,37 @@ module Fluent
       case @platform
       when Platform::GCE
         @service_name = COMPUTE_SERVICE
-        # Check for specialized GCE environments (Managed VM or Dataflow).
-        # TODO: Add config options for these to allow for running outside GCE?
-        attributes = fetch_gce_metadata('instance/attributes/').split
-        if attributes.include?('gae_backend_name') &&
-           attributes.include?('gae_backend_version')
-          # Managed VM
-          @running_on_managed_vm = true
-          @gae_backend_name =
-              fetch_gce_metadata('instance/attributes/gae_backend_name')
-          @gae_backend_version =
-              fetch_gce_metadata('instance/attributes/gae_backend_version')
-          @service_name = APPENGINE_SERVICE
-          common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
-          common_labels["#{APPENGINE_SERVICE}/version_id"] =
-            @gae_backend_version
-        elsif attributes.include?('job_id')
-          # Dataflow
-          @service_name = DATAFLOW_SERVICE
-          @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
-          common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
-        elsif attributes.include?('kube-env')
-          # Kubernetes/Container Engine
-          @service_name = CONTAINER_SERVICE
-          common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
-          @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
-          @kube_env = YAML.load(@raw_kube_env)
-          common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
-            cluster_name_from_kube_env(@kube_env)
+        if @detect_subservice
+          # Check for specialized GCE environments (Managed VM or Dataflow).
+          # TODO: Add config options for these to allow for running outside GCE?
+          attributes = fetch_gce_metadata('instance/attributes/').split
+          # Do nothing, just don't populate other service's labels.
+          if attributes.include?('gae_backend_name') &&
+             attributes.include?('gae_backend_version')
+            # Managed VM
+            @running_on_managed_vm = true
+            @gae_backend_name =
+                fetch_gce_metadata('instance/attributes/gae_backend_name')
+            @gae_backend_version =
+                fetch_gce_metadata('instance/attributes/gae_backend_version')
+            @service_name = APPENGINE_SERVICE
+            common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
+            common_labels["#{APPENGINE_SERVICE}/version_id"] =
+              @gae_backend_version
+          elsif attributes.include?('job_id')
+            # Dataflow
+            @service_name = DATAFLOW_SERVICE
+            @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
+            common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
+          elsif attributes.include?('kube-env')
+            # Kubernetes/Container Engine
+            @service_name = CONTAINER_SERVICE
+            common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
+            @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
+            @kube_env = YAML.load(@raw_kube_env)
+            common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
+              cluster_name_from_kube_env(@kube_env)
+          end
         end
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
         common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
