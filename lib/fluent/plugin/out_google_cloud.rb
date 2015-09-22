@@ -70,6 +70,12 @@ module Fluent
     # component (Docker, Kubelet, etc.) logs from container logs.
     config_param :detect_subservice, :bool, :default => true
 
+    # The regular expression to use on Kubernetes logs to extract some basic
+    # information about the log source. The regex must contain capture groups
+    # for pod_name, namespace_name, and container_name.
+    config_param :kubernetes_tag_regexp, :string, :default =>
+      '\.(?<pod_name>[^_]+)_(?<namespace_name>[^_]+)_(?<container_name>.+)$'
+
     # label_map (specified as a JSON object) is an unordered set of fluent
     # field names whose values are sent as labels rather than as part of the
     # struct payload.
@@ -142,8 +148,11 @@ module Fluent
 
       # TODO: Send instance tags as labels as well?
       @common_labels = {}
-      @tag_to_kubernetes_labels_regexp =
-        /\.(?<pod_name>[^\._]+)_(?<namespace_name>[^_]+)_(?<container_name>.+)$/
+
+      @compiled_kubernetes_tag_regexp = nil
+      if @kubernetes_tag_regexp
+        @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
+      end
 
       # set attributes from metadata (unless overriden by static config)
       @vm_name = Socket.gethostname if @vm_name.nil?
@@ -273,11 +282,11 @@ module Fluent
           'commonLabels' => @common_labels,
           'entries' => []
         }
-        if @service_name == CONTAINER_SERVICE
+        if @service_name == CONTAINER_SERVICE && @compiled_kubernetes_tag_regexp
           # Container logs in Kubernetes are tagged based on where they came
           # from, so we can extract useful metadata from the tag.
           # Do this here to avoid having to repeat it for each record.
-          match_data = @tag_to_kubernetes_labels_regexp.match(tag)
+          match_data = @compiled_kubernetes_tag_regexp.match(tag)
           if match_data
             labels = write_log_entries_request['commonLabels']
             %w(namespace_name pod_name container_name).each do |field|
