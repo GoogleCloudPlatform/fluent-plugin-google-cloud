@@ -1049,7 +1049,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert value.is_a?(String), "Value #{value} for label #{key} " \
         'is not a string: ' + value.class.name
       assert expected_labels.key?(key), "Unexpected label #{key} => #{value}"
-      assert_equal value, expected_labels[key], 'Value mismatch - expected ' \
+      assert_equal expected_labels[key], value, 'Value mismatch - expected ' \
         "#{expected_labels[key]} in #{key} => #{value}"
     end
     assert_equal expected_labels.length, all_labels.length, 'Expected ' \
