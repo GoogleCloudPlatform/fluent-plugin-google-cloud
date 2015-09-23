@@ -65,7 +65,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONTAINER_NAMESPACE_ID = '898268c8-4a36-11e5-9d81-42010af0194c'
   CONTAINER_NAMESPACE_NAME = 'kube-system'
   CONTAINER_POD_ID = 'cad3c3c4-4b9c-11e5-9d81-42010af0194c'
-  CONTAINER_POD_NAME = 'redis-master-c0l82'
+  CONTAINER_POD_NAME = 'redis-master-c0l82.foo.bar'
   CONTAINER_CONTAINER_NAME = 'redis'
 
   # Parameters used for authentication
