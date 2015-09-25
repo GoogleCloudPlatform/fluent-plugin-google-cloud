@@ -19,6 +19,7 @@ module Fluent
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
+    CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'
     COMPUTE_SERVICE = 'compute.googleapis.com'
     CONTAINER_SERVICE = 'container.googleapis.com'
     DATAFLOW_SERVICE = 'dataflow.googleapis.com'
@@ -154,6 +155,14 @@ module Fluent
         @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
       end
 
+      @cloudfunctions_tag_regexp =
+        /\.(?<function_name>.+)-[^-]+_default_worker$/
+      @cloudfunctions_log_regexp = /^
+        (?:\[(?<severity>.)\])?
+        \[(?<timestamp>.{24})\]
+        (?:\[(?<execution_id>[^\]]+)\])?
+        [ ](?<text>.*)$/x
+
       # set attributes from metadata (unless overriden by static config)
       @vm_name = Socket.gethostname if @vm_name.nil?
       @platform = detect_platform
@@ -199,12 +208,16 @@ module Fluent
       # Default this to false; it is only overwritten if we detect Managed VM.
       @running_on_managed_vm = false
 
+      # Default this to false; it is only overwritten if we detect Cloud
+      # Functions.
+      @running_cloudfunctions = false
+
       # Set labels, etc. based on the config
       case @platform
       when Platform::GCE
         @service_name = COMPUTE_SERVICE
         if @detect_subservice
-          # Check for specialized GCE environments (Managed VM or Dataflow).
+          # Check for specialized GCE environments.
           # TODO: Add config options for these to allow for running outside GCE?
           attributes = fetch_gce_metadata('instance/attributes/').split
           # Do nothing, just don't populate other service's labels.
@@ -233,6 +246,7 @@ module Fluent
             @kube_env = YAML.load(@raw_kube_env)
             common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
               cluster_name_from_kube_env(@kube_env)
+            detect_cloudfunctions(attributes, common_labels)
           end
         end
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
@@ -294,8 +308,29 @@ module Fluent
             end
           end
         end
+        if @running_cloudfunctions
+          # If the current group of entries is coming from a Cloud Functions
+          # function, the function name can be extracted from the tag.
+          match_data = @cloudfunctions_tag_regexp.match(tag)
+          if match_data
+            # Service name is set to Cloud Functions only for logs actually
+            # coming from a function.
+            @service_name = CLOUDFUNCTIONS_SERVICE
+            labels = write_log_entries_request['commonLabels']
+            labels["#{CLOUDFUNCTIONS_SERVICE}/function_name"] =
+              match_data['function_name']
+          else
+            # Other logs are considered as coming from the Container Engine
+            # service.
+            @service_name = CONTAINER_SERVICE
+          end
+        end
         arr.each do |time, record|
           next unless record.is_a?(Hash)
+          if @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
+            @cloudfunctions_log_match =
+              @cloudfunctions_log_regexp.match(record['log'])
+          end
           if record.key?('timestamp') &&
              record['timestamp'].is_a?(Hash) &&
              record['timestamp'].key?('seconds') &&
@@ -321,6 +356,11 @@ module Fluent
               @log.warn 'timeNanos is deprecated - please use ' \
                 'timestampSeconds and timestampNanos instead.'
             end
+          elsif @service_name == CLOUDFUNCTIONS_SERVICE &&
+                @cloudfunctions_log_match
+            timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
+            ts_secs = timestamp.strftime('%s')
+            ts_nanos = timestamp.strftime('%N')
           else
             timestamp = Time.at(time)
             ts_secs = timestamp.tv_sec
@@ -338,12 +378,8 @@ module Fluent
               'labels' => {}
             }
           }
-          if record.key?('severity')
-            entry['metadata']['severity'] = parse_severity(record['severity'])
-            record.delete('severity')
-          else
-            entry['metadata']['severity'] = 'DEFAULT'
-          end
+
+          set_severity(record, entry)
 
           # If the record has been annotated by the kubernetes_metadata_filter
           # plugin, then use that metadata. Otherwise, rely on commonLabels
@@ -361,13 +397,14 @@ module Fluent
             end
           end
 
-          # use textPayload if the only remainaing key is 'message',
-          # otherwise use a struct.
-          if record.size == 1 && record.key?('message')
-            entry['textPayload'] = record['message']
-          else
-            entry['structPayload'] = record
+          if @service_name == CLOUDFUNCTIONS_SERVICE &&
+             @cloudfunctions_log_match &&
+             @cloudfunctions_log_match['execution_id']
+            entry['metadata']['labels']['execution_id'] =
+              @cloudfunctions_log_match['execution_id']
           end
+
+          set_payload(record, entry)
 
           # Remove the labels metadata if we didn't populate it with anything.
           if entry['metadata']['labels'].empty?
@@ -379,10 +416,7 @@ module Fluent
         # Don't send an empty request if we rejected all the entries.
         next if write_log_entries_request['entries'].empty?
 
-        # Add a prefix to VMEngines logs to prevent namespace collisions,
-        # and also escape the log name.
-        log_name = CGI.escape(
-          @running_on_managed_vm ? "#{APPENGINE_SERVICE}/#{tag}" : tag)
+        log_name = CGI.escape(log_name(tag))
         url = 'https://logging.googleapis.com/v1beta3/projects/' \
           "#{@project_id}/logs/#{log_name}/entries:write"
         begin
@@ -492,6 +526,14 @@ module Fluent
       end
     end
 
+    def detect_cloudfunctions(attributes, common_labels)
+      return unless attributes.include?('gcf_region')
+      # Cloud Functions detected
+      @running_cloudfunctions = true
+      @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
+      common_labels["#{CLOUDFUNCTIONS_SERVICE}/region"] = @gcf_region
+    end
+
     def cluster_name_from_kube_env(kube_env)
       return kube_env['CLUSTER_NAME'] if kube_env.key?('CLUSTER_NAME')
       instance_prefix = kube_env['INSTANCE_PREFIX']
@@ -499,6 +541,28 @@ module Fluent
       return gke_name_match.captures[0] if gke_name_match &&
                                            !gke_name_match.captures.empty?
       instance_prefix
+    end
+
+    def set_severity(record, entry)
+      if @service_name == CLOUDFUNCTIONS_SERVICE
+        if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
+          entry['metadata']['severity'] =
+            parse_severity(@cloudfunctions_log_match['severity'])
+        elsif record.key?('stream') && record['stream'] == 'stdout'
+          entry['metadata']['severity'] = 'INFO'
+          record.delete('stream')
+        elsif record.key?('stream') && record['stream'] == 'stderr'
+          entry['metadata']['severity'] = 'ERROR'
+          record.delete('stream')
+        else
+          entry['metadata']['severity'] = 'DEFAULT'
+        end
+      elsif record.key?('severity')
+        entry['metadata']['severity'] = parse_severity(record['severity'])
+        record.delete('severity')
+      else
+        entry['metadata']['severity'] = 'DEFAULT'
+      end
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
@@ -584,6 +648,29 @@ module Fluent
       return unless record.key?(field)
       labels[label] = record[field].to_s
       record.delete(field)
+    end
+
+    def set_payload(record, entry)
+      # Use textPayload if this is the Cloud Functions service and 'log' key is
+      # available, or if the only remainaing key is 'message'.
+      if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
+        entry['textPayload'] = @cloudfunctions_log_match['text']
+      elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
+        entry['textPayload'] = record['log']
+      elsif record.size == 1 && record.key?('message')
+        entry['textPayload'] = record['message']
+      else
+        entry['structPayload'] = record
+      end
+    end
+
+    def log_name(tag)
+      if @service_name == CLOUDFUNCTIONS_SERVICE
+        return 'cloud-functions'
+      else
+        # Add a prefix to VMEngines logs to prevent namespace collisions.
+        return @running_on_managed_vm ? "#{APPENGINE_SERVICE}/#{tag}" : tag
+      end
     end
 
     def init_api_client
