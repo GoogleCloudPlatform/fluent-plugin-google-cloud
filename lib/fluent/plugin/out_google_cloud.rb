@@ -246,7 +246,7 @@ module Fluent
             @kube_env = YAML.load(@raw_kube_env)
             common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
               cluster_name_from_kube_env(@kube_env)
-            detect_cloudfunctions(attributes, common_labels)
+            detect_cloudfunctions(attributes)
           end
         end
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
@@ -317,6 +317,7 @@ module Fluent
             # coming from a function.
             @service_name = CLOUDFUNCTIONS_SERVICE
             labels = write_log_entries_request['commonLabels']
+            labels["#{CLOUDFUNCTIONS_SERVICE}/region"] = @gcf_region
             labels["#{CLOUDFUNCTIONS_SERVICE}/function_name"] =
               match_data['function_name']
           else
@@ -526,12 +527,11 @@ module Fluent
       end
     end
 
-    def detect_cloudfunctions(attributes, common_labels)
+    def detect_cloudfunctions(attributes)
       return unless attributes.include?('gcf_region')
       # Cloud Functions detected
       @running_cloudfunctions = true
       @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
-      common_labels["#{CLOUDFUNCTIONS_SERVICE}/region"] = @gcf_region
     end
 
     def cluster_name_from_kube_env(kube_env)

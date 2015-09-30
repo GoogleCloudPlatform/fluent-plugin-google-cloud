@@ -71,8 +71,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Cloud Functions specific labels
   CLOUDFUNCTIONS_FUNCTION_NAME = 'function-1'
   CLOUDFUNCTIONS_REGION = 'us-central1'
-  CLOUDFUNCTIONS_EXECUTION_ID = '123456789-0'
-  CLOUDFUNCTIONS_CLUSTER_NAME = 'gcf-cluster-1'
+  CLOUDFUNCTIONS_EXECUTION_ID = '123-0'
+  CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'
   CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'
   CLOUDFUNCTIONS_POD_NAME = "#{CLOUDFUNCTIONS_FUNCTION_NAME}-c0l82"
   CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'
@@ -222,12 +222,33 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'log_name' => 'cloud-functions',
     'project_id' => PROJECT_ID,
     'zone' => ZONE,
-    'severity' => 'DEBUG',
+    'labels' => {
+      'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
+      "#{CLOUDFUNCTIONS_SERVICE_NAME}/function_name" =>
+        CLOUDFUNCTIONS_FUNCTION_NAME,
+      "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
+      "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
+      "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
+      "#{CONTAINER_SERVICE_NAME}/namespace_name" =>
+        CLOUDFUNCTIONS_NAMESPACE_NAME,
+      "#{CONTAINER_SERVICE_NAME}/pod_name" => CLOUDFUNCTIONS_POD_NAME,
+      "#{CONTAINER_SERVICE_NAME}/container_name" =>
+        CLOUDFUNCTIONS_CONTAINER_NAME,
+      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+    }
+  }
+
+  CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
+    'service_name' => CLOUDFUNCTIONS_SERVICE_NAME,
+    'log_name' => 'cloud-functions',
+    'project_id' => PROJECT_ID,
+    'zone' => ZONE,
     'labels' => {
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/function_name" =>
         CLOUDFUNCTIONS_FUNCTION_NAME,
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
-      'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
       "#{CONTAINER_SERVICE_NAME}/namespace_name" =>
@@ -884,7 +905,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver(APPLICATION_DEFAULT_CONFIG, CLOUDFUNCTIONS_TAG)
     d.emit(cloudfunctions_log_entry(0))
     d.run
-    verify_log_entries(1, CLOUDFUNCTIONS_PARAMS)
+    verify_log_entries(1, CLOUDFUNCTIONS_PARAMS) do |entry|
+      assert_equal 'DEBUG', entry['metadata']['severity'], entry
+    end
   end
 
   def test_multiple_cloudfunctions_logs
@@ -899,7 +922,78 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       @logs_sent = []
       n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
       d.run
-      verify_log_entries(n, CLOUDFUNCTIONS_PARAMS)
+      verify_log_entries(n, CLOUDFUNCTIONS_PARAMS) do |entry|
+        assert_equal 'DEBUG', entry['metadata']['severity'], entry
+      end
+    end
+  end
+
+  def test_one_cloudfunctions_log_text_not_matched
+    setup_gce_metadata_stubs
+    setup_cloudfunctions_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CLOUDFUNCTIONS_TAG)
+    d.emit(cloudfunctions_log_entry_text_not_matched(0))
+    d.run
+    verify_log_entries(1, CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS) do |entry|
+      assert_equal 'INFO', entry['metadata']['severity'], entry
+    end
+  end
+
+  def test_multiple_cloudfunctions_logs_text_not_matched
+    setup_gce_metadata_stubs
+    setup_cloudfunctions_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CLOUDFUNCTIONS_TAG)
+    [2, 3, 5, 11, 50].each do |n|
+      # The test driver doesn't clear its buffer of entries after running, so
+      # do it manually here.
+      d.instance_variable_get('@entries').clear
+      @logs_sent = []
+      n.times { |i| d.emit(cloudfunctions_log_entry_text_not_matched(i)) }
+      d.run
+      verify_log_entries(n, CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS) do |entry|
+        assert_equal 'INFO', entry['metadata']['severity'], entry
+      end
+    end
+  end
+
+  def test_one_cloudfunctions_log_tag_not_matched
+    setup_gce_metadata_stubs
+    setup_cloudfunctions_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d.emit(cloudfunctions_log_entry(0))
+    d.run
+    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS, 'structPayload') do |entry|
+      assert_equal 2, entry['structPayload'].size, entry
+      assert_equal '[D][2015-09-25T12:34:56.789Z][123-0] test log entry 0',
+                   entry['structPayload']['log'], entry
+      assert_equal 'stdout', entry['structPayload']['stream'], entry
+    end
+  end
+
+  def test_multiple_cloudfunctions_logs_tag_not_matched
+    setup_gce_metadata_stubs
+    setup_cloudfunctions_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    [2, 3, 5, 11, 50].each do |n|
+      # The test driver doesn't clear its buffer of entries after running, so
+      # do it manually here.
+      d.instance_variable_get('@entries').clear
+      @logs_sent = []
+      n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
+      d.run
+      i = 0
+      params = CONTAINER_FROM_TAG_PARAMS
+      verify_log_entries(n, params, 'structPayload') do |entry|
+        assert_equal 2, entry['structPayload'].size, entry
+        assert_equal "[D][2015-09-25T12:34:56.789Z][123-0] test log entry #{i}",
+                     entry['structPayload']['log'], entry
+        assert_equal 'stdout', entry['structPayload']['stream'], entry
+        i += 1
+      end
     end
   end
 
@@ -1095,7 +1189,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "attribute1\nkube-env\ngcf_region\nlast_attribute")
     stub_metadata_request('instance/attributes/kube-env',
                           "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          "INSTANCE_PREFIX: gke-gcf-cluster-1-740fdafa\n"\
+                          "INSTANCE_PREFIX: gke-cluster-1-740fdafa\n"\
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
     stub_metadata_request('instance/attributes/gcf_region', 'us-central1')
   end
@@ -1116,7 +1210,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def cloudfunctions_log_entry(i)
     {
       stream: 'stdout',
-      log: '[D][2015-09-25T12:34:56.789Z][123456789-0] ' + log_entry(i)
+      log: '[D][2015-09-25T12:34:56.789Z][123-0] ' + log_entry(i)
+    }
+  end
+
+  def cloudfunctions_log_entry_text_not_matched(i)
+    {
+      stream: 'stdout',
+      log: log_entry(i)
     }
   end
 
