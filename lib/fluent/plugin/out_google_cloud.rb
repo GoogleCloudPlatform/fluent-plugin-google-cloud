@@ -417,7 +417,8 @@ module Fluent
         # Don't send an empty request if we rejected all the entries.
         next if write_log_entries_request['entries'].empty?
 
-        log_name = CGI.escape(log_name(tag))
+        log_name = CGI.escape(
+          log_name(tag, write_log_entries_request['commonLabels']))
         url = 'https://logging.googleapis.com/v1beta3/projects/' \
           "#{@project_id}/logs/#{log_name}/entries:write"
         begin
@@ -664,13 +665,21 @@ module Fluent
       end
     end
 
-    def log_name(tag)
+    def log_name(tag, commonLabels)
       if @service_name == CLOUDFUNCTIONS_SERVICE
         return 'cloud-functions'
-      else
-        # Add a prefix to VMEngines logs to prevent namespace collisions.
-        return @running_on_managed_vm ? "#{APPENGINE_SERVICE}/#{tag}" : tag
+      elsif @running_on_managed_vm
+        # Add a prefix to Managed VM logs to prevent namespace collisions.
+        return "#{APPENGINE_SERVICE}/#{tag}"
+      elsif @service_name == CONTAINER_SERVICE
+        # For Kubernetes logs, use just the container name as the log name
+        # if we have it.
+        container_name_key = "#{CONTAINER_SERVICE}/container_name"
+        if commonLabels && commonLabels.key?(container_name_key)
+          return commonLabels[container_name_key]
+        end
       end
+      tag
     end
 
     def init_api_client
