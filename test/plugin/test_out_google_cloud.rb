@@ -173,12 +173,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
-  CONTAINER_LOG_NAME = "kubernetes.#{CONTAINER_POD_NAME}_" \
-                       "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
+  CONTAINER_TAG = "kubernetes.#{CONTAINER_POD_NAME}_" \
+                  "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
 
   CONTAINER_FROM_METADATA_PARAMS = {
     'service_name' => CONTAINER_SERVICE_NAME,
-    'log_name' => CONTAINER_LOG_NAME,
+    'log_name' => CONTAINER_CONTAINER_NAME,
     'project_id' => PROJECT_ID,
     'zone' => ZONE,
     'labels' => {
@@ -198,7 +198,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Almost the same as from metadata, but missing namespace_id and pod_id.
   CONTAINER_FROM_TAG_PARAMS = {
     'service_name' => CONTAINER_SERVICE_NAME,
-    'log_name' => CONTAINER_LOG_NAME,
+    'log_name' => CONTAINER_CONTAINER_NAME,
     'project_id' => PROJECT_ID,
     'zone' => ZONE,
     'labels' => {
@@ -850,7 +850,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(container_log_entry_with_metadata(0))
     d.run
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS)
@@ -860,7 +860,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
@@ -876,7 +876,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS)
@@ -886,7 +886,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
@@ -962,7 +962,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_cloudfunctions_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(cloudfunctions_log_entry(0))
     d.run
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS, 'structPayload') do |entry|
@@ -977,7 +977,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_cloudfunctions_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
