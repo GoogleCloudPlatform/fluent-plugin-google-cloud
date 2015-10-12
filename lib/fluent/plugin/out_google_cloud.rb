@@ -382,11 +382,16 @@ module Fluent
 
           set_severity(record, entry)
 
-          # If the record has been annotated by the kubernetes_metadata_filter
-          # plugin, then use that metadata. Otherwise, rely on commonLabels
-          # populated at the grouped_entries level from the group's tag.
-          if @service_name == CONTAINER_SERVICE && record['kubernetes']
-            handle_container_metadata(record, entry)
+          if @service_name == CONTAINER_SERVICE
+            # Move the stdout/stderr annotation from the record into a label
+            field_to_label(record, 'stream', entry['metadata']['labels'],
+                           "#{CONTAINER_SERVICE}/stream")
+            # If the record has been annotated by the kubernetes_metadata_filter
+            # plugin, then use that metadata. Otherwise, rely on commonLabels
+            # populated at the grouped_entries level from the group's tag.
+            if record.key?('kubernetes')
+              handle_container_metadata(record, entry)
+            end
           end
 
           # If a field is present in the label_map, send its value as a label
@@ -656,7 +661,8 @@ module Fluent
       # available, or if the only remainaing key is 'message'.
       if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
         entry['textPayload'] = @cloudfunctions_log_match['text']
-      elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
+      elsif (@service_name == CLOUDFUNCTIONS_SERVICE ||
+             @service_name == CONTAINER_SERVICE) && record.key?('log')
         entry['textPayload'] = record['log']
       elsif record.size == 1 && record.key?('message')
         entry['textPayload'] = record['message']
