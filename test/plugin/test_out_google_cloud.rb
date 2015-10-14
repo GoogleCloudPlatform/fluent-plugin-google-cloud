@@ -67,6 +67,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONTAINER_POD_ID = 'cad3c3c4-4b9c-11e5-9d81-42010af0194c'
   CONTAINER_POD_NAME = 'redis-master-c0l82.foo.bar'
   CONTAINER_CONTAINER_NAME = 'redis'
+  CONTAINER_STREAM = 'stdout'
 
   # Cloud Functions specific labels
   CLOUDFUNCTIONS_FUNCTION_NAME = 'function-1'
@@ -173,12 +174,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
-  CONTAINER_LOG_NAME = "kubernetes.#{CONTAINER_POD_NAME}_" \
-                       "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
+  CONTAINER_TAG = "kubernetes.#{CONTAINER_POD_NAME}_" \
+                  "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
 
   CONTAINER_FROM_METADATA_PARAMS = {
     'service_name' => CONTAINER_SERVICE_NAME,
-    'log_name' => CONTAINER_LOG_NAME,
+    'log_name' => CONTAINER_CONTAINER_NAME,
     'project_id' => PROJECT_ID,
     'zone' => ZONE,
     'labels' => {
@@ -189,6 +190,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
       "#{CONTAINER_SERVICE_NAME}/pod_id" => CONTAINER_POD_ID,
       "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
+      "#{CONTAINER_SERVICE_NAME}/stream" => CONTAINER_STREAM,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
@@ -198,7 +200,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Almost the same as from metadata, but missing namespace_id and pod_id.
   CONTAINER_FROM_TAG_PARAMS = {
     'service_name' => CONTAINER_SERVICE_NAME,
-    'log_name' => CONTAINER_LOG_NAME,
+    'log_name' => CONTAINER_CONTAINER_NAME,
     'project_id' => PROJECT_ID,
     'zone' => ZONE,
     'labels' => {
@@ -207,6 +209,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
       "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
       "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
+      "#{CONTAINER_SERVICE_NAME}/stream" => CONTAINER_STREAM,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
@@ -850,7 +853,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(container_log_entry_with_metadata(0))
     d.run
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS)
@@ -860,7 +863,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
@@ -876,8 +879,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
-    d.emit('message' => log_entry(0))
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+    d.emit(container_log_entry(0))
     d.run
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS)
   end
@@ -886,13 +889,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
       d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit('message' => log_entry(i)) }
+      n.times { |i| d.emit(container_log_entry(i)) }
       d.run
       verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS)
     end
@@ -962,14 +965,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_cloudfunctions_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(cloudfunctions_log_entry(0))
     d.run
-    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS, 'structPayload') do |entry|
-      assert_equal 2, entry['structPayload'].size, entry
+    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS, '') do |entry|
       assert_equal '[D][2015-09-25T12:34:56.789Z][123-0] test log entry 0',
-                   entry['structPayload']['log'], entry
-      assert_equal 'stdout', entry['structPayload']['stream'], entry
+                   entry['textPayload'], entry
     end
   end
 
@@ -977,7 +978,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     setup_cloudfunctions_metadata_stubs
     setup_logging_stubs
-    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_LOG_NAME)
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     [2, 3, 5, 11, 50].each do |n|
       # The test driver doesn't clear its buffer of entries after running, so
       # do it manually here.
@@ -987,11 +988,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       d.run
       i = 0
       params = CONTAINER_FROM_TAG_PARAMS
-      verify_log_entries(n, params, 'structPayload') do |entry|
-        assert_equal 2, entry['structPayload'].size, entry
+      verify_log_entries(n, params, '') do |entry|
         assert_equal "[D][2015-09-25T12:34:56.789Z][123-0] test log entry #{i}",
-                     entry['structPayload']['log'], entry
-        assert_equal 'stdout', entry['structPayload']['stream'], entry
+                     entry['textPayload'], entry
         i += 1
       end
     end
@@ -1196,7 +1195,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def container_log_entry_with_metadata(i)
     {
-      message: log_entry(i),
+      log: log_entry(i),
+      stream: 'stdout',
       kubernetes: {
         namespace_id: CONTAINER_NAMESPACE_ID,
         namespace_name: CONTAINER_NAMESPACE_NAME,
@@ -1204,6 +1204,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         pod_name: CONTAINER_POD_NAME,
         container_name: CONTAINER_CONTAINER_NAME
       }
+    }
+  end
+
+  def container_log_entry(i)
+    {
+      log: log_entry(i),
+      stream: 'stdout'
     }
   end
 
@@ -1245,10 +1252,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     i = 0
     @logs_sent.each do |batch|
       batch['entries'].each do |entry|
-        assert entry.key?(payload_type)
-        if (payload_type == 'textPayload')
-          # Check the payload for textPayload, otherwise it is up to the caller.
-          assert_equal "test log entry #{i}", entry['textPayload'], batch
+        unless payload_type.empty?
+          assert entry.key?(payload_type)
+          # Check the payload for textPayload, otherwise it's up to the caller.
+          if (payload_type == 'textPayload')
+            assert_equal "test log entry #{i}", entry['textPayload'], batch
+          end
         end
 
         assert_equal params['zone'], entry['metadata']['zone']
