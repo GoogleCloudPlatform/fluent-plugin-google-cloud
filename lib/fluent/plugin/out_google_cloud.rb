@@ -326,12 +326,54 @@ module Fluent
             @service_name = CONTAINER_SERVICE
           end
         end
+        is_container_json = nil
         arr.each do |time, record|
           next unless record.is_a?(Hash)
+
+          entry = {
+            'metadata' => {
+              'serviceName' => @service_name,
+              'projectId' => @project_id,
+              'zone' => @zone,
+              'labels' => {}
+            }
+          }
+
           if @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
             @cloudfunctions_log_match =
               @cloudfunctions_log_regexp.match(record['log'])
           end
+          if @service_name == CONTAINER_SERVICE
+            # Move the stdout/stderr annotation from the record into a label
+            field_to_label(record, 'stream', entry['metadata']['labels'],
+                           "#{CONTAINER_SERVICE}/stream")
+            # If the record has been annotated by the kubernetes_metadata_filter
+            # plugin, then use that metadata. Otherwise, rely on commonLabels
+            # populated at the grouped_entries level from the group's tag.
+            if record.key?('kubernetes')
+              handle_container_metadata(record, entry)
+            end
+            # If the log from the user container is json, we want to export it
+            # as a structured log. Now that we've pulled out all the
+            # container-specific metadata from the record, we can replace the
+            # record with the json that the user logged.
+            # To save CPU in the common case of unstructured logs, only check if
+            # the contents are parsable as json for the first entry of each
+            # batch.
+            if is_container_json.nil? && record.key?('log')
+              record_json = parse_json_or_nil(record['log'])
+              if record_json.nil?
+                is_container_json = false
+              else
+                record = record_json
+                is_container_json = true
+              end
+            elsif is_container_json && record.key?('log')
+              record_json = parse_json_or_nil(record['log'])
+              record = record_json unless record_json.nil?
+            end
+          end
+
           if record.key?('timestamp') &&
              record['timestamp'].is_a?(Hash) &&
              record['timestamp'].key?('seconds') &&
@@ -367,32 +409,12 @@ module Fluent
             ts_secs = timestamp.tv_sec
             ts_nanos = timestamp.tv_nsec
           end
-          entry = {
-            'metadata' => {
-              'serviceName' => @service_name,
-              'projectId' => @project_id,
-              'zone' => @zone,
-              'timestamp' => {
-                'seconds' => ts_secs,
-                'nanos' => ts_nanos
-              },
-              'labels' => {}
-            }
+          entry['metadata']['timestamp'] = {
+            'seconds' => ts_secs,
+            'nanos' => ts_nanos
           }
 
           set_severity(record, entry)
-
-          if @service_name == CONTAINER_SERVICE
-            # Move the stdout/stderr annotation from the record into a label
-            field_to_label(record, 'stream', entry['metadata']['labels'],
-                           "#{CONTAINER_SERVICE}/stream")
-            # If the record has been annotated by the kubernetes_metadata_filter
-            # plugin, then use that metadata. Otherwise, rely on commonLabels
-            # populated at the grouped_entries level from the group's tag.
-            if record.key?('kubernetes')
-              handle_container_metadata(record, entry)
-            end
-          end
 
           # If a field is present in the label_map, send its value as a label
           # (mapping the field name to label name as specified in the config)
@@ -410,7 +432,7 @@ module Fluent
               @cloudfunctions_log_match['execution_id']
           end
 
-          set_payload(record, entry)
+          set_payload(record, entry, is_container_json)
 
           # Remove the labels metadata if we didn't populate it with anything.
           if entry['metadata']['labels'].empty?
@@ -476,6 +498,17 @@ module Fluent
       dropped = request['entries'].length
       @log.warn "Dropping #{dropped} log message(s)",
                 error_class: error.class.to_s, error: error.to_s
+    end
+
+    def parse_json_or_nil(input)
+      # Only here to please rubocop...
+      return nil if input.nil?
+
+      begin
+        return JSON.parse(input)
+      rescue JSON::ParserError
+        return nil
+      end
     end
 
     # "enum" of Platform values
@@ -656,13 +689,18 @@ module Fluent
       record.delete(field)
     end
 
-    def set_payload(record, entry)
-      # Use textPayload if this is the Cloud Functions service and 'log' key is
-      # available, or if the only remainaing key is 'message'.
+    def set_payload(record, entry, is_container_json)
+      # Use textPayload if
+      # 1. This is a Cloud Functions log that matched the expected regexp
+      # 2. This is a Cloud Functions log and the 'log' key is available
+      # 3. This is an unstructured Container log and the 'log' key is available
+      # 4. The only remaining key is 'message'
       if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
         entry['textPayload'] = @cloudfunctions_log_match['text']
-      elsif (@service_name == CLOUDFUNCTIONS_SERVICE ||
-             @service_name == CONTAINER_SERVICE) && record.key?('log')
+      elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
+        entry['textPayload'] = record['log']
+      elsif @service_name == CONTAINER_SERVICE && record.key?('log') &&
+            !is_container_json
         entry['textPayload'] = record['log']
       elsif record.size == 1 && record.key?('message')
         entry['textPayload'] = record['message']
