@@ -854,7 +854,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_container_metadata_stubs
     setup_logging_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-    d.emit(container_log_entry_with_metadata(0))
+    d.emit(container_log_entry_with_metadata(log_entry(0)))
     d.run
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS)
   end
@@ -869,7 +869,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       # do it manually here.
       d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit(container_log_entry_with_metadata(i)) }
+      n.times { |i| d.emit(container_log_entry_with_metadata(log_entry(i))) }
       d.run
       verify_log_entries(n, CONTAINER_FROM_METADATA_PARAMS)
     end
@@ -880,7 +880,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_container_metadata_stubs
     setup_logging_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-    d.emit(container_log_entry(0))
+    d.emit(container_log_entry(log_entry(0)))
     d.run
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS)
   end
@@ -895,9 +895,43 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       # do it manually here.
       d.instance_variable_get('@entries').clear
       @logs_sent = []
-      n.times { |i| d.emit(container_log_entry(i)) }
+      n.times { |i| d.emit(container_log_entry(log_entry(i))) }
       d.run
       verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS)
+    end
+  end
+
+  def test_struct_container_log_metadata_from_plugin
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+    d.emit(container_log_entry_with_metadata('{"msg": "test log entry 0", ' \
+                                             '"tag2": "test", "data": 5000}'))
+    d.run
+    verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS,
+                       'structPayload') do |entry|
+      assert_equal 3, entry['structPayload'].size, entry
+      assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+      assert_equal 'test', entry['structPayload']['tag2'], entry
+      assert_equal 5000, entry['structPayload']['data'], entry
+    end
+  end
+
+  def test_struct_container_log_metadata_from_tag
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+    d.emit(container_log_entry('{"msg": "test log entry 0", ' \
+                               '"tag2": "test", "data": 5000}'))
+    d.run
+    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS,
+                       'structPayload') do |entry|
+      assert_equal 3, entry['structPayload'].size, entry
+      assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+      assert_equal 'test', entry['structPayload']['tag2'], entry
+      assert_equal 5000, entry['structPayload']['data'], entry
     end
   end
 
@@ -1193,9 +1227,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     stub_metadata_request('instance/attributes/gcf_region', 'us-central1')
   end
 
-  def container_log_entry_with_metadata(i)
+  def container_log_entry_with_metadata(log)
     {
-      log: log_entry(i),
+      log: log,
       stream: 'stdout',
       kubernetes: {
         namespace_id: CONTAINER_NAMESPACE_ID,
@@ -1207,9 +1241,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   end
 
-  def container_log_entry(i)
+  def container_log_entry(log)
     {
-      log: log_entry(i),
+      log: log,
       stream: 'stdout'
     }
   end
@@ -1253,7 +1287,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     @logs_sent.each do |batch|
       batch['entries'].each do |entry|
         unless payload_type.empty?
-          assert entry.key?(payload_type)
+          assert entry.key?(payload_type), 'Entry did not contain expected ' \
+            "#{payload_type} key: " + entry.to_s
           # Check the payload for textPayload, otherwise it's up to the caller.
           if (payload_type == 'textPayload')
             assert_equal "test log entry #{i}", entry['textPayload'], batch
