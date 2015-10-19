@@ -156,7 +156,7 @@ module Fluent
       end
 
       @cloudfunctions_tag_regexp =
-        /\.(?<function_name>.+)-[^-]+_default_worker$/
+        /\.(?<function_name>[^.]+)(?:\.\d+)?-[^-]+_default_worker$/
       @cloudfunctions_log_regexp = /^
         (?:\[(?<severity>.)\])?
         \[(?<timestamp>.{24})\]
