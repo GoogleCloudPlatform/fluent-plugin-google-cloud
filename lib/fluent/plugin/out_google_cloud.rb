@@ -550,9 +550,7 @@ module Fluent
         @platform == Platform::GCE
       # See https://cloud.google.com/compute/docs/metadata
       open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
-           metadata_path, 'Metadata-Flavor' => 'Google') do |f|
-        f.read
-      end
+           metadata_path, 'Metadata-Flavor' => 'Google', &:read)
     end
 
     def fetch_ec2_metadata

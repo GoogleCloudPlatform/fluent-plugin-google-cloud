@@ -18,14 +18,14 @@ eos
   gem.test_files    = gem.files.grep(/^(test)/)
   gem.require_paths = ['lib']
 
-  gem.add_runtime_dependency 'fluentd', '>= 0.10'
-  gem.add_runtime_dependency 'google-api-client', '~> 0.8.6'
+  gem.add_runtime_dependency 'fluentd', '~> 0.10'
+  gem.add_runtime_dependency 'google-api-client', '>= 0.8.6', '<= 0.9'
   gem.add_runtime_dependency 'googleauth', '~> 0.4'
-  gem.add_runtime_dependency 'json', '~> 1.8.2'
+  gem.add_runtime_dependency 'json', '~> 1.8'
 
   gem.add_development_dependency 'mocha', '~> 1.1'
-  gem.add_development_dependency 'rake', '>= 10.3.2'
-  gem.add_development_dependency 'rubocop', '~> 0.33.0'
-  gem.add_development_dependency 'webmock', '>= 1.17.0'
-  gem.add_development_dependency 'test-unit', '~> 3.0.2'
+  gem.add_development_dependency 'rake', '~> 10.3'
+  gem.add_development_dependency 'rubocop', '= 0.34.2'
+  gem.add_development_dependency 'webmock', '~> 1.17'
+  gem.add_development_dependency 'test-unit', '~> 3.0'
 end
