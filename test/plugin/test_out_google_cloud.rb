@@ -82,6 +82,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
   FAKE_AUTH_TOKEN = 'abc123'
 
+  # Paths to test credentials files
+  CREDENTIALS_FILE = 'test/plugin/data/credentials.json'
+  INVALID_CREDENTIALS_FILE = 'test/plugin/data/invalid_credentials.json'
+
+  # Project ID for the test credentials.
+  # This must match the prefix of 'client_id' in CREDENTIALS_FILE.
+  CREDENTIALS_PROJECT_ID = '847859579879'
+
   # Configuration files for various test scenarios
   APPLICATION_DEFAULT_CONFIG = %(
   )
@@ -491,6 +499,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
+  def test_ec2_metadata_project_id_from_credentials
+    setup_ec2_metadata_stubs
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = CREDENTIALS_FILE
+    d = create_driver
+    d.run
+    assert_equal CREDENTIALS_PROJECT_ID, d.instance.project_id
+  end
+
   def test_one_log
     setup_gce_metadata_stubs
     setup_logging_stubs
@@ -503,7 +519,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_one_log_with_json_credentials
     setup_gce_metadata_stubs
     setup_logging_stubs
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = CREDENTIALS_FILE
     d = create_driver
     d.emit('message' => log_entry(0))
     d.run
@@ -513,8 +529,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_one_log_with_invalid_json_credentials
     setup_gce_metadata_stubs
     setup_logging_stubs
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = \
-      'test/plugin/data/invalid_credentials.json'
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS_FILE
     d = create_driver
     d.emit('message' => log_entry(0))
     exception_count = 0
@@ -540,7 +555,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     # don't set up any metadata stubs, so the test will fail if we try to
     # fetch metadata (and explicitly check this as well).
     Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = CREDENTIALS_FILE
     setup_logging_stubs
     d = create_driver(NO_METADATA_SERVICE_CONFIG + CUSTOM_METADATA_CONFIG)
     d.emit('message' => log_entry(0))
@@ -549,7 +564,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_ec2
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = 'test/plugin/data/credentials.json'
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = CREDENTIALS_FILE
     setup_ec2_metadata_stubs
     setup_logging_stubs
     d = create_driver(CONFIG_EC2_PROJECT_ID)
