@@ -195,6 +195,14 @@ module Fluent
         fail Fluent::ConfigError, 'Unknown platform ' + @platform
       end
 
+      # If we still don't have a project ID, try to obtain it from the
+      # credentials.
+      if @project_id.nil?
+        @project_id = CredentialsInfo.project_id
+        @log.info 'Set Project ID from credentials: ', @project_id unless
+          @project_id.nil?
+      end
+
       # all metadata parameters must now be set
       unless @project_id && @zone && @vm_id
         missing = []
@@ -561,6 +569,37 @@ module Fluent
            '/latest/dynamic/instance-identity/document') do |f|
         contents = f.read
         return JSON.parse(contents)
+      end
+    end
+
+    # TODO: This functionality should eventually be available in another
+    # library, but implement it ourselves for now.
+    module CredentialsInfo
+      # Determine the project ID from the credentials, if possible.
+      # Returns the project ID (as a string) on success, or nil on failure.
+      def self.project_id
+        return nil if @auth_method == 'private_key'
+        creds = Google::Auth.get_application_default(LOGGING_SCOPE)
+        if creds.issuer
+          id = extract_project_id(creds.issuer)
+          return id unless id.nil?
+        end
+        if creds.client_id
+          id = extract_project_id(creds.client_id)
+          return id unless id.nil?
+        end
+        nil
+      end
+
+      # Extracts the project id from str.  Assumes the project ID is at the
+      # front of str, and consists of a string of digits terminated by a
+      # dash (-) which is not part of the project ID.  Example:
+      # 270694816269-1l1r2hb813leuppurdeik0apglbs80sv.apps.googleusercontent.com
+      # Returns the project ID (as a string) on success, or nil on failure.
+      def self.extract_project_id(str)
+        @project_regexp = /^(?<project_id>\d+)-/
+        match_data = @project_regexp.match(str)
+        match_data ? match_data['project_id'] : nil
       end
     end
 
