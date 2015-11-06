@@ -272,6 +272,11 @@ module Fluent
         common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
         common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
       end
+
+      # Log an informational message containing the Logs viewer URL
+      @log.info 'Logs viewer address: ',
+                'https://console.developers.google.com/project/', @project_id,
+                '/logs?service=', @service_name, '&key1=instance&key2=', @vm_id
     end
 
     def start
