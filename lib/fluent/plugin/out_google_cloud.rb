@@ -596,15 +596,20 @@ module Fluent
         nil
       end
 
-      # Extracts the project id from str.  Assumes the project ID is at the
-      # front of str, and consists of a string of digits terminated by a
-      # dash (-) which is not part of the project ID.  Example:
-      # 270694816269-1l1r2hb813leuppurdeik0apglbs80sv.apps.googleusercontent.com
+      # Extracts the project id from str.
       # Returns the project ID (as a string) on success, or nil on failure.
+      #
+      # Recognizes IAM format (account@project-name.iam.gserviceaccount.com)
+      # as well as the legacy format with a project number at the front of the
+      # string, terminated by a dash (-) which is not part of the ID, i.e.:
+      # 270694816269-1l1r2hb813leuppurdeik0apglbs80sv.apps.googleusercontent.com
       def self.extract_project_id(str)
-        @project_regexp = /^(?<project_id>\d+)-/
-        match_data = @project_regexp.match(str)
-        match_data ? match_data['project_id'] : nil
+        [/^.*@(?<project_id>.+)\.iam\.gserviceaccount\.com/,
+         /^(?<project_id>\d+)-/].each do |exp|
+          match_data = exp.match(str)
+          return match_data['project_id'] unless match_data.nil?
+        end
+        nil
       end
     end
 
