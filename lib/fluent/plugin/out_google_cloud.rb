@@ -723,7 +723,7 @@ module Fluent
                        "#{CONTAINER_SERVICE}/#{field}")
       end
       # Prepend label/ to all user-defined labels' keys.
-      if record.key?('labels')
+      if record['kubernetes'].key?('labels')
         record['kubernetes']['labels'].each do |key, value|
           entry['metadata']['labels']["label/#{key}"] = value
         end
