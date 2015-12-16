@@ -67,6 +67,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONTAINER_POD_ID = 'cad3c3c4-4b9c-11e5-9d81-42010af0194c'
   CONTAINER_POD_NAME = 'redis-master-c0l82.foo.bar'
   CONTAINER_CONTAINER_NAME = 'redis'
+  CONTAINER_LABEL_KEY = 'component'
+  CONTAINER_LABEL_VALUE = 'redis-component'
   CONTAINER_STREAM = 'stdout'
 
   # Cloud Functions specific labels
@@ -207,6 +209,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{CONTAINER_SERVICE_NAME}/pod_id" => CONTAINER_POD_ID,
       "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
       "#{CONTAINER_SERVICE_NAME}/stream" => CONTAINER_STREAM,
+      "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
@@ -1261,7 +1264,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         namespace_name: CONTAINER_NAMESPACE_NAME,
         pod_id: CONTAINER_POD_ID,
         pod_name: CONTAINER_POD_NAME,
-        container_name: CONTAINER_CONTAINER_NAME
+        container_name: CONTAINER_CONTAINER_NAME,
+        labels: {
+          CONTAINER_LABEL_KEY => CONTAINER_LABEL_VALUE
+        }
       }
     }
   end
