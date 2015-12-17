@@ -332,8 +332,7 @@ module Fluent
             @service_name = CONTAINER_SERVICE
           end
         end
-        if [CONTAINER_SERVICE, CLOUDFUNCTIONS_SERVICE]
-           .include?(@service_name) && @compiled_kubernetes_tag_regexp
+        if @service_name == CONTAINER_SERVICE && @compiled_kubernetes_tag_regexp
           # Container logs in Kubernetes are tagged based on where they came
           # from, so we can extract useful metadata from the tag.
           # Do this here to avoid having to repeat it for each record.

@@ -251,11 +251,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{CONTAINER_SERVICE_NAME}/namespace_name" =>
-        CLOUDFUNCTIONS_NAMESPACE_NAME,
-      "#{CONTAINER_SERVICE_NAME}/pod_name" => CLOUDFUNCTIONS_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/container_name" =>
-        CLOUDFUNCTIONS_CONTAINER_NAME,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
@@ -273,11 +268,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{CONTAINER_SERVICE_NAME}/namespace_name" =>
-        CLOUDFUNCTIONS_NAMESPACE_NAME,
-      "#{CONTAINER_SERVICE_NAME}/pod_name" => CLOUDFUNCTIONS_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/container_name" =>
-        CLOUDFUNCTIONS_CONTAINER_NAME,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
