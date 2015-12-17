@@ -160,7 +160,7 @@ module Fluent
       end
 
       @cloudfunctions_tag_regexp =
-        /\.(?<function_name>[^.]+)(?:\.\d+)?-[^-]+_default_worker$/
+        /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
       @cloudfunctions_log_regexp = /^
         (?:\[(?<severity>.)\])?
         \[(?<timestamp>.{24})\]
@@ -313,18 +313,6 @@ module Fluent
           'commonLabels' => @common_labels,
           'entries' => []
         }
-        if @service_name == CONTAINER_SERVICE && @compiled_kubernetes_tag_regexp
-          # Container logs in Kubernetes are tagged based on where they came
-          # from, so we can extract useful metadata from the tag.
-          # Do this here to avoid having to repeat it for each record.
-          match_data = @compiled_kubernetes_tag_regexp.match(tag)
-          if match_data
-            labels = write_log_entries_request['commonLabels']
-            %w(namespace_name pod_name container_name).each do |field|
-              labels["#{CONTAINER_SERVICE}/#{field}"] = match_data[field]
-            end
-          end
-        end
         if @running_cloudfunctions
           # If the current group of entries is coming from a Cloud Functions
           # function, the function name can be extracted from the tag.
@@ -336,11 +324,24 @@ module Fluent
             labels = write_log_entries_request['commonLabels']
             labels["#{CLOUDFUNCTIONS_SERVICE}/region"] = @gcf_region
             labels["#{CLOUDFUNCTIONS_SERVICE}/function_name"] =
-              match_data['function_name']
+              decode_cloudfunctions_function_name(
+                match_data['encoded_function_name'])
           else
             # Other logs are considered as coming from the Container Engine
             # service.
             @service_name = CONTAINER_SERVICE
+          end
+        end
+        if @service_name == CONTAINER_SERVICE && @compiled_kubernetes_tag_regexp
+          # Container logs in Kubernetes are tagged based on where they came
+          # from, so we can extract useful metadata from the tag.
+          # Do this here to avoid having to repeat it for each record.
+          match_data = @compiled_kubernetes_tag_regexp.match(tag)
+          if match_data
+            labels = write_log_entries_request['commonLabels']
+            %w(namespace_name pod_name container_name).each do |field|
+              labels["#{CONTAINER_SERVICE}/#{field}"] = match_data[field]
+            end
           end
         end
         is_container_json = nil
@@ -713,6 +714,11 @@ module Fluent
 
       # If all else fails, use 'DEFAULT'.
       'DEFAULT'
+    end
+
+    def decode_cloudfunctions_function_name(function_name)
+      function_name.gsub(/c\.[a-z]/) { |s| s.upcase[-1] }
+        .gsub('u.u', '_').gsub('d.d', '$').gsub('a.a', '@').gsub('p.p', '.')
     end
 
     # Requires that record has a 'kubernetes' field.

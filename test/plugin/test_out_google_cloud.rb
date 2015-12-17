@@ -72,12 +72,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONTAINER_STREAM = 'stdout'
 
   # Cloud Functions specific labels
-  CLOUDFUNCTIONS_FUNCTION_NAME = 'function-1'
+  CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'
   CLOUDFUNCTIONS_REGION = 'us-central1'
   CLOUDFUNCTIONS_EXECUTION_ID = '123-0'
   CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'
   CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'
-  CLOUDFUNCTIONS_POD_NAME = "#{CLOUDFUNCTIONS_FUNCTION_NAME}.987-c0l82"
+  CLOUDFUNCTIONS_POD_NAME = 'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'
   CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'
 
   # Parameters used for authentication
@@ -251,11 +251,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{CONTAINER_SERVICE_NAME}/namespace_name" =>
-        CLOUDFUNCTIONS_NAMESPACE_NAME,
-      "#{CONTAINER_SERVICE_NAME}/pod_name" => CLOUDFUNCTIONS_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/container_name" =>
-        CLOUDFUNCTIONS_CONTAINER_NAME,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
@@ -273,11 +268,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{CONTAINER_SERVICE_NAME}/namespace_name" =>
-        CLOUDFUNCTIONS_NAMESPACE_NAME,
-      "#{CONTAINER_SERVICE_NAME}/pod_name" => CLOUDFUNCTIONS_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/container_name" =>
-        CLOUDFUNCTIONS_CONTAINER_NAME,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
