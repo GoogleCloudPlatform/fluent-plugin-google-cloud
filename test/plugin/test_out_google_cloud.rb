@@ -72,12 +72,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONTAINER_STREAM = 'stdout'
 
   # Cloud Functions specific labels
-  CLOUDFUNCTIONS_FUNCTION_NAME = 'function-1'
+  CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'
   CLOUDFUNCTIONS_REGION = 'us-central1'
   CLOUDFUNCTIONS_EXECUTION_ID = '123-0'
   CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'
   CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'
-  CLOUDFUNCTIONS_POD_NAME = "#{CLOUDFUNCTIONS_FUNCTION_NAME}.987-c0l82"
+  CLOUDFUNCTIONS_POD_NAME = 'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'
   CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'
 
   # Parameters used for authentication
