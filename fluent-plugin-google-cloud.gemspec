@@ -10,7 +10,7 @@ eos
   gem.homepage      = \
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache 2.0'
-  gem.version       = '0.4.13'
+  gem.version       = '0.4.14'
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
 
@@ -19,7 +19,7 @@ eos
   gem.require_paths = ['lib']
 
   gem.add_runtime_dependency 'fluentd', '~> 0.10'
-  gem.add_runtime_dependency 'google-api-client', '>= 0.8.6', '<= 0.9'
+  gem.add_runtime_dependency 'google-api-client', '>= 0.8.6', '< 0.9'
   gem.add_runtime_dependency 'googleauth', '~> 0.4'
   gem.add_runtime_dependency 'json', '~> 1.8'
 
