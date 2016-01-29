@@ -9,7 +9,7 @@ eos
   gem.summary       = 'fluentd output plugin for the Google Cloud Logging API'
   gem.homepage      = \
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
-  gem.license       = 'Apache 2.0'
+  gem.license       = 'Apache-2.0'
   gem.version       = '0.4.14'
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
