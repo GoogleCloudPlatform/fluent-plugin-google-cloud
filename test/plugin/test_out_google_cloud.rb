@@ -299,6 +299,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
+  HTTP_REQUEST_MESSAGE = {
+    'requestMethod' => 'POST',
+    'requestUrl' => 'http://example/',
+    'requestSize' => 210,
+    'status' => 200,
+    'responseSize' => 65,
+    'userAgent' => 'USER AGENT 1.0',
+    'remoteIp' => '55.55.55.55',
+    'referer' => 'http://referer/',
+    'cacheHit' => false,
+    'validatedWithOriginServer' => true
+  }
+
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
     Fluent::Test::BufferedOutputTestDriver.new(
       Fluent::GoogleCloudOutput, tag).configure(conf, use_v1_config: true)
@@ -1045,6 +1058,43 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                      entry['textPayload'], entry
         i += 1
       end
+    end
+  end
+
+  def test_http_request_from_record
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG)
+    d.emit('httpRequest' => HTTP_REQUEST_MESSAGE)
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
+      assert_equal nil, entry['structPayload']['httpRequest'], entry
+    end
+  end
+
+  def test_http_request_partial_from_record
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG)
+    d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('otherKey' => 'value'))
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
+      assert_equal 'value', entry['structPayload']['httpRequest']['otherKey'],
+                   entry
+    end
+  end
+
+  def test_http_request_when_not_hash
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG)
+    d.emit('httpRequest' => 'a_string')
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      assert_equal 'a_string', entry['structPayload']['httpRequest'], entry
+      assert_equal nil, entry['httpRequest'], entry
     end
   end
 

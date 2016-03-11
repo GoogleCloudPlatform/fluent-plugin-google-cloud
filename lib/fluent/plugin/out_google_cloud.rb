@@ -31,6 +31,11 @@ module Fluent
     # Address of the metadata service.
     METADATA_SERVICE_ADDR = '169.254.169.254'
 
+    # Fields allowed in httpRequest object
+    HTTP_REQUEST_FIELDS = %w(requestMethod requestUrl requestSize status
+                             responseSize userAgent remoteIp referer
+                             cacheHit validatedWithOriginServer)
+
     # Disable this warning to conform to fluentd config_param conventions.
     # rubocop:disable Style/HashSyntax
 
@@ -434,6 +439,8 @@ module Fluent
 
           set_severity(record, entry)
 
+          set_http_request(record, entry)
+
           # If a field is present in the label_map, send its value as a label
           # (mapping the field name to label name as specified in the config)
           # and do not send that field as part of the payload.
@@ -654,6 +661,21 @@ module Fluent
       else
         entry['metadata']['severity'] = 'DEFAULT'
       end
+    end
+
+    def set_http_request(record, entry)
+      return unless record['httpRequest'].is_a?(Hash)
+
+      entry['httpRequest'] = {}
+
+      HTTP_REQUEST_FIELDS.each do |field|
+        if record['httpRequest'].key?(field)
+          entry['httpRequest'][field] = record['httpRequest'][field]
+          record['httpRequest'].delete(field)
+        end
+      end
+
+      record.delete('httpRequest') if record['httpRequest'].empty?
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
