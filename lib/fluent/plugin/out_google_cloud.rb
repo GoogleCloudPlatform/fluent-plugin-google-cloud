@@ -11,6 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'cgi'
+require 'google/api_client'
+require 'google/api_client/auth/compute_service_account'
+require 'googleauth'
+require 'json'
+require 'open-uri'
+require 'socket'
+require 'yaml'
 
 module Fluent
   # fluentd output plugin for the Google Cloud Logging API
@@ -123,15 +131,6 @@ module Fluent
 
     def initialize
       super
-      require 'cgi'
-      require 'google/api_client'
-      require 'google/api_client/auth/compute_service_account'
-      require 'googleauth'
-      require 'json'
-      require 'open-uri'
-      require 'socket'
-      require 'yaml'
-
       # use the global logger
       @log = $log # rubocop:disable Style/GlobalVars
     end
