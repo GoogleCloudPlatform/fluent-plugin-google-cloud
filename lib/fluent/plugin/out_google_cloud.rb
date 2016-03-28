@@ -88,6 +88,22 @@ module Fluent
     #   }
     config_param :label_map, :hash, :default => nil
 
+    # Credentials and Authorization
+    #
+    # Method 1: Use Application Default Credentials / GCE service account
+    #
+    # This method makes use of the application default credentials. These
+    # are provided by GCE, or through the the 'gcloud auth' command.
+    # This requires no parameters, though it may read credentials
+    # located by the environment variable GOOGLE_APPLICATION_CREDENTIALS.
+    #
+    # Method 2: Use Service account keys.
+    #
+    # service_credentials_path is a path to a service account key file,
+    # in json format, which can be acquired from the Google Cloud Developers
+    # Console. When set, the other fields are unnecessary.
+    config_param :service_credentials_path, :string, :default => nil
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
