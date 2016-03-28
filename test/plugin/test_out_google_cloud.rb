@@ -16,6 +16,7 @@ require 'helper'
 require 'json'
 require 'mocha/test_unit'
 require 'webmock/test_unit'
+require 'google/apis'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
@@ -742,7 +743,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert @logs_sent.empty?
   end
 
-  def test_client_error
+  def test_client_400
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
@@ -754,43 +755,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
   end
 
-  # helper for the ClientError retriable special cases below.
-  def client_error_helper(message)
+  # All credentials errors resolve to a 401.
+  def test_client_401
     setup_gce_metadata_stubs
     stub_request(:post, uri_for_log(COMPUTE_PARAMS))
-      .to_return(status: 401, body: message)
+      .to_return(status: 401, body: 'Unauthorized')
     d = create_driver
     d.emit('message' => log_entry(0))
-    exception_count = 0
     begin
       d.run
-    rescue Google::APIClient::ClientError => error
-      assert_equal message, error.message
-      exception_count += 1
+    rescue Google::Apis::AuthorizationError => error
+      assert_equal 'Unauthorized', error.message
     end
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
-    assert_equal 1, exception_count
-  end
-
-  def test_client_error_invalid_credentials
-    client_error_helper('Invalid Credentials')
-  end
-
-  def test_client_error_caller_does_not_have_permission
-    client_error_helper('The caller does not have permission')
-  end
-
-  def test_client_error_request_had_invalid_credentials
-    client_error_helper('Request had invalid credentials.')
-  end
-
-  def test_client_error_project_has_not_enabled_the_api
-    client_error_helper('Project has not enabled the API. Please use ' \
-      'Google Developers Console to activate the API for your project.')
-  end
-
-  def test_client_error_unable_to_fetch_accesss_token
-    client_error_helper('Unable to fetch access token (no scopes configured?)')
   end
 
   def test_server_error
@@ -804,11 +781,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     exception_count = 0
     begin
       d.run
-    rescue Google::APIClient::ServerError => error
-      assert_equal 'Server Error', error.message
+    rescue Google::Apis::ServerError => error
+      assert_equal 'Server error', error.message
       exception_count += 1
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
     assert_equal 1, exception_count
   end
 

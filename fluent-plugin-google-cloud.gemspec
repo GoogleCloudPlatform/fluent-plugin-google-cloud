@@ -19,7 +19,7 @@ eos
   gem.require_paths = ['lib']
 
   gem.add_runtime_dependency 'fluentd', '~> 0.10'
-  gem.add_runtime_dependency 'google-api-client', '>= 0.8.6', '< 0.9'
+  gem.add_runtime_dependency 'google-api-client', '> 0.9'
   gem.add_runtime_dependency 'googleauth', '~> 0.4'
   gem.add_runtime_dependency 'json', '~> 1.8'
   # workaround for jwt 1.5.3 breaking ruby 1.9 support (included by googleauth)
