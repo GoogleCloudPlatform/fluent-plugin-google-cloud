@@ -1292,7 +1292,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "attribute1\nkube-env\nlast_attribute")
     stub_metadata_request('instance/attributes/kube-env',
                           "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          "INSTANCE_PREFIX: gke-#{CONTAINER_CLUSTER_NAME}-740fdafa\n"\
+                          'INSTANCE_PREFIX: '\
+                          "gke-#{CONTAINER_CLUSTER_NAME}-740fdafa\n"\
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
   end
 
@@ -1302,7 +1303,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "attribute1\nkube-env\ngcf_region\nlast_attribute")
     stub_metadata_request('instance/attributes/kube-env',
                           "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          "INSTANCE_PREFIX: gke-#{CLOUDFUNCTIONS_CLUSTER_NAME}-740fdafa\n"\
+                          'INSTANCE_PREFIX: '\
+                          "gke-#{CLOUDFUNCTIONS_CLUSTER_NAME}-740fdafa\n"\
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
     stub_metadata_request('instance/attributes/gcf_region',
                           CLOUDFUNCTIONS_REGION)
