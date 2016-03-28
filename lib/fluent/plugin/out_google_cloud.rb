@@ -12,34 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 require 'json'
-require 'open-uri'
-require 'socket'
-require 'yaml'
 require 'google/apis'
 require 'google/apis/logging_v1beta3'
-require 'googleauth'
+require 'fluent/plugin/google_util'
 
 module Fluent
   # fluentd output plugin for the Google Cloud Logging API
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
 
-    PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5'
+    # Use the GoogleUtil mixins for metadata and credential management.
+    include Fluent::GoogleUtil::MetadataMixin
+    include Fluent::GoogleUtil::CredentialsMixin
 
-    # Constants for service names.
-    APPENGINE_SERVICE = 'appengine.googleapis.com'
-    CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'
-    COMPUTE_SERVICE = 'compute.googleapis.com'
-    CONTAINER_SERVICE = 'container.googleapis.com'
-    DATAFLOW_SERVICE = 'dataflow.googleapis.com'
-    EC2_SERVICE = 'ec2.amazonaws.com'
+    PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
+    PLUGIN_VERSION = '0.5.1'
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
-
-    # Address of the metadata service.
-    METADATA_SERVICE_ADDR = '169.254.169.254'
 
     # Disable this warning to conform to fluentd config_param conventions.
     # rubocop:disable Style/HashSyntax
@@ -57,6 +47,7 @@ module Fluent
     # Whether to attempt to obtain metadata from the local metadata service.
     # It is safe to specify 'true' even on platforms with no metadata service.
     config_param :use_metadata_service, :bool, :default => true
+
     # These parameters override any values obtained from the metadata service.
     config_param :project_id, :string, :default => nil
     config_param :zone, :string, :default => nil
@@ -103,9 +94,6 @@ module Fluent
 
     # Expose attr_readers to make testing of metadata more direct than only
     # testing it indirectly through metadata sent with logs.
-    attr_reader :project_id
-    attr_reader :zone
-    attr_reader :vm_id
     attr_reader :running_on_managed_vm
     attr_reader :gae_backend_name
     attr_reader :gae_backend_version
@@ -121,9 +109,6 @@ module Fluent
     def configure(conf)
       super
 
-      # TODO: Send instance tags as labels as well?
-      @common_labels = {}
-
       @compiled_kubernetes_tag_regexp = nil
       if @kubernetes_tag_regexp
         @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
@@ -137,44 +122,17 @@ module Fluent
         (?:\[(?<execution_id>[^\]]+)\])?
         [ ](?<text>.*)$/x
 
-      # set attributes from metadata (unless overriden by static config)
-      @vm_name = Socket.gethostname if @vm_name.nil?
-      @platform = detect_platform
-      case @platform
-      when Platform::GCE
-        if @project_id.nil?
-          @project_id = fetch_gce_metadata('project/project-id')
+      # Detect the metadata.
+      ext = detect_metadata(@use_metadata_service, @detect_subservice)
+      unless @project_id
+        # If no project_id is set, we can attempt to extract the project_id
+        # from the credentials.
+        begin
+          get_credentials(LOGGING_SCOPE)
+          @project_id = project_id_from_credentials
+        rescue StandardError => _ # rubocop:disable Lint/HandleExceptions
+          # Ignore errors trying to read project_id from credentials.
         end
-        if @zone.nil?
-          # this returns "projects/<number>/zones/<zone>"; we only want
-          # the part after the final slash.
-          fully_qualified_zone = fetch_gce_metadata('instance/zone')
-          @zone = fully_qualified_zone.rpartition('/')[2]
-        end
-        @vm_id = fetch_gce_metadata('instance/id') if @vm_id.nil?
-      when Platform::EC2
-        metadata = fetch_ec2_metadata
-        if @zone.nil? && metadata.key?('availabilityZone')
-          @zone = 'aws:' + metadata['availabilityZone']
-        end
-        if @vm_id.nil? && metadata.key?('instanceId')
-          @vm_id = metadata['instanceId']
-        end
-        if metadata.key?('accountId')
-          common_labels["#{EC2_SERVICE}/account_id"] = metadata['accountId']
-        end
-      when Platform::OTHER
-        # do nothing
-      else
-        fail Fluent::ConfigError, 'Unknown platform ' + @platform
-      end
-
-      # If we still don't have a project ID, try to obtain it from the
-      # credentials.
-      if @project_id.nil?
-        @project_id = CredentialsInfo.project_id
-        @log.info 'Set Project ID from credentials: ', @project_id unless
-          @project_id.nil?
       end
 
       # all metadata parameters must now be set
@@ -187,6 +145,22 @@ module Fluent
           missing.join(' ')
       end
 
+      # Translate metadata into labels.
+      # TODO: Send instance tags as labels as well?
+      @common_labels = {}
+      case @platform
+      when Fluent::GoogleUtil::Platform::EC2
+        @common_labels["#{EC2_SERVICE}/resource_type"] = 'instance'
+        @common_labels["#{EC2_SERVICE}/resource_id"] = @vm_id
+        @common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
+        @common_labels["#{EC2_SERVICE}/account_id"] = ext.ec2_account_id \
+          unless ext.nil?
+      else
+        @common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
+        @common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
+        @common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
+      end
+
       # Default this to false; it is only overwritten if we detect Managed VM.
       @running_on_managed_vm = false
 
@@ -194,57 +168,31 @@ module Fluent
       # Functions.
       @running_cloudfunctions = false
 
-      # Set labels, etc. based on the config
-      case @platform
-      when Platform::GCE
-        @service_name = COMPUTE_SERVICE
-        if @detect_subservice
-          # Check for specialized GCE environments.
-          # TODO: Add config options for these to allow for running outside GCE?
-          attributes = fetch_gce_metadata('instance/attributes/').split
-          # Do nothing, just don't populate other service's labels.
-          if attributes.include?('gae_backend_name') &&
-             attributes.include?('gae_backend_version')
-            # Managed VM
-            @running_on_managed_vm = true
-            @gae_backend_name =
-                fetch_gce_metadata('instance/attributes/gae_backend_name')
-            @gae_backend_version =
-                fetch_gce_metadata('instance/attributes/gae_backend_version')
-            @service_name = APPENGINE_SERVICE
-            common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
-            common_labels["#{APPENGINE_SERVICE}/version_id"] =
-              @gae_backend_version
-          elsif attributes.include?('job_id')
-            # Dataflow
-            @service_name = DATAFLOW_SERVICE
-            @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
-            common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
-          elsif attributes.include?('kube-env')
-            # Kubernetes/Container Engine
-            @service_name = CONTAINER_SERVICE
-            common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
-            @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
-            @kube_env = YAML.load(@raw_kube_env)
-            common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
-              cluster_name_from_kube_env(@kube_env)
-            detect_cloudfunctions(attributes)
-          end
+      case @service_name
+      when DATAFLOW_SERVICE
+        @dataflow_job_id = ext.dataflow_job_id
+        common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
+      when APPENGINE_SERVICE
+        @running_on_managed_vm = true
+        unless ext.nil?
+          @gae_backend_name = ext.gae_backend_name
+          @gae_backend_version = ext.gae_backend_version
+          common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
+          common_labels["#{APPENGINE_SERVICE}/version_id"] = \
+            @gae_backend_version
         end
-        common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
-        common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
-        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
-      when Platform::EC2
-        @service_name = EC2_SERVICE
-        common_labels["#{EC2_SERVICE}/resource_type"] = 'instance'
-        common_labels["#{EC2_SERVICE}/resource_id"] = @vm_id
-        common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
-      when Platform::OTHER
-        # Use COMPUTE_SERVICE as the default environment.
-        @service_name = COMPUTE_SERVICE
-        common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
-        common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
-        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
+      when CONTAINER_SERVICE
+        common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
+        common_labels["#{CONTAINER_SERVICE}/cluster_name"] = \
+          ext.kube_cluster_name unless ext.nil?
+      when CLOUDFUNCTIONS_SERVICE
+        @running_cloudfunctions = true
+        common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
+        unless ext.nil?
+          @gcf_region = ext.gcf_region
+          common_labels["#{CONTAINER_SERVICE}/cluster_name"] = \
+            ext.kube_cluster_name
+        end
       end
 
       # Log an informational message containing the Logs viewer URL
@@ -443,110 +391,6 @@ module Fluent
       rescue JSON::ParserError
         return nil
       end
-    end
-
-    # "enum" of Platform values
-    module Platform
-      OTHER = 0  # Other/unkown platform
-      GCE = 1    # Google Compute Engine
-      EC2 = 2    # Amazon EC2
-    end
-
-    # Determine what platform we are running on by consulting the metadata
-    # service (unless the user has explicitly disabled using that).
-    def detect_platform
-      unless @use_metadata_service
-        @log.info 'use_metadata_service is false; not detecting platform'
-        return Platform::OTHER
-      end
-
-      begin
-        open('http://' + METADATA_SERVICE_ADDR) do |f|
-          if (f.meta['metadata-flavor'] == 'Google')
-            @log.info 'Detected GCE platform'
-            return Platform::GCE
-          end
-          if (f.meta['server'] == 'EC2ws')
-            @log.info 'Detected EC2 platform'
-            return Platform::EC2
-          end
-        end
-      rescue StandardError => e
-        @log.debug 'Failed to access metadata service: ', error: e
-      end
-
-      @log.info 'Unable to determine platform'
-      Platform::OTHER
-    end
-
-    def fetch_gce_metadata(metadata_path)
-      fail "Called fetch_gce_metadata with platform=#{@platform}" unless
-        @platform == Platform::GCE
-      # See https://cloud.google.com/compute/docs/metadata
-      open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
-           metadata_path, 'Metadata-Flavor' => 'Google', &:read)
-    end
-
-    def fetch_ec2_metadata
-      fail "Called fetch_ec2_metadata with platform=#{@platform}" unless
-        @platform == Platform::EC2
-      # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
-      open('http://' + METADATA_SERVICE_ADDR +
-           '/latest/dynamic/instance-identity/document') do |f|
-        contents = f.read
-        return JSON.parse(contents)
-      end
-    end
-
-    # TODO: This functionality should eventually be available in another
-    # library, but implement it ourselves for now.
-    module CredentialsInfo
-      # Determine the project ID from the credentials, if possible.
-      # Returns the project ID (as a string) on success, or nil on failure.
-      def self.project_id
-        creds = Google::Auth.get_application_default(LOGGING_SCOPE)
-        if creds.issuer
-          id = extract_project_id(creds.issuer)
-          return id unless id.nil?
-        end
-        if creds.client_id
-          id = extract_project_id(creds.client_id)
-          return id unless id.nil?
-        end
-        nil
-      end
-
-      # Extracts the project id (either name or number) from str and returns
-      # it (as a string) on success, or nil on failure.
-      #
-      # Recognizes IAM format (account@project-name.iam.gserviceaccount.com)
-      # as well as the legacy format with a project number at the front of the
-      # string, terminated by a dash (-) which is not part of the ID, i.e.:
-      # 270694816269-1l1r2hb813leuppurdeik0apglbs80sv.apps.googleusercontent.com
-      def self.extract_project_id(str)
-        [/^.*@(?<project_id>.+)\.iam\.gserviceaccount\.com/,
-         /^(?<project_id>\d+)-/].each do |exp|
-          match_data = exp.match(str)
-          return match_data['project_id'] unless match_data.nil?
-        end
-        nil
-      end
-    end
-
-    def detect_cloudfunctions(attributes)
-      return unless attributes.include?('gcf_region')
-      # Cloud Functions detected
-      @running_cloudfunctions = true
-      @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
-    end
-
-    def cluster_name_from_kube_env(kube_env)
-      return kube_env['CLUSTER_NAME'] if kube_env.key?('CLUSTER_NAME')
-      instance_prefix = kube_env['INSTANCE_PREFIX']
-      gke_name_match = /^gke-(.+)-[0-9a-f]{8}$/.match(instance_prefix)
-      return gke_name_match.captures[0] if gke_name_match &&
-                                           !gke_name_match.captures.empty?
-      instance_prefix
     end
 
     def set_timestamp(record, entry, time)
@@ -765,21 +609,11 @@ module Fluent
       Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
       Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
       @client = Google::Apis::LoggingV1beta3::LoggingService.new
-      @client.authorization = Google::Auth.get_application_default(
-        LOGGING_SCOPE)
+      @client.authorization = get_credentials(LOGGING_SCOPE)
     end
 
     def api_client
-      unless @client.authorization.expired?
-        begin
-          @client.authorization.fetch_access_token!
-        rescue MultiJson::ParseError
-          # Workaround an issue in the API client; just re-raise a more
-          # descriptive error for the user (which will still cause a retry).
-          raise Google::APIClient::ClientError, 'Unable to fetch access ' \
-            'token (no scopes configured?)'
-        end
-      end
+      authorize
       @client
     end
   end

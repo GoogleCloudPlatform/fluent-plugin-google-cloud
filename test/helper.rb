@@ -38,3 +38,4 @@ unless ENV.key?('VERBOSE')
 end
 
 require 'fluent/plugin/out_google_cloud'
+require 'fluent/plugin/google_util'
