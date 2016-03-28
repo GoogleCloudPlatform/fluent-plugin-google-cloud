@@ -115,14 +115,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   APPLICATION_DEFAULT_CONFIG = %(
   )
 
-  # rubocop:disable Metrics/LineLength
-  PRIVATE_KEY_CONFIG = %(
-    auth_method private_key
-    private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
-    private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
-  )
-  # rubocop:enable Metrics/LineLength
-
   NO_METADATA_SERVICE_CONFIG = %(
     use_metadata_service false
   )
@@ -138,14 +130,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     vm_name #{CUSTOM_HOSTNAME}
   )
 
-  CONFIG_MISSING_PRIVATE_KEY_PATH = %(
-    auth_method private_key
-    private_key_email nobody@example.com
-  )
-  CONFIG_MISSING_PRIVATE_KEY_EMAIL = %(
-    auth_method private_key
-    private_key_path /fake/path/to/key
-  )
   CONFIG_MISSING_METADATA_PROJECT_ID = %(
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
@@ -331,13 +315,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_configure_service_account_application_default
     setup_gce_metadata_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG)
-    assert d.instance.auth_method.nil?
-  end
-
-  def test_configure_service_account_private_key
-    setup_gce_metadata_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
-    assert_equal 'private_key', d.instance.auth_method
+    assert_equal HOSTNAME, d.instance.vm_name
   end
 
   def test_configure_custom_metadata
@@ -346,28 +324,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
-  end
-
-  def test_configure_invalid_private_key_missing_path
-    exception_count = 0
-    begin
-      _d = create_driver(CONFIG_MISSING_PRIVATE_KEY_PATH)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'private_key_path'
-      exception_count += 1
-    end
-    assert_equal 1, exception_count
-  end
-
-  def test_configure_invalid_private_key_missing_email
-    exception_count = 0
-    begin
-      _d = create_driver(CONFIG_MISSING_PRIVATE_KEY_EMAIL)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'private_key_email'
-      exception_count += 1
-    end
-    assert_equal 1, exception_count
   end
 
   def test_configure_invalid_metadata_missing_project_id_no_metadata_service
@@ -567,15 +523,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       exception_count += 1
     end
     assert_equal 1, exception_count
-  end
-
-  def test_one_log_private_key
-    setup_gce_metadata_stubs
-    setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
-    d.emit('message' => log_entry(0))
-    d.run
-    verify_log_entries(1, COMPUTE_PARAMS)
   end
 
   def test_one_log_custom_metadata

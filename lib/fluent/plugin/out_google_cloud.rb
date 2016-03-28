@@ -26,7 +26,7 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.4.16'
+    PLUGIN_VERSION = '0.4.17'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
@@ -49,20 +49,6 @@ module Fluent
 
     # Disable this warning to conform to fluentd config_param conventions.
     # rubocop:disable Style/HashSyntax
-
-    # DEPRECATED: auth_method (and support for 'private_key') is deprecated in
-    # favor of Google Application Default Credentials as documented at:
-    # https://developers.google.com/identity/protocols/application-default-credentials
-    # 'private_key' is still accepted to support existing users; any other
-    # value is ignored.
-    config_param :auth_method, :string, :default => nil
-
-    # DEPRECATED: Parameters necessary to use the private_key auth_method.
-    config_param :private_key_email, :string, :default => nil
-    config_param :private_key_path, :string, :default => nil
-    config_param :private_key_passphrase, :string,
-                 :default => 'notasecret',
-                 :secret => true
 
     # Specify project/instance metadata.
     #
@@ -140,23 +126,6 @@ module Fluent
 
     def configure(conf)
       super
-
-      unless @auth_method.nil?
-        @log.warn 'auth_method is deprecated; please migrate to using ' \
-          'Application Default Credentials.'
-        if @auth_method == 'private_key'
-          if !@private_key_email
-            fail Fluent::ConfigError, '"private_key_email" must be ' \
-              'specified if auth_method is "private_key"'
-          elsif !@private_key_path
-            fail Fluent::ConfigError, '"private_key_path" must be ' \
-              'specified if auth_method is "private_key"'
-          elsif !@private_key_passphrase
-            fail Fluent::ConfigError, '"private_key_passphrase" must be ' \
-              'specified if auth_method is "private_key"'
-          end
-        end
-      end
 
       # TODO: Send instance tags as labels as well?
       @common_labels = {}
@@ -555,7 +524,6 @@ module Fluent
       # Determine the project ID from the credentials, if possible.
       # Returns the project ID (as a string) on success, or nil on failure.
       def self.project_id
-        return nil if @auth_method == 'private_key'
         creds = Google::Auth.get_application_default(LOGGING_SCOPE)
         if creds.issuer
           id = extract_project_id(creds.issuer)
@@ -814,17 +782,8 @@ module Fluent
         application_version: PLUGIN_VERSION,
         retries: 1)
 
-      if @auth_method == 'private_key'
-        key = Google::APIClient::PKCS12.load_key(@private_key_path,
-                                                 @private_key_passphrase)
-        jwt_asserter = Google::APIClient::JWTAsserter.new(
-          @private_key_email, LOGGING_SCOPE, key)
-        @client.authorization = jwt_asserter.to_authorization
-        @client.authorization.expiry = 3600 # 3600s is the max allowed value
-      else
-        @client.authorization = Google::Auth.get_application_default(
-          LOGGING_SCOPE)
-      end
+      @client.authorization = Google::Auth.get_application_default(
+        LOGGING_SCOPE)
     end
 
     def api_client
