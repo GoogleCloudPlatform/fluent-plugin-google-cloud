@@ -314,10 +314,9 @@ module Fluent
       end
 
       grouped_entries.each do |tag, arr|
-        write_log_entries_request = {
-          'commonLabels' => @common_labels,
-          'entries' => []
-        }
+        entries = []
+        labels = @common_labels.clone
+
         if @running_cloudfunctions
           # If the current group of entries is coming from a Cloud Functions
           # function, the function name can be extracted from the tag.
@@ -326,7 +325,6 @@ module Fluent
             # Service name is set to Cloud Functions only for logs actually
             # coming from a function.
             @service_name = CLOUDFUNCTIONS_SERVICE
-            labels = write_log_entries_request['commonLabels']
             labels["#{CLOUDFUNCTIONS_SERVICE}/region"] = @gcf_region
             labels["#{CLOUDFUNCTIONS_SERVICE}/function_name"] =
               decode_cloudfunctions_function_name(
@@ -343,7 +341,6 @@ module Fluent
           # Do this here to avoid having to repeat it for each record.
           match_data = @compiled_kubernetes_tag_regexp.match(tag)
           if match_data
-            labels = write_log_entries_request['commonLabels']
             %w(namespace_name pod_name container_name).each do |field|
               labels["#{CONTAINER_SERVICE}/#{field}"] = match_data[field]
             end
@@ -424,22 +421,25 @@ module Fluent
             entry['metadata'].delete('labels')
           end
 
-          write_log_entries_request['entries'].push(entry)
+          entries.push(entry)
         end
         # Don't send an empty request if we rejected all the entries.
-        next if write_log_entries_request['entries'].empty?
+        next if entries.empty?
 
-        log_name = CGI.escape(
-          log_name(tag, write_log_entries_request['commonLabels']))
+        log_name = CGI.escape(log_name(tag, labels))
         url = 'https://logging.googleapis.com/v1beta3/projects/' \
           "#{@project_id}/logs/#{log_name}/entries:write"
+
         begin
           client = api_client
           request = client.generate_request(
             uri: url,
-            body_object: write_log_entries_request,
             http_method: 'POST',
-            authenticated: true
+            authenticated: true,
+            body_object: {
+              'commonLabels' => labels,
+              'entries' => entries
+            }
           )
           client.execute!(request)
           # Let the user explicitly know when the first call succeeded,
@@ -456,11 +456,11 @@ module Fluent
           # should not be retried, unless it is an authentication issue, in
           # which case we will retry the request via re-raising the exception.
           raise error if retriable_client_error?(error)
-          log_write_failure(write_log_entries_request, error)
+          log_write_failure(entries.length, error)
         rescue JSON::GeneratorError => error
           # This happens if the request contains illegal characters;
           # do not retry it because it will fail repeatedly.
-          log_write_failure(write_log_entries_request, error)
+          log_write_failure(entries.length, error)
         end
       end
     end
@@ -479,8 +479,7 @@ module Fluent
       RETRIABLE_CLIENT_ERRORS.include?(error.message)
     end
 
-    def log_write_failure(request, error)
-      dropped = request['entries'].length
+    def log_write_failure(dropped, error)
       @log.warn "Dropping #{dropped} log message(s)",
                 error_class: error.class.to_s, error: error.to_s
     end
