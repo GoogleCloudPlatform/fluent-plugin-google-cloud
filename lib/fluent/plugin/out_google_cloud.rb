@@ -26,7 +26,7 @@ module Fluent
     include Fluent::GoogleUtil::CredentialsMixin
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.1'
+    PLUGIN_VERSION = '0.4.15'
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
