@@ -21,7 +21,18 @@ require 'webmock/test_unit'
 class GoogleCloudOutputTest < Test::Unit::TestCase
   def setup
     Fluent::Test.setup
+    # delete environment variables that googleauth uses to find credentials.
     ENV.delete('GOOGLE_APPLICATION_CREDENTIALS')
+    # service account env.
+    ENV.delete('PRIVATE_KEY_VAR')
+    ENV.delete('CLIENT_EMAIL_VAR')
+    # authorized_user env.
+    ENV.delete('CLIENT_ID_VAR')
+    ENV.delete('CLIENT_SECRET_VAR')
+    ENV.delete('REFRESH_TOKEN_VAR')
+    # home var, which is used to find $HOME/.gcloud/...
+    ENV.delete('HOME')
+
     setup_auth_stubs
     @logs_sent = []
   end
@@ -88,16 +99,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # path: Path to the credentials file.
   # project_id: ID of the project, which must correspond to the file contents.
   IAM_CREDENTIALS = {
-    'path' => 'test/plugin/data/iam-credentials.json',
-    'project_id' => 'fluent-test-project'
+    path: 'test/plugin/data/iam-credentials.json',
+    project_id: 'fluent-test-project'
   }
   LEGACY_CREDENTIALS = {
-    'path' => 'test/plugin/data/credentials.json',
-    'project_id' => '847859579879'
+    path: 'test/plugin/data/credentials.json',
+    project_id: '847859579879'
   }
   INVALID_CREDENTIALS = {
-    'path' => 'test/plugin/data/invalid_credentials.json',
-    'project_id' => ''
+    path: 'test/plugin/data/invalid_credentials.json',
+    project_id: ''
   }
 
   # Configuration files for various test scenarios
@@ -167,11 +178,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   EC2_SERVICE_NAME = 'ec2.amazonaws.com'
 
   COMPUTE_PARAMS = {
-    'service_name' => COMPUTE_SERVICE_NAME,
-    'log_name' => 'test',
-    'project_id' => PROJECT_ID,
-    'zone' => ZONE,
-    'labels' => {
+    service_name: COMPUTE_SERVICE_NAME,
+    log_name: 'test',
+    project_id: PROJECT_ID,
+    zone: ZONE,
+    labels: {
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
@@ -179,11 +190,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   }
 
   VMENGINE_PARAMS = {
-    'service_name' => APPENGINE_SERVICE_NAME,
-    'log_name' => "#{APPENGINE_SERVICE_NAME}%2Ftest",
-    'project_id' => PROJECT_ID,
-    'zone' => ZONE,
-    'labels' => {
+    service_name: APPENGINE_SERVICE_NAME,
+    log_name: "#{APPENGINE_SERVICE_NAME}%2Ftest",
+    project_id: PROJECT_ID,
+    zone: ZONE,
+    labels: {
       "#{APPENGINE_SERVICE_NAME}/module_id" => MANAGED_VM_BACKEND_NAME,
       "#{APPENGINE_SERVICE_NAME}/version_id" => MANAGED_VM_BACKEND_VERSION,
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
@@ -196,11 +207,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                   "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
 
   CONTAINER_FROM_METADATA_PARAMS = {
-    'service_name' => CONTAINER_SERVICE_NAME,
-    'log_name' => CONTAINER_CONTAINER_NAME,
-    'project_id' => PROJECT_ID,
-    'zone' => ZONE,
-    'labels' => {
+    service_name: CONTAINER_SERVICE_NAME,
+    log_name: CONTAINER_CONTAINER_NAME,
+    project_id: PROJECT_ID,
+    zone: ZONE,
+    labels: {
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CONTAINER_CLUSTER_NAME,
       "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
@@ -218,11 +229,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # Almost the same as from metadata, but missing namespace_id and pod_id.
   CONTAINER_FROM_TAG_PARAMS = {
-    'service_name' => CONTAINER_SERVICE_NAME,
-    'log_name' => CONTAINER_CONTAINER_NAME,
-    'project_id' => PROJECT_ID,
-    'zone' => ZONE,
-    'labels' => {
+    service_name: CONTAINER_SERVICE_NAME,
+    log_name: CONTAINER_CONTAINER_NAME,
+    project_id: PROJECT_ID,
+    zone: ZONE,
+    labels: {
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CONTAINER_CLUSTER_NAME,
       "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
@@ -240,11 +251,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                         "#{CLOUDFUNCTIONS_CONTAINER_NAME}"
 
   CLOUDFUNCTIONS_PARAMS = {
-    'service_name' => CLOUDFUNCTIONS_SERVICE_NAME,
-    'log_name' => 'cloud-functions',
-    'project_id' => PROJECT_ID,
-    'zone' => ZONE,
-    'labels' => {
+    service_name: CLOUDFUNCTIONS_SERVICE_NAME,
+    log_name: 'cloud-functions',
+    project_id: PROJECT_ID,
+    zone: ZONE,
+    labels: {
       'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/function_name" =>
         CLOUDFUNCTIONS_FUNCTION_NAME,
@@ -258,11 +269,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   }
 
   CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
-    'service_name' => CLOUDFUNCTIONS_SERVICE_NAME,
-    'log_name' => 'cloud-functions',
-    'project_id' => PROJECT_ID,
-    'zone' => ZONE,
-    'labels' => {
+    service_name: CLOUDFUNCTIONS_SERVICE_NAME,
+    log_name: 'cloud-functions',
+    project_id: PROJECT_ID,
+    zone: ZONE,
+    labels: {
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/function_name" =>
         CLOUDFUNCTIONS_FUNCTION_NAME,
       "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
@@ -275,11 +286,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   }
 
   CUSTOM_PARAMS = {
-    'service_name' => COMPUTE_SERVICE_NAME,
-    'log_name' => 'test',
-    'project_id' => CUSTOM_PROJECT_ID,
-    'zone' => CUSTOM_ZONE,
-    'labels' => {
+    service_name: COMPUTE_SERVICE_NAME,
+    log_name: 'test',
+    project_id: CUSTOM_PROJECT_ID,
+    zone: CUSTOM_ZONE,
+    labels: {
       "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => CUSTOM_VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => CUSTOM_HOSTNAME
@@ -287,11 +298,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   }
 
   EC2_PARAMS = {
-    'service_name' => EC2_SERVICE_NAME,
-    'log_name' => 'test',
-    'project_id' => EC2_PROJECT_ID,
-    'zone' => EC2_PREFIXED_ZONE,
-    'labels' => {
+    service_name: EC2_SERVICE_NAME,
+    log_name: 'test',
+    project_id: EC2_PROJECT_ID,
+    zone: EC2_PREFIXED_ZONE,
+    labels: {
       "#{EC2_SERVICE_NAME}/resource_type" => 'instance',
       "#{EC2_SERVICE_NAME}/resource_id" => EC2_VM_ID,
       "#{EC2_SERVICE_NAME}/account_id" => EC2_ACCOUNT_ID,
@@ -516,10 +527,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_ec2_metadata_project_id_from_credentials
     setup_ec2_metadata_stubs
     [IAM_CREDENTIALS, LEGACY_CREDENTIALS].each do |creds|
-      ENV['GOOGLE_APPLICATION_CREDENTIALS'] = creds['path']
+      ENV['GOOGLE_APPLICATION_CREDENTIALS'] = creds[:path]
       d = create_driver
       d.run
-      assert_equal creds['project_id'], d.instance.project_id
+      assert_equal creds[:project_id], d.instance.project_id
     end
   end
 
@@ -535,7 +546,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_one_log_with_json_credentials
     setup_gce_metadata_stubs
     setup_logging_stubs
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS['path']
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
     d = create_driver
     d.emit('message' => log_entry(0))
     d.run
@@ -545,7 +556,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_one_log_with_invalid_json_credentials
     setup_gce_metadata_stubs
     setup_logging_stubs
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS['path']
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
     d = create_driver
     d.emit('message' => log_entry(0))
     exception_count = 0
@@ -571,7 +582,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     # don't set up any metadata stubs, so the test will fail if we try to
     # fetch metadata (and explicitly check this as well).
     Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS['path']
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
     setup_logging_stubs
     d = create_driver(NO_METADATA_SERVICE_CONFIG + CUSTOM_METADATA_CONFIG)
     d.emit('message' => log_entry(0))
@@ -580,7 +591,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_one_log_ec2
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS['path']
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
     setup_ec2_metadata_stubs
     setup_logging_stubs
     d = create_driver(CONFIG_EC2_PROJECT_ID)
@@ -695,7 +706,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.run
     # make a deep copy of COMPUTE_PARAMS and add the parsed label.
     params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
-    params['labels']['sent_label'] = 'label_value'
+    params[:labels]['sent_label'] = 'label_value'
     verify_log_entries(1, params)
   end
 
@@ -708,7 +719,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.run
     # make a deep copy of COMPUTE_PARAMS and add the parsed label.
     params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
-    params['labels']['sent_label'] = '123456789'
+    params[:labels]['sent_label'] = '123456789'
     verify_log_entries(1, params)
   end
 
@@ -724,7 +735,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.run
     # make a deep copy of COMPUTE_PARAMS and add the parsed label.
     params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
-    params['labels']['sent_label'] = '{"k1"=>10, "k2"=>"val"}'
+    params[:labels]['sent_label'] = '{"k1"=>10, "k2"=>"val"}'
     verify_log_entries(1, params)
   end
 
@@ -748,9 +759,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.run
     # make a deep copy of COMPUTE_PARAMS and add the parsed labels.
     params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
-    params['labels']['sent_label_1'] = 'value1'
-    params['labels']['foo.googleapis.com/bar'] = 'value2'
-    params['labels']['label3'] = 'value3'
+    params[:labels]['sent_label_1'] = 'value1'
+    params[:labels]['foo.googleapis.com/bar'] = 'value2'
+    params[:labels]['label3'] = 'value3'
     verify_log_entries(1, params, 'structPayload') do |entry|
       assert_equal 2, entry['structPayload'].size, entry
       assert_equal 'test log entry 0', entry['structPayload']['message'], entry
@@ -1178,9 +1189,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
-  def uri_for_log(config)
-    'https://logging.googleapis.com/v1beta3/projects/' + config['project_id'] +
-      '/logs/' + config['log_name'] + '/entries:write'
+  def uri_for_log(params)
+    'https://logging.googleapis.com/v1beta3/projects/' + params[:project_id] +
+      '/logs/' + params[:log_name] + '/entries:write'
   end
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1269,9 +1280,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     stub_metadata_request(
       'instance/attributes/',
       "attribute1\ngae_backend_name\ngae_backend_version\nlast_attribute")
-    stub_metadata_request('instance/attributes/gae_backend_name', 'default')
+    stub_metadata_request('instance/attributes/gae_backend_name',
+                          MANAGED_VM_BACKEND_NAME)
     stub_metadata_request('instance/attributes/gae_backend_version',
-                          'guestbook2.0')
+                          MANAGED_VM_BACKEND_VERSION)
   end
 
   def setup_container_metadata_stubs
@@ -1280,7 +1292,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "attribute1\nkube-env\nlast_attribute")
     stub_metadata_request('instance/attributes/kube-env',
                           "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          "INSTANCE_PREFIX: gke-cluster-1-740fdafa\n"\
+                          'INSTANCE_PREFIX: '\
+                          "gke-#{CONTAINER_CLUSTER_NAME}-740fdafa\n"\
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
   end
 
@@ -1290,9 +1303,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "attribute1\nkube-env\ngcf_region\nlast_attribute")
     stub_metadata_request('instance/attributes/kube-env',
                           "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          "INSTANCE_PREFIX: gke-cluster-1-740fdafa\n"\
+                          'INSTANCE_PREFIX: '\
+                          "gke-#{CLOUDFUNCTIONS_CLUSTER_NAME}-740fdafa\n"\
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
-    stub_metadata_request('instance/attributes/gcf_region', 'us-central1')
+    stub_metadata_request('instance/attributes/gcf_region',
+                          CLOUDFUNCTIONS_REGION)
   end
 
   def container_log_entry_with_metadata(log)
@@ -1366,9 +1381,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
           end
         end
 
-        assert_equal params['zone'], entry['metadata']['zone']
-        assert_equal params['service_name'], entry['metadata']['serviceName']
-        check_labels entry, batch['commonLabels'], params['labels']
+        assert_equal params[:zone], entry['metadata']['zone']
+        assert_equal params[:service_name], entry['metadata']['serviceName']
+        check_labels entry, batch['commonLabels'], params[:labels]
         yield(entry) if block_given?
         i += 1
         assert i <= n, "Number of entries #{i} exceeds expected number #{n}"

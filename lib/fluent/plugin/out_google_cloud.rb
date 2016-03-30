@@ -11,11 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'cgi'
+require 'google/api_client'
+require 'google/api_client/auth/compute_service_account'
+require 'googleauth'
+require 'json'
+require 'open-uri'
+require 'socket'
+require 'yaml'
 
 module Fluent
   # fluentd output plugin for the Google Cloud Logging API
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
+
+    PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
+    PLUGIN_VERSION = '0.4.15'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
@@ -123,15 +134,6 @@ module Fluent
 
     def initialize
       super
-      require 'cgi'
-      require 'google/api_client'
-      require 'google/api_client/auth/compute_service_account'
-      require 'googleauth'
-      require 'json'
-      require 'open-uri'
-      require 'socket'
-      require 'yaml'
-
       # use the global logger
       @log = $log # rubocop:disable Style/GlobalVars
     end
@@ -290,9 +292,7 @@ module Fluent
 
     def start
       super
-
       init_api_client
-
       @successful_call = false
       @timenanos_warning = false
     end
@@ -397,48 +397,8 @@ module Fluent
             end
           end
 
-          if record.key?('timestamp') &&
-             record['timestamp'].is_a?(Hash) &&
-             record['timestamp'].key?('seconds') &&
-             record['timestamp'].key?('nanos')
-            ts_secs = record['timestamp']['seconds']
-            ts_nanos = record['timestamp']['nanos']
-            record.delete('timestamp')
-          elsif record.key?('timestampSeconds') &&
-                record.key?('timestampNanos')
-            ts_secs = record['timestampSeconds']
-            ts_nanos = record['timestampNanos']
-            record.delete('timestampSeconds')
-            record.delete('timestampNanos')
-          elsif record.key?('timeNanos')
-            # This is deprecated since the precision is insufficient.
-            # Use timestampSeconds/timestampNanos instead
-            ts_secs = (record['timeNanos'] / 1_000_000_000).to_i
-            ts_nanos = record['timeNanos'] % 1_000_000_000
-            record.delete('timeNanos')
-            unless @timenanos_warning
-              # Warn the user this is deprecated, but only once to avoid spam.
-              @timenanos_warning = true
-              @log.warn 'timeNanos is deprecated - please use ' \
-                'timestampSeconds and timestampNanos instead.'
-            end
-          elsif @service_name == CLOUDFUNCTIONS_SERVICE &&
-                @cloudfunctions_log_match
-            timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
-            ts_secs = timestamp.strftime('%s')
-            ts_nanos = timestamp.strftime('%N')
-          else
-            timestamp = Time.at(time)
-            ts_secs = timestamp.tv_sec
-            ts_nanos = timestamp.tv_nsec
-          end
-          entry['metadata']['timestamp'] = {
-            'seconds' => ts_secs,
-            'nanos' => ts_nanos
-          }
-
+          set_timestamp(record, entry, time)
           set_severity(record, entry)
-
           set_http_request(record, entry)
 
           # If a field is present in the label_map, send its value as a label
@@ -641,6 +601,48 @@ module Fluent
       instance_prefix
     end
 
+    def set_timestamp(record, entry, time)
+      if record.key?('timestamp') &&
+         record['timestamp'].is_a?(Hash) &&
+         record['timestamp'].key?('seconds') &&
+         record['timestamp'].key?('nanos')
+        ts_secs = record['timestamp']['seconds']
+        ts_nanos = record['timestamp']['nanos']
+        record.delete('timestamp')
+      elsif record.key?('timestampSeconds') &&
+            record.key?('timestampNanos')
+        ts_secs = record['timestampSeconds']
+        ts_nanos = record['timestampNanos']
+        record.delete('timestampSeconds')
+        record.delete('timestampNanos')
+      elsif record.key?('timeNanos')
+        # This is deprecated since the precision is insufficient.
+        # Use timestampSeconds/timestampNanos instead
+        ts_secs = (record['timeNanos'] / 1_000_000_000).to_i
+        ts_nanos = record['timeNanos'] % 1_000_000_000
+        record.delete('timeNanos')
+        unless @timenanos_warning
+          # Warn the user this is deprecated, but only once to avoid spam.
+          @timenanos_warning = true
+          @log.warn 'timeNanos is deprecated - please use ' \
+            'timestampSeconds and timestampNanos instead.'
+        end
+      elsif @service_name == CLOUDFUNCTIONS_SERVICE &&
+            @cloudfunctions_log_match
+        timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
+        ts_secs = timestamp.strftime('%s')
+        ts_nanos = timestamp.strftime('%N')
+      else
+        timestamp = Time.at(time)
+        ts_secs = timestamp.tv_sec
+        ts_nanos = timestamp.tv_nsec
+      end
+      entry['metadata']['timestamp'] = {
+        'seconds' => ts_secs,
+        'nanos' => ts_nanos
+      }
+    end
+
     def set_severity(record, entry)
       if @service_name == CLOUDFUNCTIONS_SERVICE
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
@@ -808,8 +810,8 @@ module Fluent
 
     def init_api_client
       @client = Google::APIClient.new(
-        application_name: 'Fluentd Google Cloud Logging plugin',
-        application_version: '0.4.15',
+        application_name: PLUGIN_NAME,
+        application_version: PLUGIN_VERSION,
         retries: 1)
 
       if @auth_method == 'private_key'
