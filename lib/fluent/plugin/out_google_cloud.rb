@@ -419,16 +419,14 @@ module Fluent
         record.delete('timestamp')
       elsif record.key?('timestampSeconds') &&
             record.key?('timestampNanos')
-        ts_secs = record['timestampSeconds']
-        ts_nanos = record['timestampNanos']
-        record.delete('timestampSeconds')
-        record.delete('timestampNanos')
+        ts_secs = record.delete('timestampSeconds')
+        ts_nanos = record.delete('timestampNanos')
       elsif record.key?('timeNanos')
         # This is deprecated since the precision is insufficient.
         # Use timestampSeconds/timestampNanos instead
-        ts_secs = (record['timeNanos'] / 1_000_000_000).to_i
-        ts_nanos = record['timeNanos'] % 1_000_000_000
-        record.delete('timeNanos')
+        nanos = record.delete('timeNanos')
+        ts_secs = (nanos / 1_000_000_000).to_i
+        ts_nanos = nanos % 1_000_000_000
         unless @timenanos_warning
           # Warn the user this is deprecated, but only once to avoid spam.
           @timenanos_warning = true
