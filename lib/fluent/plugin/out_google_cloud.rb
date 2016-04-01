@@ -97,6 +97,13 @@ module Fluent
     #   }
     config_param :label_map, :hash, :default => nil
 
+    # DEPRECATED: The following parameters, if present in the config
+    # indicate that the plugin configuration must be updated.
+    config_param :auth_method, :string, :default => nil
+    config_param :private_key_email, :string, :default => nil
+    config_param :private_key_path, :string, :default => nil
+    config_param :private_key_passphrase, :string, :default => nil
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -120,6 +127,21 @@ module Fluent
 
     def configure(conf)
       super
+
+      # Alert on old authentication configuration.
+      unless @auth_method.nil? && @private_key_email.nil? &&
+             @private_key_path.nil? && @private_key_passphrase.nil?
+        extra = []
+        extra << 'auth_method' unless @auth_method.nil?
+        extra << 'private_key_email' unless @private_key_email.nil?
+        extra << 'private_key_path' unless @private_key_path.nil?
+        extra << 'private_key_passphrase' unless @private_key_passphrase.nil?
+
+        fail Fluent::ConfigError,
+             "#{PLUGIN_NAME} no longer supports auth_method.\n" \
+             'Please remove configuration parameters: ' +
+               extra.join(' ')
+      end
 
       # TODO: Send instance tags as labels as well?
       @common_labels = {}

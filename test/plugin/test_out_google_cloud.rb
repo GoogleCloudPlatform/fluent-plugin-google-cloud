@@ -116,6 +116,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   APPLICATION_DEFAULT_CONFIG = %(
   )
 
+  # rubocop:disable Metrics/LineLength
+  PRIVATE_KEY_CONFIG = %(
+     auth_method private_key
+     private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
+     private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
+  )
+  # rubocop:enable Metrics/LineLength
+
   NO_METADATA_SERVICE_CONFIG = %(
     use_metadata_service false
   )
@@ -317,6 +325,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG)
     assert_equal HOSTNAME, d.instance.vm_name
+  end
+
+  def test_configure_service_account_private_key
+    # Using out-of-date config method.
+    setup_gce_metadata_stubs
+    exception_count = 0
+    begin
+      _d = create_driver(PRIVATE_KEY_CONFIG)
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Please remove configuration parameters'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
   end
 
   def test_configure_custom_metadata
