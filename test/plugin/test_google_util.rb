@@ -210,7 +210,8 @@ class GoogleUtilMetadataTest < Test::Unit::TestCase
   def test_metadata_loading
     setup_gce_metadata_stubs
     d = MyConfig.new
-    assert !d.ext.nil?
+    # Extended parameters are not detected by plain GCE.
+    assert d.ext.nil?
     assert_equal PROJECT_ID, d.project_id
     assert_equal ZONE, d.zone
     assert_equal VM_ID, d.vm_id

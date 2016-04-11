@@ -1313,7 +1313,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
           assert entry.key?(payload_type), 'Entry did not contain expected ' \
             "#{payload_type} key: " + entry.to_s
           # Check the payload for textPayload, otherwise it's up to the caller.
-          if (payload_type == 'textPayload')
+          if payload_type == 'textPayload'
             assert_equal "test log entry #{i}", entry['textPayload'], batch
           end
         end

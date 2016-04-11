@@ -207,7 +207,6 @@ module Fluent
       # Default this to false; it is only overwritten if we detect Cloud
       # Functions.
       @running_cloudfunctions = false
- 
 
       unless ext.nil?
         # Set extended attribute fields.
@@ -321,7 +320,7 @@ module Fluent
             field_to_label(record, 'stream', entry.metadata.labels,
                            "#{CONTAINER_SERVICE}/stream")
             # If the record has been annotated by the kubernetes_metadata_filter
-            # plugin, then use that metadata. Otherwise, rely on commonLabels
+            # plugin, then use that metadata. Otherwise, rely on common_labels
             # populated at the grouped_entries level from the group's tag.
             if record.key?('kubernetes')
               handle_container_metadata(record, entry)
@@ -628,7 +627,7 @@ module Fluent
       end
     end
 
-    def log_name(tag, commonLabels)
+    def log_name(tag, common_labels)
       if @service_name == CLOUDFUNCTIONS_SERVICE
         return 'cloud-functions'
       elsif @running_on_managed_vm
@@ -638,8 +637,8 @@ module Fluent
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         container_name_key = "#{CONTAINER_SERVICE}/container_name"
-        if commonLabels && commonLabels.key?(container_name_key)
-          return commonLabels[container_name_key]
+        if common_labels && common_labels.key?(container_name_key)
+          return common_labels[container_name_key]
         end
       end
       tag

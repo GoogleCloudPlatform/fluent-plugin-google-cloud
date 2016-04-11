@@ -180,11 +180,11 @@ module Fluent
       def detect_platform
         begin
           open('http://' + METADATA_SERVICE_ADDR) do |f|
-            if (f.meta['metadata-flavor'] == 'Google')
+            if f.meta['metadata-flavor'] == 'Google'
               @log.info 'Detected GCE platform'
               return Platform::GCE
             end
-            if (f.meta['server'] == 'EC2ws')
+            if f.meta['server'] == 'EC2ws'
               @log.info 'Detected EC2 platform'
               return Platform::EC2
             end
