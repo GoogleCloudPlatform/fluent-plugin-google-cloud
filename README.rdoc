@@ -38,7 +38,7 @@ for authorization - for additional information see
 {here}[https://cloud.google.com/logging/docs/agent/authorization].
 
 <em>The previously documented parameters auth_method, private_key_email,
-and private_key_path are deprecated and should no longer be used.</em>
+and private_key_path are removed, and can no longer be used.</em>
 
 == Copyright
 

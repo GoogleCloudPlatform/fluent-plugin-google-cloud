@@ -16,6 +16,7 @@ require 'helper'
 require 'json'
 require 'mocha/test_unit'
 require 'webmock/test_unit'
+require 'google/apis'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
@@ -117,9 +118,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # rubocop:disable Metrics/LineLength
   PRIVATE_KEY_CONFIG = %(
-    auth_method private_key
-    private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
-    private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
+     auth_method private_key
+     private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
+     private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
   )
   # rubocop:enable Metrics/LineLength
 
@@ -138,14 +139,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     vm_name #{CUSTOM_HOSTNAME}
   )
 
-  CONFIG_MISSING_PRIVATE_KEY_PATH = %(
-    auth_method private_key
-    private_key_email nobody@example.com
-  )
-  CONFIG_MISSING_PRIVATE_KEY_EMAIL = %(
-    auth_method private_key
-    private_key_path /fake/path/to/key
-  )
   CONFIG_MISSING_METADATA_PROJECT_ID = %(
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
@@ -331,13 +324,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def test_configure_service_account_application_default
     setup_gce_metadata_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG)
-    assert d.instance.auth_method.nil?
+    assert_equal HOSTNAME, d.instance.vm_name
   end
 
   def test_configure_service_account_private_key
+    # Using out-of-date config method.
     setup_gce_metadata_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
-    assert_equal 'private_key', d.instance.auth_method
+    exception_count = 0
+    begin
+      _d = create_driver(PRIVATE_KEY_CONFIG)
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Please remove configuration parameters'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
   end
 
   def test_configure_custom_metadata
@@ -346,28 +346,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
-  end
-
-  def test_configure_invalid_private_key_missing_path
-    exception_count = 0
-    begin
-      _d = create_driver(CONFIG_MISSING_PRIVATE_KEY_PATH)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'private_key_path'
-      exception_count += 1
-    end
-    assert_equal 1, exception_count
-  end
-
-  def test_configure_invalid_private_key_missing_email
-    exception_count = 0
-    begin
-      _d = create_driver(CONFIG_MISSING_PRIVATE_KEY_EMAIL)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'private_key_email'
-      exception_count += 1
-    end
-    assert_equal 1, exception_count
   end
 
   def test_configure_invalid_metadata_missing_project_id_no_metadata_service
@@ -567,15 +545,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       exception_count += 1
     end
     assert_equal 1, exception_count
-  end
-
-  def test_one_log_private_key
-    setup_gce_metadata_stubs
-    setup_logging_stubs
-    d = create_driver(PRIVATE_KEY_CONFIG)
-    d.emit('message' => log_entry(0))
-    d.run
-    verify_log_entries(1, COMPUTE_PARAMS)
   end
 
   def test_one_log_custom_metadata
@@ -795,7 +764,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert @logs_sent.empty?
   end
 
-  def test_client_error
+  def test_client_400
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
@@ -807,43 +776,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
   end
 
-  # helper for the ClientError retriable special cases below.
-  def client_error_helper(message)
+  # All credentials errors resolve to a 401.
+  def test_client_401
     setup_gce_metadata_stubs
     stub_request(:post, uri_for_log(COMPUTE_PARAMS))
-      .to_return(status: 401, body: message)
+      .to_return(status: 401, body: 'Unauthorized')
     d = create_driver
     d.emit('message' => log_entry(0))
-    exception_count = 0
     begin
       d.run
-    rescue Google::APIClient::ClientError => error
-      assert_equal message, error.message
-      exception_count += 1
+    rescue Google::Apis::AuthorizationError => error
+      assert_equal 'Unauthorized', error.message
     end
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
-    assert_equal 1, exception_count
-  end
-
-  def test_client_error_invalid_credentials
-    client_error_helper('Invalid Credentials')
-  end
-
-  def test_client_error_caller_does_not_have_permission
-    client_error_helper('The caller does not have permission')
-  end
-
-  def test_client_error_request_had_invalid_credentials
-    client_error_helper('Request had invalid credentials.')
-  end
-
-  def test_client_error_project_has_not_enabled_the_api
-    client_error_helper('Project has not enabled the API. Please use ' \
-      'Google Developers Console to activate the API for your project.')
-  end
-
-  def test_client_error_unable_to_fetch_accesss_token
-    client_error_helper('Unable to fetch access token (no scopes configured?)')
   end
 
   def test_server_error
@@ -857,11 +802,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     exception_count = 0
     begin
       d.run
-    rescue Google::APIClient::ServerError => error
-      assert_equal 'Server Error', error.message
+    rescue Google::Apis::ServerError => error
+      assert_equal 'Server error', error.message
       exception_count += 1
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
     assert_equal 1, exception_count
   end
 
@@ -1262,14 +1207,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
     stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
       .with(body: hash_including(grant_type: 'refresh_token'))
-      .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
-                 status: 200,
-                 headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
-                            'Content-Type' => 'application/json' })
-
-    # Used for 'private_key' auth.
-    stub_request(:post, 'https://accounts.google.com/o/oauth2/token')
-      .with(body: hash_including(grant_type: AUTH_GRANT_TYPE))
       .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
                  status: 200,
                  headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,

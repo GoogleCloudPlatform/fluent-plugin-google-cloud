@@ -11,14 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-require 'cgi'
-require 'google/api_client'
-require 'google/api_client/auth/compute_service_account'
-require 'googleauth'
 require 'json'
 require 'open-uri'
 require 'socket'
 require 'yaml'
+require 'google/apis'
+require 'google/apis/logging_v1beta3'
+require 'googleauth'
 
 module Fluent
   # fluentd output plugin for the Google Cloud Logging API
@@ -42,27 +41,8 @@ module Fluent
     # Address of the metadata service.
     METADATA_SERVICE_ADDR = '169.254.169.254'
 
-    # Fields allowed in httpRequest object
-    HTTP_REQUEST_FIELDS = %w(requestMethod requestUrl requestSize status
-                             responseSize userAgent remoteIp referer
-                             cacheHit validatedWithOriginServer)
-
     # Disable this warning to conform to fluentd config_param conventions.
     # rubocop:disable Style/HashSyntax
-
-    # DEPRECATED: auth_method (and support for 'private_key') is deprecated in
-    # favor of Google Application Default Credentials as documented at:
-    # https://developers.google.com/identity/protocols/application-default-credentials
-    # 'private_key' is still accepted to support existing users; any other
-    # value is ignored.
-    config_param :auth_method, :string, :default => nil
-
-    # DEPRECATED: Parameters necessary to use the private_key auth_method.
-    config_param :private_key_email, :string, :default => nil
-    config_param :private_key_path, :string, :default => nil
-    config_param :private_key_passphrase, :string,
-                 :default => 'notasecret',
-                 :secret => true
 
     # Specify project/instance metadata.
     #
@@ -117,6 +97,15 @@ module Fluent
     #   }
     config_param :label_map, :hash, :default => nil
 
+    # DEPRECATED: The following parameters, if present in the config
+    # indicate that the plugin configuration must be updated.
+    config_param :auth_method, :string, :default => nil
+    config_param :private_key_email, :string, :default => nil
+    config_param :private_key_path, :string, :default => nil
+    config_param :private_key_passphrase, :string,
+                 :default => nil,
+                 :secret => true
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -141,21 +130,19 @@ module Fluent
     def configure(conf)
       super
 
-      unless @auth_method.nil?
-        @log.warn 'auth_method is deprecated; please migrate to using ' \
-          'Application Default Credentials.'
-        if @auth_method == 'private_key'
-          if !@private_key_email
-            fail Fluent::ConfigError, '"private_key_email" must be ' \
-              'specified if auth_method is "private_key"'
-          elsif !@private_key_path
-            fail Fluent::ConfigError, '"private_key_path" must be ' \
-              'specified if auth_method is "private_key"'
-          elsif !@private_key_passphrase
-            fail Fluent::ConfigError, '"private_key_passphrase" must be ' \
-              'specified if auth_method is "private_key"'
-          end
-        end
+      # Alert on old authentication configuration.
+      unless @auth_method.nil? && @private_key_email.nil? &&
+             @private_key_path.nil? && @private_key_passphrase.nil?
+        extra = []
+        extra << 'auth_method' unless @auth_method.nil?
+        extra << 'private_key_email' unless @private_key_email.nil?
+        extra << 'private_key_path' unless @private_key_path.nil?
+        extra << 'private_key_passphrase' unless @private_key_passphrase.nil?
+
+        fail Fluent::ConfigError,
+             "#{PLUGIN_NAME} no longer supports auth_method.\n" \
+             'Please remove configuration parameters: ' +
+               extra.join(' ')
       end
 
       # TODO: Send instance tags as labels as well?
@@ -350,14 +337,13 @@ module Fluent
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
-          entry = {
-            'metadata' => {
-              'serviceName' => @service_name,
-              'projectId' => @project_id,
-              'zone' => @zone,
-              'labels' => {}
-            }
-          }
+          entry = Google::Apis::LoggingV1beta3::LogEntry.new(
+            metadata: Google::Apis::LoggingV1beta3::LogEntryMetadata.new(
+              service_name: @service_name,
+              project_id: @project_id,
+              zone: @zone,
+              labels: {}
+            ))
 
           if @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
             @cloudfunctions_log_match =
@@ -365,7 +351,7 @@ module Fluent
           end
           if @service_name == CONTAINER_SERVICE
             # Move the stdout/stderr annotation from the record into a label
-            field_to_label(record, 'stream', entry['metadata']['labels'],
+            field_to_label(record, 'stream', entry.metadata.labels,
                            "#{CONTAINER_SERVICE}/stream")
             # If the record has been annotated by the kubernetes_metadata_filter
             # plugin, then use that metadata. Otherwise, rely on commonLabels
@@ -403,86 +389,74 @@ module Fluent
           # and do not send that field as part of the payload.
           if @label_map
             @label_map.each do |field, label|
-              field_to_label(record, field, entry['metadata']['labels'], label)
+              field_to_label(record, field, entry.metadata.labels, label)
             end
           end
 
           if @service_name == CLOUDFUNCTIONS_SERVICE &&
              @cloudfunctions_log_match &&
              @cloudfunctions_log_match['execution_id']
-            entry['metadata']['labels']['execution_id'] =
+            entry.metadata.labels['execution_id'] =
               @cloudfunctions_log_match['execution_id']
           end
 
           set_payload(record, entry, is_container_json)
-
-          # Remove the labels metadata if we didn't populate it with anything.
-          if entry['metadata']['labels'].empty?
-            entry['metadata'].delete('labels')
-          end
+          entry.metadata.labels = nil if entry.metadata.labels.empty?
 
           entries.push(entry)
         end
         # Don't send an empty request if we rejected all the entries.
         next if entries.empty?
 
-        log_name = CGI.escape(log_name(tag, labels))
-        url = 'https://logging.googleapis.com/v1beta3/projects/' \
-          "#{@project_id}/logs/#{log_name}/entries:write"
+        log_name = log_name(tag, labels)
 
         begin
+          # Does the actual write to the cloud logging api.
+          # The URI of the write is constructed by the Google::Api request;
+          # it is equivalent to this URL:
+          # 'https://logging.googleapis.com/v1beta3/projects/' \
+          #   "#{@project_id}/logs/#{log_name}/entries:write"
+
           client = api_client
-          request = client.generate_request(
-            uri: url,
-            http_method: 'POST',
-            authenticated: true,
-            body_object: {
-              'commonLabels' => labels,
-              'entries' => entries
-            }
-          )
-          client.execute!(request)
+
+          write_request = \
+            Google::Apis::LoggingV1beta3::WriteLogEntriesRequest.new(
+              common_labels: labels,
+              entries: entries)
+
+          # TODO: RequestOptions
+          client.write_log_entries(@project_id, log_name, write_request)
+
           # Let the user explicitly know when the first call succeeded,
           # to aid with verification and troubleshooting.
           unless @successful_call
             @successful_call = true
             @log.info 'Successfully sent to Google Cloud Logging API.'
           end
-        # Allow most exceptions to propagate, which will cause fluentd to
-        # retry (with backoff), but in some cases we catch the error and
-        # drop the request (we will emit a log message in those cases).
-        rescue Google::APIClient::ClientError => error
+
+        rescue Google::Apis::ServerError => error
+          # Server error, so retry via re-raising the error.
+          raise error
+
+        rescue Google::Apis::AuthorizationError => error
+          # Authorization error.
+          # These are usually solved via a `gcloud auth` call, or by modifying
+          # the permissions on the Google Cloud project.
+          dropped = entries.length
+          @log.warn "Dropping #{dropped} log message(s)",
+                    error_class: error.class.to_s, error: error.to_s
+
+        rescue Google::Apis::ClientError => error
           # Most ClientErrors indicate a problem with the request itself and
-          # should not be retried, unless it is an authentication issue, in
-          # which case we will retry the request via re-raising the exception.
-          raise error if retriable_client_error?(error)
-          log_write_failure(entries.length, error)
-        rescue JSON::GeneratorError => error
-          # This happens if the request contains illegal characters;
-          # do not retry it because it will fail repeatedly.
-          log_write_failure(entries.length, error)
+          # should not be retried.
+          dropped = entries.length
+          @log.warn "Dropping #{dropped} log message(s)",
+                    error_class: error.class.to_s, error: error.to_s
         end
       end
     end
 
     private
-
-    RETRIABLE_CLIENT_ERRORS = Set.new [
-      'Invalid Credentials',
-      'Request had invalid credentials.',
-      'The caller does not have permission',
-      'Project has not enabled the API. Please use Google Developers ' \
-        'Console to activate the API for your project.',
-      'Unable to fetch access token (no scopes configured?)']
-
-    def retriable_client_error?(error)
-      RETRIABLE_CLIENT_ERRORS.include?(error.message)
-    end
-
-    def log_write_failure(dropped, error)
-      @log.warn "Dropping #{dropped} log message(s)",
-                error_class: error.class.to_s, error: error.to_s
-    end
 
     def parse_json_or_nil(input)
       # Only here to please rubocop...
@@ -554,7 +528,6 @@ module Fluent
       # Determine the project ID from the credentials, if possible.
       # Returns the project ID (as a string) on success, or nil on failure.
       def self.project_id
-        return nil if @auth_method == 'private_key'
         creds = Google::Auth.get_application_default(LOGGING_SCOPE)
         if creds.issuer
           id = extract_project_id(creds.issuer)
@@ -610,16 +583,14 @@ module Fluent
         record.delete('timestamp')
       elsif record.key?('timestampSeconds') &&
             record.key?('timestampNanos')
-        ts_secs = record['timestampSeconds']
-        ts_nanos = record['timestampNanos']
-        record.delete('timestampSeconds')
-        record.delete('timestampNanos')
+        ts_secs = record.delete('timestampSeconds')
+        ts_nanos = record.delete('timestampNanos')
       elsif record.key?('timeNanos')
         # This is deprecated since the precision is insufficient.
         # Use timestampSeconds/timestampNanos instead
-        ts_secs = (record['timeNanos'] / 1_000_000_000).to_i
-        ts_nanos = record['timeNanos'] % 1_000_000_000
-        record.delete('timeNanos')
+        nanos = record.delete('timeNanos')
+        ts_secs = (nanos / 1_000_000_000).to_i
+        ts_nanos = nanos % 1_000_000_000
         unless @timenanos_warning
           # Warn the user this is deprecated, but only once to avoid spam.
           @timenanos_warning = true
@@ -636,47 +607,51 @@ module Fluent
         ts_secs = timestamp.tv_sec
         ts_nanos = timestamp.tv_nsec
       end
-      entry['metadata']['timestamp'] = {
-        'seconds' => ts_secs,
-        'nanos' => ts_nanos
+      entry.metadata.timestamp = {
+        seconds: ts_secs,
+        nanos: ts_nanos
       }
     end
 
     def set_severity(record, entry)
       if @service_name == CLOUDFUNCTIONS_SERVICE
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
-          entry['metadata']['severity'] =
+          entry.metadata.severity =
             parse_severity(@cloudfunctions_log_match['severity'])
         elsif record.key?('stream') && record['stream'] == 'stdout'
-          entry['metadata']['severity'] = 'INFO'
+          entry.metadata.severity = 'INFO'
           record.delete('stream')
         elsif record.key?('stream') && record['stream'] == 'stderr'
-          entry['metadata']['severity'] = 'ERROR'
+          entry.metadata.severity = 'ERROR'
           record.delete('stream')
         else
-          entry['metadata']['severity'] = 'DEFAULT'
+          entry.metadata.severity = 'DEFAULT'
         end
       elsif record.key?('severity')
-        entry['metadata']['severity'] = parse_severity(record['severity'])
+        entry.metadata.severity = parse_severity(record['severity'])
         record.delete('severity')
       else
-        entry['metadata']['severity'] = 'DEFAULT'
+        entry.metadata.severity = 'DEFAULT'
       end
     end
 
     def set_http_request(record, entry)
-      return unless record['httpRequest'].is_a?(Hash)
-
-      entry['httpRequest'] = {}
-
-      HTTP_REQUEST_FIELDS.each do |field|
-        if record['httpRequest'].key?(field)
-          entry['httpRequest'][field] = record['httpRequest'][field]
-          record['httpRequest'].delete(field)
-        end
-      end
-
-      record.delete('httpRequest') if record['httpRequest'].empty?
+      return nil unless record['httpRequest'].is_a?(Hash)
+      input = record['httpRequest']
+      output = Google::Apis::LoggingV1beta3::HttpRequest.new
+      output.request_method = input.delete('requestMethod')
+      output.request_url = input.delete('requestUrl')
+      output.request_size = input.delete('requestSize')
+      output.status = input.delete('status')
+      output.response_size = input.delete('responseSize')
+      output.user_agent = input.delete('userAgent')
+      output.remote_ip = input.delete('remoteIp')
+      output.referer = input.delete('referer')
+      output.cache_hit = input.delete('cacheHit')
+      output.validated_with_origin_server = \
+        input.delete('validatedWithOriginServer')
+      record.delete('httpRequest') if input.empty?
+      entry.http_request = output
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
@@ -748,13 +723,13 @@ module Fluent
     def handle_container_metadata(record, entry)
       fields = %w(namespace_id namespace_name pod_id pod_name container_name)
       fields.each do |field|
-        field_to_label(record['kubernetes'], field, entry['metadata']['labels'],
+        field_to_label(record['kubernetes'], field, entry.metadata.labels,
                        "#{CONTAINER_SERVICE}/#{field}")
       end
       # Prepend label/ to all user-defined labels' keys.
       if record['kubernetes'].key?('labels')
         record['kubernetes']['labels'].each do |key, value|
-          entry['metadata']['labels']["label/#{key}"] = value
+          entry.metadata.labels["label/#{key}"] = value
         end
       end
       # We've explicitly consumed all the fields we care about -- don't litter
@@ -777,16 +752,16 @@ module Fluent
       # 3. This is an unstructured Container log and the 'log' key is available
       # 4. The only remaining key is 'message'
       if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
-        entry['textPayload'] = @cloudfunctions_log_match['text']
+        entry.text_payload = @cloudfunctions_log_match['text']
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
-        entry['textPayload'] = record['log']
+        entry.text_payload = record['log']
       elsif @service_name == CONTAINER_SERVICE && record.key?('log') &&
             !is_container_json
-        entry['textPayload'] = record['log']
+        entry.text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
-        entry['textPayload'] = record['message']
+        entry.text_payload = record['message']
       else
-        entry['structPayload'] = record
+        entry.struct_payload = record
       end
     end
 
@@ -808,22 +783,12 @@ module Fluent
     end
 
     def init_api_client
-      @client = Google::APIClient.new(
-        application_name: PLUGIN_NAME,
-        application_version: PLUGIN_VERSION,
-        retries: 1)
-
-      if @auth_method == 'private_key'
-        key = Google::APIClient::PKCS12.load_key(@private_key_path,
-                                                 @private_key_passphrase)
-        jwt_asserter = Google::APIClient::JWTAsserter.new(
-          @private_key_email, LOGGING_SCOPE, key)
-        @client.authorization = jwt_asserter.to_authorization
-        @client.authorization.expiry = 3600 # 3600s is the max allowed value
-      else
-        @client.authorization = Google::Auth.get_application_default(
-          LOGGING_SCOPE)
-      end
+      # TODO: Use a non-default ClientOptions object.
+      Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
+      Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
+      @client = Google::Apis::LoggingV1beta3::LoggingService.new
+      @client.authorization = Google::Auth.get_application_default(
+        LOGGING_SCOPE)
     end
 
     def api_client
