@@ -102,7 +102,9 @@ module Fluent
     config_param :auth_method, :string, :default => nil
     config_param :private_key_email, :string, :default => nil
     config_param :private_key_path, :string, :default => nil
-    config_param :private_key_passphrase, :string, :default => nil
+    config_param :private_key_passphrase, :string,
+                 :default => nil,
+                 :secret => true
 
     # rubocop:enable Style/HashSyntax
 

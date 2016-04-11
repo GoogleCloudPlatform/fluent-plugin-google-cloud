@@ -1211,14 +1211,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                  status: 200,
                  headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
                             'Content-Type' => 'application/json' })
-
-    # Used for 'private_key' auth.
-    stub_request(:post, 'https://accounts.google.com/o/oauth2/token')
-      .with(body: hash_including(grant_type: AUTH_GRANT_TYPE))
-      .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
-                 status: 200,
-                 headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
-                            'Content-Type' => 'application/json' })
   end
 
   def setup_managed_vm_metadata_stubs
