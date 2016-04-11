@@ -134,21 +134,19 @@ module Fluent
     def configure(conf)
       super
 
-      unless @auth_method.nil?
-        @log.warn 'auth_method is deprecated; please migrate to using ' \
-          'Application Default Credentials.'
-        if @auth_method == 'private_key'
-          if !@private_key_email
-            fail Fluent::ConfigError, '"private_key_email" must be ' \
-              'specified if auth_method is "private_key"'
-          elsif !@private_key_path
-            fail Fluent::ConfigError, '"private_key_path" must be ' \
-              'specified if auth_method is "private_key"'
-          elsif !@private_key_passphrase
-            fail Fluent::ConfigError, '"private_key_passphrase" must be ' \
-              'specified if auth_method is "private_key"'
-          end
-        end
+      # Alert on old authentication configuration.
+      unless @auth_method.nil? && @private_key_email.nil? &&
+             @private_key_path.nil? && @private_key_passphrase.nil?
+        extra = []
+        extra << 'auth_method' unless @auth_method.nil?
+        extra << 'private_key_email' unless @private_key_email.nil?
+        extra << 'private_key_path' unless @private_key_path.nil?
+        extra << 'private_key_passphrase' unless @private_key_passphrase.nil?
+
+        fail Fluent::ConfigError,
+             "#{PLUGIN_NAME} no longer supports auth_method.\n" \
+             'Please remove configuration parameters: ' +
+               extra.join(' ')
       end
 
       @compiled_kubernetes_tag_regexp = nil
