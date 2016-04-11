@@ -194,7 +194,7 @@ module Fluent
         @common_labels["#{EC2_SERVICE}/resource_id"] = @vm_id
         @common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
         @common_labels["#{EC2_SERVICE}/account_id"] = ext.ec2_account_id \
-          unless ext.nil?
+          unless ext.nil? || ext.ec2_account_id.nil?
       else
         @common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
         @common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
@@ -207,31 +207,33 @@ module Fluent
       # Default this to false; it is only overwritten if we detect Cloud
       # Functions.
       @running_cloudfunctions = false
+ 
 
-      case @service_name
-      when DATAFLOW_SERVICE
-        @dataflow_job_id = ext.dataflow_job_id
-        common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
-      when APPENGINE_SERVICE
-        @running_on_managed_vm = true
-        unless ext.nil?
+      unless ext.nil?
+        # Set extended attribute fields.
+        case @service_name
+        when DATAFLOW_SERVICE
+          @dataflow_job_id = ext.dataflow_job_id
+          common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id \
+            unless @dataflow_job_id.nil?
+        when APPENGINE_SERVICE
+          @running_on_managed_vm = true
           @gae_backend_name = ext.gae_backend_name
           @gae_backend_version = ext.gae_backend_version
-          common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
+          common_labels["#{APPENGINE_SERVICE}/module_id"] = \
+            @gae_backend_name unless @gae_backend_name.nil?
           common_labels["#{APPENGINE_SERVICE}/version_id"] = \
-            @gae_backend_version
-        end
-      when CONTAINER_SERVICE
-        common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
-        common_labels["#{CONTAINER_SERVICE}/cluster_name"] = \
-          ext.kube_cluster_name unless ext.nil?
-      when CLOUDFUNCTIONS_SERVICE
-        @running_cloudfunctions = true
-        common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
-        unless ext.nil?
-          @gcf_region = ext.gcf_region
+            @gae_backend_version unless @gae_backend_version.nil?
+        when CONTAINER_SERVICE
+          common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
           common_labels["#{CONTAINER_SERVICE}/cluster_name"] = \
-            ext.kube_cluster_name
+            ext.kube_cluster_name unless ext.kube_cluster_name.nil?
+        when CLOUDFUNCTIONS_SERVICE
+          @running_cloudfunctions = true
+          @gcf_region = ext.gcf_region
+          common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
+          common_labels["#{CONTAINER_SERVICE}/cluster_name"] = \
+            ext.kube_cluster_name unless ext.kube_cluster_name.nil?
         end
       end
 
@@ -281,6 +283,7 @@ module Fluent
               decode_cloudfunctions_function_name(
                 match_data['encoded_function_name'])
           else
+
             # Other logs are considered as coming from the Container Engine
             # service.
             @service_name = CONTAINER_SERVICE

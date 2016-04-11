@@ -109,7 +109,6 @@ module Fluent
           @vm_id = fetch_gce_metadata('instance/id') if @vm_id.nil?
 
           if detect_subservice
-            extended = ExtendedMetadata.new
             # Check for specialized GCE environments.
             # TODO: Add config options to set these outside of GCE?
             attributes = fetch_gce_metadata('instance/attributes/').split
@@ -118,6 +117,7 @@ module Fluent
                attributes.include?('gae_backend_version')
               # Managed VM
               @service_name = APPENGINE_SERVICE
+              extended = ExtendedMetadata.new
               extended.gae_backend_name = fetch_gce_metadata(
                 'instance/attributes/gae_backend_name')
               extended.gae_backend_version = fetch_gce_metadata(
@@ -125,18 +125,21 @@ module Fluent
             elsif attributes.include?('job_id')
               # Dataflow
               @service_name = DATAFLOW_SERVICE
+              extended = ExtendedMetadata.new
               extended.dataflow_job_id = fetch_gce_metadata(
                 'instance/attributes/job_id')
             elsif attributes.include?('gcf_region') &&
                   attributes.include?('kube-env')
               # CloudFunctions
               @service_name = CLOUDFUNCTIONS_SERVICE
+              extended = ExtendedMetadata.new
               extended.gcf_region = fetch_gce_metadata(
                 'instance/attributes/gcf_region')
               extended.kube_cluster_name = kube_cluster_name
             elsif attributes.include?('kube-env')
               # Kubernetes/Container Engine
               @service_name = CONTAINER_SERVICE
+              extended = ExtendedMetadata.new
               extended.kube_cluster_name = kube_cluster_name
               # TODO: Augment with common kubernetes fields.
               # namespace_name pod_name container_name
