@@ -10,21 +10,21 @@ eos
   gem.homepage      = \
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache-2.0'
-  gem.version       = '0.4.15'
+  gem.version       = '0.4.16'
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
+
+  gem.required_ruby_version = Gem::Requirement.new('>= 2.0')
 
   gem.files         = Dir['**/*'].keep_if { |file| File.file?(file) }
   gem.test_files    = gem.files.grep(/^(test)/)
   gem.require_paths = ['lib']
+  gem.required_ruby_version = Gem::Requirement.new('>= 2.0')
 
   gem.add_runtime_dependency 'fluentd', '~> 0.10'
   gem.add_runtime_dependency 'google-api-client', '> 0.9'
   gem.add_runtime_dependency 'googleauth', '~> 0.4'
   gem.add_runtime_dependency 'json', '~> 1.8'
-  # workaround for jwt 1.5.3 breaking ruby 1.9 support (included by googleauth)
-  # see https://github.com/jwt/ruby-jwt/issues/132
-  gem.add_runtime_dependency 'jwt', '< 1.5.3'
 
   gem.add_development_dependency 'mocha', '~> 1.1'
   gem.add_development_dependency 'rake', '~> 10.3'

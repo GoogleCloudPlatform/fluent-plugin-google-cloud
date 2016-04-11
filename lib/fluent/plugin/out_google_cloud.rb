@@ -26,7 +26,7 @@ module Fluent
     include Fluent::GoogleUtil::CredentialsMixin
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.4.15'
+    PLUGIN_VERSION = '0.4.16'
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
@@ -104,6 +104,15 @@ module Fluent
     # Console. When set, the other fields are unnecessary.
     config_param :service_credentials_path, :string, :default => nil
 
+    # DEPRECATED: The following parameters, if present in the config
+    # indicate that the plugin configuration must be updated.
+    config_param :auth_method, :string, :default => nil
+    config_param :private_key_email, :string, :default => nil
+    config_param :private_key_path, :string, :default => nil
+    config_param :private_key_passphrase, :string,
+                 :default => nil,
+                 :secret => true
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -124,6 +133,23 @@ module Fluent
 
     def configure(conf)
       super
+
+      unless @auth_method.nil?
+        @log.warn 'auth_method is deprecated; please migrate to using ' \
+          'Application Default Credentials.'
+        if @auth_method == 'private_key'
+          if !@private_key_email
+            fail Fluent::ConfigError, '"private_key_email" must be ' \
+              'specified if auth_method is "private_key"'
+          elsif !@private_key_path
+            fail Fluent::ConfigError, '"private_key_path" must be ' \
+              'specified if auth_method is "private_key"'
+          elsif !@private_key_passphrase
+            fail Fluent::ConfigError, '"private_key_passphrase" must be ' \
+              'specified if auth_method is "private_key"'
+          end
+        end
+      end
 
       @compiled_kubernetes_tag_regexp = nil
       if @kubernetes_tag_regexp
