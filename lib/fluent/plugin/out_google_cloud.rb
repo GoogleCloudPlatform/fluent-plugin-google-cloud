@@ -282,7 +282,6 @@ module Fluent
               decode_cloudfunctions_function_name(
                 match_data['encoded_function_name'])
           else
-
             # Other logs are considered as coming from the Container Engine
             # service.
             @service_name = CONTAINER_SERVICE
