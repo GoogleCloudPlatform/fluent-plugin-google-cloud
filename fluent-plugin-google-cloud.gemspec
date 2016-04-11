@@ -13,13 +13,11 @@ eos
   gem.version       = '0.4.16'
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
-
   gem.required_ruby_version = Gem::Requirement.new('>= 2.0')
 
   gem.files         = Dir['**/*'].keep_if { |file| File.file?(file) }
   gem.test_files    = gem.files.grep(/^(test)/)
   gem.require_paths = ['lib']
-  gem.required_ruby_version = Gem::Requirement.new('>= 2.0')
 
   gem.add_runtime_dependency 'fluentd', '~> 0.10'
   gem.add_runtime_dependency 'google-api-client', '> 0.9'
@@ -28,7 +26,7 @@ eos
 
   gem.add_development_dependency 'mocha', '~> 1.1'
   gem.add_development_dependency 'rake', '~> 10.3'
-  gem.add_development_dependency 'rubocop', '= 0.34.2'
+  gem.add_development_dependency 'rubocop', '= 0.35.0'
   gem.add_development_dependency 'webmock', '~> 1.17'
   gem.add_development_dependency 'test-unit', '~> 3.0'
 end
