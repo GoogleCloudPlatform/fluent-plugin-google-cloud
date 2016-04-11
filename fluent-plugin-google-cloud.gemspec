@@ -14,7 +14,7 @@ eos
   gem.authors       = ['Todd Derr', 'Alex Robinson']
   gem.email         = ['salty@google.com']
 
-  gem.required_ruby_version = '~> 2.0'
+  gem.required_ruby_version = Gem::Requirement.new('>= 2.0')
 
   gem.files         = Dir['**/*'].keep_if { |file| File.file?(file) }
   gem.test_files    = gem.files.grep(/^(test)/)
