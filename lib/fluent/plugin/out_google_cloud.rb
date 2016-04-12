@@ -25,11 +25,11 @@ module Fluent
     include Fluent::GoogleUtil::MetadataMixin
     include Fluent::GoogleUtil::CredentialsMixin
 
-    PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.4.16'
+    PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
+    PLUGIN_VERSION = '0.4.16'.freeze
 
     # Name of the the Google cloud logging write scope.
-    LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
+    LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'.freeze
 
     # Disable this warning to conform to fluentd config_param conventions.
     # rubocop:disable Style/HashSyntax
@@ -143,9 +143,9 @@ module Fluent
         extra << 'private_key_path' unless @private_key_path.nil?
         extra << 'private_key_passphrase' unless @private_key_passphrase.nil?
 
-        raise Fluent::ConfigError,
-             "#{PLUGIN_NAME} no longer supports auth_method.\n" \
-             'Please remove configuration parameters: ' +
+        raise Fluent::ConfigError, \
+              "#{PLUGIN_NAME} no longer supports auth_method.\n" \
+              'Please remove configuration parameters: ' +
                extra.join(' ')
       end
 
@@ -540,7 +540,7 @@ module Fluent
       # other misc. translations.
       'ERR' => 'ERROR',
       'F' => 'CRITICAL'
-    }
+    }.freeze
 
     def parse_severity(severity_str)
       # The API is case insensitive, but uppercase to make things simpler.
@@ -567,9 +567,8 @@ module Fluent
       end
 
       # Try to translate the severity.
-      if SEVERITY_TRANSLATIONS.key?(severity)
-        return SEVERITY_TRANSLATIONS[severity]
-      end
+      return SEVERITY_TRANSLATIONS[severity] \
+        if SEVERITY_TRANSLATIONS.key?(severity)
 
       # If all else fails, use 'DEFAULT'.
       'DEFAULT'

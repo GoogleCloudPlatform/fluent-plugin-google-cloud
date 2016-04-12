@@ -44,12 +44,12 @@ module Fluent
     # Expects: an @log instance variable.
     module MetadataMixin
       # Constants for service names.
-      APPENGINE_SERVICE = 'appengine.googleapis.com'
-      CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'
-      COMPUTE_SERVICE = 'compute.googleapis.com'
-      CONTAINER_SERVICE = 'container.googleapis.com'
-      DATAFLOW_SERVICE = 'dataflow.googleapis.com'
-      EC2_SERVICE = 'ec2.amazonaws.com'
+      APPENGINE_SERVICE = 'appengine.googleapis.com'.freeze
+      CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'.freeze
+      COMPUTE_SERVICE = 'compute.googleapis.com'.freeze
+      CONTAINER_SERVICE = 'container.googleapis.com'.freeze
+      DATAFLOW_SERVICE = 'dataflow.googleapis.com'.freeze
+      EC2_SERVICE = 'ec2.amazonaws.com'.freeze
 
       # Project/instance metadata.
       #
@@ -86,11 +86,8 @@ module Fluent
         # set attributes from metadata (unless overriden by static config)
         @vm_name = Socket.gethostname if @vm_name.nil?
 
-        if use_metadata_service
-          @platform = detect_platform
-        else
-          @platform = Platform::OTHER
-        end
+        @platform = Platform::OTHER
+        @platform = detect_platform if use_metadata_service
 
         extended = nil
 
@@ -173,13 +170,14 @@ module Fluent
       private
 
       # Address of the metadata service.
-      METADATA_SERVICE_ADDR = '169.254.169.254'
+      METADATA_SERVICE_ADDR = '169.254.169.254'.freeze
+      METADATA_SERVICE_URI = "http://#{METADATA_SERVICE_ADDR}".freeze
 
       # Determine what platform we are running on by consulting the metadata
       # service (unless the user has explicitly disabled using that).
       def detect_platform
         begin
-          open('http://' + METADATA_SERVICE_ADDR) do |f|
+          open(METADATA_SERVICE_URI) do |f|
             if f.meta['metadata-flavor'] == 'Google'
               @log.info 'Detected GCE platform'
               return Platform::GCE
@@ -283,8 +281,8 @@ module Fluent
         rescue MultiJson::ParseError
           # Workaround an issue in the API client; re-raise a more
           # descriptive error for the user (which will still cause a retry).
-          raise Google::APIClient::ClientError, 'Unable to fetch access ' \
-            'token (no scopes configured?)'
+          raise Google::APIClient::ClientError, \
+                'Unable to fetch access token (no scopes configured?)'
         end
       end
 
