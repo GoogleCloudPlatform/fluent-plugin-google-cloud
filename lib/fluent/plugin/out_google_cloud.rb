@@ -486,11 +486,11 @@ module Fluent
 
       begin
         open('http://' + METADATA_SERVICE_ADDR) do |f|
-          if (f.meta['metadata-flavor'] == 'Google')
+          if f.meta['metadata-flavor'] == 'Google'
             @log.info 'Detected GCE platform'
             return Platform::GCE
           end
-          if (f.meta['server'] == 'EC2ws')
+          if f.meta['server'] == 'EC2ws'
             @log.info 'Detected EC2 platform'
             return Platform::EC2
           end
@@ -765,7 +765,7 @@ module Fluent
       end
     end
 
-    def log_name(tag, commonLabels)
+    def log_name(tag, common_labels)
       if @service_name == CLOUDFUNCTIONS_SERVICE
         return 'cloud-functions'
       elsif @running_on_managed_vm
@@ -775,8 +775,8 @@ module Fluent
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         container_name_key = "#{CONTAINER_SERVICE}/container_name"
-        if commonLabels && commonLabels.key?(container_name_key)
-          return commonLabels[container_name_key]
+        if common_labels && common_labels.key?(container_name_key)
+          return common_labels[container_name_key]
         end
       end
       tag
