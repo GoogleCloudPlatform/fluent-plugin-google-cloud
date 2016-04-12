@@ -146,7 +146,7 @@ module Fluent
         fail Fluent::ConfigError, \
              "#{PLUGIN_NAME} no longer supports auth_method.\n" \
              'Please remove configuration parameters: ' +
-             extra.join(' ')
+               extra.join(' ')
       end
 
       @compiled_kubernetes_tag_regexp = nil
