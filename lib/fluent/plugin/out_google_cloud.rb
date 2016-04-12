@@ -143,10 +143,10 @@ module Fluent
         extra << 'private_key_path' unless @private_key_path.nil?
         extra << 'private_key_passphrase' unless @private_key_passphrase.nil?
 
-        raise Fluent::ConfigError, \
-              "#{PLUGIN_NAME} no longer supports auth_method.\n" \
-              'Please remove configuration parameters: ' +
-               extra.join(' ')
+        fail Fluent::ConfigError, \
+             "#{PLUGIN_NAME} no longer supports auth_method.\n" \
+             'Please remove configuration parameters: ' +
+             extra.join(' ')
       end
 
       @compiled_kubernetes_tag_regexp = nil
@@ -181,7 +181,7 @@ module Fluent
         missing << 'project_id' unless @project_id
         missing << 'zone' unless @zone
         missing << 'vm_id' unless @vm_id
-        raise Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
+        fail Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
           missing.join(' ')
       end
 
