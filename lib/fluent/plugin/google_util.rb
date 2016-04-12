@@ -164,7 +164,7 @@ module Fluent
           @service_name = COMPUTE_SERVICE
 
         else
-          fail Fluent::ConfigError, 'Unknown platform ' + @platform
+          raise Fluent::ConfigError, 'Unknown platform ' + @platform
         end
 
         extended
@@ -199,7 +199,7 @@ module Fluent
 
       # Read metadata from the GCE metadata service.
       def fetch_gce_metadata(metadata_path)
-        fail "Called fetch_gce_metadata with platform=#{@platform}" unless
+        raise "Called fetch_gce_metadata with platform=#{@platform}" unless
           @platform == Platform::GCE
         # See https://cloud.google.com/compute/docs/metadata
         open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
@@ -208,7 +208,7 @@ module Fluent
 
       # Read metadata from the EC2 metadata service.
       def fetch_ec2_metadata
-        fail "Called fetch_ec2_metadata with platform=#{@platform}" unless
+        raise "Called fetch_ec2_metadata with platform=#{@platform}" unless
           @platform == Platform::EC2
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
         open('http://' + METADATA_SERVICE_ADDR +

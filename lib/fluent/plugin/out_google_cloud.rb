@@ -143,7 +143,7 @@ module Fluent
         extra << 'private_key_path' unless @private_key_path.nil?
         extra << 'private_key_passphrase' unless @private_key_passphrase.nil?
 
-        fail Fluent::ConfigError,
+        raise Fluent::ConfigError,
              "#{PLUGIN_NAME} no longer supports auth_method.\n" \
              'Please remove configuration parameters: ' +
                extra.join(' ')
@@ -181,7 +181,7 @@ module Fluent
         missing << 'project_id' unless @project_id
         missing << 'zone' unless @zone
         missing << 'vm_id' unless @vm_id
-        fail Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
+        raise Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
           missing.join(' ')
       end
 
