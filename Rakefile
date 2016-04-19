@@ -16,7 +16,17 @@ Rake::TestTask.new(:test) do |test|
   test.verbose = true
 end
 
+# Building the gem will use the local file mode, so ensure it's world-readable.
+# https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud/issues/53
+desc 'Check plugin file permissions'
+task :check_perms do
+  plugin = 'lib/fluent/plugin/out_google_cloud.rb'
+  mode = File.stat(plugin).mode & 0777
+  fail "Unexpected mode #{mode.to_s(8)} for #{plugin}" unless
+    mode & 0444 == 0444
+end
+
 desc 'Run unit tests and RuboCop to check for style violations'
-task all: [:test, :rubocop]
+task all: [:test, :rubocop, :check_perms]
 
 task default: :all
