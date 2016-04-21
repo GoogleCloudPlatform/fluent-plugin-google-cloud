@@ -583,6 +583,56 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_struct_payload_json_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver
+    json_string = '{"msg": "test log entry 0", "tag2": "test", "data": 5000}'
+    d.emit('message' => 'notJSON ' + json_string)
+    d.emit('message' => json_string)
+    d.emit('message' => "\t" + json_string)
+    d.emit('message' => '  ' + json_string)
+    d.run
+    log_index = 0
+    verify_log_entries(4, COMPUTE_PARAMS, '') do |entry|
+      log_index += 1
+      if log_index == 1
+        assert entry.key?('textPayload'), 'Entry did not have textPayload'
+      else
+        assert entry.key?('structPayload'),  'Entry did not have structPayload'
+        assert_equal 3, entry['structPayload'].size, entry
+        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+        assert_equal 'test', entry['structPayload']['tag2'], entry
+        assert_equal 5000, entry['structPayload']['data'], entry
+      end
+    end
+  end
+
+  def test_struct_payload_json_container_log
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+    json_string = '{"msg": "test log entry 0", "tag2": "test", "data": 5000}'
+    d.emit(container_log_entry_with_metadata('notJSON' + json_string))
+    d.emit(container_log_entry_with_metadata(json_string))
+    d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
+    d.run
+    log_index = 0
+    verify_log_entries(3, CONTAINER_FROM_METADATA_PARAMS, '') do |entry|
+      log_index += 1
+      if log_index == 1
+        assert entry.key?('textPayload'), 'Entry did not have textPayload'
+      else
+        assert entry.key?('structPayload'),  'Entry did not have structPayload'
+        assert_equal 3, entry['structPayload'].size, entry
+        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+        assert_equal 'test', entry['structPayload']['tag2'], entry
+        assert_equal 5000, entry['structPayload']['data'], entry
+      end
+    end
+  end
+
   def test_timestamps
     setup_gce_metadata_stubs
     setup_logging_stubs
