@@ -599,7 +599,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       if log_index == 1
         assert entry.key?('textPayload'), 'Entry did not have textPayload'
       else
-        assert entry.key?('structPayload'),  'Entry did not have structPayload'
+        assert entry.key?('structPayload'), 'Entry did not have structPayload'
         assert_equal 3, entry['structPayload'].size, entry
         assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
         assert_equal 'test', entry['structPayload']['tag2'], entry
@@ -624,7 +624,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       if log_index == 1
         assert entry.key?('textPayload'), 'Entry did not have textPayload'
       else
-        assert entry.key?('structPayload'),  'Entry did not have structPayload'
+        assert entry.key?('structPayload'), 'Entry did not have structPayload'
         assert_equal 3, entry['structPayload'].size, entry
         assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
         assert_equal 'test', entry['structPayload']['tag2'], entry
