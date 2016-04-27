@@ -647,6 +647,16 @@ module Fluent
       elsif record.key?('severity')
         entry.metadata.severity = parse_severity(record['severity'])
         record.delete('severity')
+      elsif @service_name == CONTAINER_SERVICE && \
+            entry.metadata.labels.key?("#{CONTAINER_SERVICE}/stream")
+        stream = entry.metadata.labels["#{CONTAINER_SERVICE}/stream"]
+        if stream == 'stdout'
+          entry.metadata.severity = 'INFO'
+        elsif stream == 'stderr'
+          entry.metadata.severity = 'ERROR'
+        else
+          entry.metadata.severity = 'DEFAULT'
+        end
       else
         entry.metadata.severity = 'DEFAULT'
       end
