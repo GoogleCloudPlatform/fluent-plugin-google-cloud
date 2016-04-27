@@ -360,6 +360,9 @@ module Fluent
             if record.key?('kubernetes')
               handle_container_metadata(record, entry)
             end
+            # Save the timestamp if available
+            timestamp = nil
+            timestamp = record['time'] if record.key?('time')
             # If the log from the user container is json, we want to export it
             # as a structured log. Now that we've pulled out all the
             # container-specific metadata from the record, we can replace the
@@ -378,6 +381,10 @@ module Fluent
             elsif is_container_json && record.key?('log')
               record_json = parse_json_or_nil(record['log'])
               record = record_json unless record_json.nil?
+            end
+            # Restore timestamp if necessary
+            unless record.key?('time') || timestamp.nil?
+              record['time'] = timestamp
             end
           end
 
