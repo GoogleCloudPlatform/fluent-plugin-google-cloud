@@ -14,6 +14,7 @@
 require 'json'
 require 'open-uri'
 require 'socket'
+require 'time'
 require 'yaml'
 require 'google/apis'
 require 'google/apis/logging_v1beta3'
@@ -602,6 +603,15 @@ module Fluent
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
         ts_secs = timestamp.strftime('%s')
         ts_nanos = timestamp.strftime('%N')
+      elsif record.key?('time')
+        # k8s ISO8601 timestamp
+        begin
+          timestamp = Time.iso8601(record.delete('time'))
+        rescue
+          timestamp = Time.at(time)
+        end
+        ts_secs = timestamp.tv_sec
+        ts_nanos = timestamp.tv_nsec
       else
         timestamp = Time.at(time)
         ts_secs = timestamp.tv_sec
