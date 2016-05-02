@@ -32,7 +32,6 @@ module Fluent
     CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'
     COMPUTE_SERVICE = 'compute.googleapis.com'
     CONTAINER_SERVICE = 'container.googleapis.com'
-    DATAFLOW_SERVICE = 'dataflow.googleapis.com'
     EC2_SERVICE = 'ec2.amazonaws.com'
 
     # Name of the the Google cloud logging write scope.
@@ -63,13 +62,15 @@ module Fluent
     config_param :vm_id, :string, :default => nil
     config_param :vm_name, :string, :default => nil
 
-    # Whether to try to detect of the VM is owned by a "subservice" such as App
+    # Whether to try to detect if the VM is owned by a "subservice" such as App
     # Engine of Kubernetes, rather than just associating the logs with the
     # compute service of the platform. This currently only has any effect when
-    # running on GCE.
+    # running on GCE. If false, the subservice name can be provided explicitly.
+    #
     # The initial motivation for this is to separate out Kubernetes node
     # component (Docker, Kubelet, etc.) logs from container logs.
     config_param :detect_subservice, :bool, :default => true
+    config_param :subservice_name, :string, :default => nil
 
     # The regular expression to use on Kubernetes logs to extract some basic
     # information about the log source. The regex must contain capture groups
@@ -96,6 +97,11 @@ module Fluent
     #     "field_name_2": "some.prefix/sent_label_name_2"
     #   }
     config_param :label_map, :hash, :default => nil
+
+    # labels (specified as a JSON object) is a set of custom labels
+    # provided at configuration time. It allows users to inject extra
+    # environmental information into every message.
+    config_param :labels, :hash, :default => nil
 
     # DEPRECATED: The following parameters, if present in the config
     # indicate that the plugin configuration must be updated.
@@ -147,6 +153,11 @@ module Fluent
 
       # TODO: Send instance tags as labels as well?
       @common_labels = {}
+      if @labels
+        @labels.each do |key, value|
+          @common_labels[key] = value
+        end
+      end
 
       @compiled_kubernetes_tag_regexp = nil
       if @kubernetes_tag_regexp
@@ -239,11 +250,6 @@ module Fluent
             common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
             common_labels["#{APPENGINE_SERVICE}/version_id"] =
               @gae_backend_version
-          elsif attributes.include?('job_id')
-            # Dataflow
-            @service_name = DATAFLOW_SERVICE
-            @dataflow_job_id = fetch_gce_metadata('instance/attributes/job_id')
-            common_labels["#{DATAFLOW_SERVICE}/job_id"] = @dataflow_job_id
           elsif attributes.include?('kube-env')
             # Kubernetes/Container Engine
             @service_name = CONTAINER_SERVICE
@@ -254,6 +260,8 @@ module Fluent
               cluster_name_from_kube_env(@kube_env)
             detect_cloudfunctions(attributes)
           end
+        elsif @subservice_name
+          @service_name = @subservice_name
         end
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
         common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
