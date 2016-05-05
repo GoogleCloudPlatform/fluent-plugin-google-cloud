@@ -65,11 +65,12 @@ module Fluent
     # Whether to try to detect if the VM is owned by a "subservice" such as App
     # Engine of Kubernetes, rather than just associating the logs with the
     # compute service of the platform. This currently only has any effect when
-    # running on GCE. If false, the subservice name can be provided explicitly.
+    # running on GCE.
     #
     # The initial motivation for this is to separate out Kubernetes node
     # component (Docker, Kubelet, etc.) logs from container logs.
     config_param :detect_subservice, :bool, :default => true
+    # The subservice_name overrides the subserice detection, if provided.
     config_param :subservice_name, :string, :default => nil
 
     # The regular expression to use on Kubernetes logs to extract some basic
@@ -100,7 +101,16 @@ module Fluent
 
     # labels (specified as a JSON object) is a set of custom labels
     # provided at configuration time. It allows users to inject extra
-    # environmental information into every message.
+    # environmental information into every message or to customize
+    # labels otherwise detected automatically.
+    #
+    # Each entry in the map is a {"label_name": "label_value"} pair.
+    #
+    # Example:
+    #   labels {
+    #     "label_name_1": "label_value_1",
+    #     "label_name_2": "label_value_2"
+    #   }
     config_param :labels, :hash, :default => nil
 
     # DEPRECATED: The following parameters, if present in the config
@@ -233,7 +243,9 @@ module Fluent
       case @platform
       when Platform::GCE
         @service_name = COMPUTE_SERVICE
-        if @detect_subservice
+        if @subservice_name
+          @service_name = @subservice_name
+        elsif @detect_subservice
           # Check for specialized GCE environments.
           # TODO: Add config options for these to allow for running outside GCE?
           attributes = fetch_gce_metadata('instance/attributes/').split
@@ -260,8 +272,6 @@ module Fluent
               cluster_name_from_kube_env(@kube_env)
             detect_cloudfunctions(attributes)
           end
-        elsif @subservice_name
-          @service_name = @subservice_name
         end
         common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
         common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
