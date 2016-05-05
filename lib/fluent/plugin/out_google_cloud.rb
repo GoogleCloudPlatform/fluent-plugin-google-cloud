@@ -70,7 +70,7 @@ module Fluent
     # The initial motivation for this is to separate out Kubernetes node
     # component (Docker, Kubelet, etc.) logs from container logs.
     config_param :detect_subservice, :bool, :default => true
-    # The subservice_name overrides the subserice detection, if provided.
+    # The subservice_name overrides the subservice detection, if provided.
     config_param :subservice_name, :string, :default => nil
 
     # The regular expression to use on Kubernetes logs to extract some basic
@@ -163,11 +163,7 @@ module Fluent
 
       # TODO: Send instance tags as labels as well?
       @common_labels = {}
-      if @labels
-        @labels.each do |key, value|
-          @common_labels[key] = value
-        end
-      end
+      @common_labels.merge!(@labels) if @labels
 
       @compiled_kubernetes_tag_regexp = nil
       if @kubernetes_tag_regexp
