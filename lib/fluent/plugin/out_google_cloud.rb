@@ -361,8 +361,7 @@ module Fluent
               handle_container_metadata(record, entry)
             end
             # Save the timestamp if available
-            timestamp = nil
-            timestamp = record['time'] if record.key?('time')
+            timestamp = record.key?('time') ? record['time'] : nil
             # If the log from the user container is json, we want to export it
             # as a structured log. Now that we've pulled out all the
             # container-specific metadata from the record, we can replace the
