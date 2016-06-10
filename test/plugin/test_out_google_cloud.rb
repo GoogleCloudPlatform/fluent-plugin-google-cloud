@@ -1250,7 +1250,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def container_log_entry_with_metadata(log)
     {
       log: log,
-      stream: 'stdout',
+      stream: CONTAINER_STREAM,
+      time: '2016-04-26T00:17:14.263279268Z',
       kubernetes: {
         namespace_id: CONTAINER_NAMESPACE_ID,
         namespace_name: CONTAINER_NAMESPACE_NAME,
@@ -1267,7 +1268,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   def container_log_entry(log)
     {
       log: log,
-      stream: 'stdout'
+      stream: CONTAINER_STREAM,
+      time: '2016-04-26T00:17:14.263279268Z'
     }
   end
 
