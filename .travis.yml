@@ -10,6 +10,6 @@ before_install:
 notifications:
   email:
     recipients:
-      - salty@google.com
+      - google-fluentd-notifications+travis@google.com
     on_success: change
     on_failure: change
