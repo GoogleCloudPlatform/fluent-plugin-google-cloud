@@ -752,17 +752,18 @@ module Fluent
     end
 
     def set_payload(record, entry, is_json)
-      # Use text payload if the log was not valid JSON and:
-      # 1. This is a Cloud Functions log that matched the expected regexp
-      # 2. This is a Cloud Functions log and the 'log' key is available
-      # 3. This is an unstructured Container log and the 'log' key is available
-      # 4. The only remaining key is 'message'
-      if is_json
-        entry.struct_payload = record
-      elsif @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
+      # If this is a Cloud Functions log that matched the expected regexp,
+      # use text payload. Otherwise, use JSON if we found valid JSON, or text
+      # payload in the following cases:
+      # 1. This is a Cloud Functions log and the 'log' key is available
+      # 2. This is an unstructured Container log and the 'log' key is available
+      # 3. The only remaining key is 'message'
+      if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
         entry.text_payload = @cloudfunctions_log_match['text']
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
         entry.text_payload = record['log']
+      elsif is_json
+        entry.struct_payload = record
       elsif @service_name == CONTAINER_SERVICE && record.key?('log')
         entry.text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
