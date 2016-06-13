@@ -14,6 +14,7 @@
 
 require 'helper'
 require 'json'
+require 'time'
 require 'mocha/test_unit'
 require 'webmock/test_unit'
 require 'google/apis'
@@ -82,6 +83,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONTAINER_LABEL_KEY = 'component'
   CONTAINER_LABEL_VALUE = 'redis-component'
   CONTAINER_STREAM = 'stdout'
+  # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch
+  CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'
+  CONTAINER_SECONDS_EPOCH = 1_234_567_890
+  CONTAINER_NANOS = 987_654_321
 
   # Cloud Functions specific labels
   CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'
@@ -843,7 +848,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(container_log_entry_with_metadata(log_entry(0)))
     d.run
-    verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS)
+    verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS) do |entry|
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+    end
   end
 
   def test_multiple_container_logs_metadata_from_plugin
@@ -858,7 +868,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       @logs_sent = []
       n.times { |i| d.emit(container_log_entry_with_metadata(log_entry(i))) }
       d.run
-      verify_log_entries(n, CONTAINER_FROM_METADATA_PARAMS)
+      verify_log_entries(n, CONTAINER_FROM_METADATA_PARAMS) do |entry|
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+      end
     end
   end
 
@@ -869,7 +884,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(container_log_entry(log_entry(0)))
     d.run
-    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS)
+    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS) do |entry|
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+    end
   end
 
   def test_multiple_container_logs_metadata_from_tag
@@ -884,7 +904,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       @logs_sent = []
       n.times { |i| d.emit(container_log_entry(log_entry(i))) }
       d.run
-      verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS)
+      verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS) do |entry|
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+      end
     end
   end
 
@@ -902,6 +927,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
       assert_equal 'test', entry['structPayload']['tag2'], entry
       assert_equal 5000, entry['structPayload']['data'], entry
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
     end
   end
 
@@ -919,6 +948,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
       assert_equal 'test', entry['structPayload']['tag2'], entry
       assert_equal 5000, entry['structPayload']['data'], entry
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
     end
   end
 
@@ -1251,7 +1284,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     {
       log: log,
       stream: CONTAINER_STREAM,
-      time: '2016-04-26T00:17:14.263279268Z',
+      time: CONTAINER_TIMESTAMP,
       kubernetes: {
         namespace_id: CONTAINER_NAMESPACE_ID,
         namespace_name: CONTAINER_NAMESPACE_NAME,
@@ -1269,7 +1302,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     {
       log: log,
       stream: CONTAINER_STREAM,
-      time: '2016-04-26T00:17:14.263279268Z'
+      time: CONTAINER_TIMESTAMP
     }
   end
 
