@@ -14,6 +14,7 @@
 require 'json'
 require 'open-uri'
 require 'socket'
+require 'time'
 require 'yaml'
 require 'google/apis'
 require 'google/apis/logging_v1beta3'
@@ -373,6 +374,8 @@ module Fluent
             if record.key?('kubernetes')
               handle_container_metadata(record, entry)
             end
+            # Save the timestamp if available
+            timestamp = record.key?('time') ? record['time'] : nil
             # If the log from the user container is json, we want to export it
             # as a structured log. Now that we've pulled out all the
             # container-specific metadata from the record, we can replace the
@@ -391,6 +394,10 @@ module Fluent
             elsif is_container_json && record.key?('log')
               record_json = parse_json_or_nil(record['log'])
               record = record_json unless record_json.nil?
+            end
+            # Restore timestamp if necessary
+            unless record.key?('time') || timestamp.nil?
+              record['time'] = timestamp
             end
           end
 
@@ -616,6 +623,15 @@ module Fluent
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
         ts_secs = timestamp.strftime('%s')
         ts_nanos = timestamp.strftime('%N')
+      elsif record.key?('time')
+        # k8s ISO8601 timestamp
+        begin
+          timestamp = Time.iso8601(record.delete('time'))
+        rescue
+          timestamp = Time.at(time)
+        end
+        ts_secs = timestamp.tv_sec
+        ts_nanos = timestamp.tv_nsec
       else
         timestamp = Time.at(time)
         ts_secs = timestamp.tv_sec
