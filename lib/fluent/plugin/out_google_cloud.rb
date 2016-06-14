@@ -375,8 +375,10 @@ module Fluent
             end
           end
 
-          # Save the timestamp if available
+          # Save the timestamp if available, then clear it out to allow for
+          # determining whether we should parse the log or message field.
           timestamp = record.key?('time') ? record['time'] : nil
+          record.delete('time')
           # If the log is json, we want to export it as a structured log unless
           # there is additional metadata that would be lost.
           is_json = false
