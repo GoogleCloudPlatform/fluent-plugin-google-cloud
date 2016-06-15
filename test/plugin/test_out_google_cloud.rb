@@ -83,6 +83,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CONTAINER_LABEL_KEY = 'component'
   CONTAINER_LABEL_VALUE = 'redis-component'
   CONTAINER_STREAM = 'stdout'
+  CONTAINER_SEVERITY = 'INFO'
   # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch
   CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'
   CONTAINER_SECONDS_EPOCH = 1_234_567_890
@@ -853,6 +854,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                    entry['metadata']['timestamp']['seconds'], entry
       assert_equal CONTAINER_NANOS, \
                    entry['metadata']['timestamp']['nanos'], entry
+      assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
     end
   end
 
@@ -873,6 +875,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                      entry['metadata']['timestamp']['seconds'], entry
         assert_equal CONTAINER_NANOS, \
                      entry['metadata']['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
       end
     end
   end
@@ -889,6 +892,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                    entry['metadata']['timestamp']['seconds'], entry
       assert_equal CONTAINER_NANOS, \
                    entry['metadata']['timestamp']['nanos'], entry
+      assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
     end
   end
 
@@ -909,7 +913,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                      entry['metadata']['timestamp']['seconds'], entry
         assert_equal CONTAINER_NANOS, \
                      entry['metadata']['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
       end
+    end
+  end
+
+  def test_one_container_log_from_tag_stderr
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+    d.emit(container_log_entry(log_entry(0), 'stderr'))
+    d.run
+    expected_params = CONTAINER_FROM_TAG_PARAMS.merge(
+      labels: { "#{CONTAINER_SERVICE_NAME}/stream" => 'stderr' }
+    ) { |_, oldval, newval| oldval.merge(newval) }
+    verify_log_entries(1, expected_params) do |entry|
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+      assert_equal 'ERROR', entry['metadata']['severity'], entry
     end
   end
 
@@ -919,7 +943,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_logging_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(container_log_entry_with_metadata('{"msg": "test log entry 0", ' \
-                                             '"tag2": "test", "data": 5000}'))
+                                             '"tag2": "test", "data": 5000, ' \
+                                             '"severity": "WARNING"}'))
     d.run
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS,
                        'structPayload') do |entry|
@@ -931,6 +956,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                    entry['metadata']['timestamp']['seconds'], entry
       assert_equal CONTAINER_NANOS, \
                    entry['metadata']['timestamp']['nanos'], entry
+      assert_equal 'WARNING', entry['metadata']['severity'], entry
     end
   end
 
@@ -940,7 +966,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_logging_stubs
     d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
     d.emit(container_log_entry('{"msg": "test log entry 0", ' \
-                               '"tag2": "test", "data": 5000}'))
+                               '"tag2": "test", "data": 5000, ' \
+                               '"severity": "W"}'))
     d.run
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS,
                        'structPayload') do |entry|
@@ -952,6 +979,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                    entry['metadata']['timestamp']['seconds'], entry
       assert_equal CONTAINER_NANOS, \
                    entry['metadata']['timestamp']['nanos'], entry
+      assert_equal 'WARNING', entry['metadata']['severity'], entry
     end
   end
 
@@ -1298,10 +1326,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   end
 
-  def container_log_entry(log)
+  def container_log_entry(log, stream = CONTAINER_STREAM)
     {
       log: log,
-      stream: CONTAINER_STREAM,
+      stream: stream,
       time: CONTAINER_TIMESTAMP
     }
   end
