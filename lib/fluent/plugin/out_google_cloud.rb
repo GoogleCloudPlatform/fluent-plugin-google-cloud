@@ -373,28 +373,28 @@ module Fluent
             if record.key?('kubernetes')
               handle_container_metadata(record, entry)
             end
-          end
 
-          # Save the timestamp if available, then clear it out to allow for
-          # determining whether we should parse the log or message field.
-          timestamp = record.key?('time') ? record['time'] : nil
-          record.delete('time')
-          # If the log is json, we want to export it as a structured log unless
-          # there is additional metadata that would be lost.
-          is_json = false
-          if record.length == 1 && record.key?('log')
-            record_json = parse_json_or_nil(record['log'])
-          end
-          if record.length == 1 && record.key?('message')
-            record_json = parse_json_or_nil(record['message'])
-          end
-          unless record_json.nil?
-            record = record_json
-            is_json = true
-          end
-          # Restore timestamp if necessary
-          unless record.key?('time') || timestamp.nil?
-            record['time'] = timestamp
+            # Save the timestamp if available, then clear it out to allow for
+            # determining whether we should parse the log or message field.
+            timestamp = record.key?('time') ? record['time'] : nil
+            record.delete('time')
+            # If the log is json, we want to export it as a structured log
+            # unless there is additional metadata that would be lost.
+            is_json = false
+            if record.length == 1 && record.key?('log')
+              record_json = parse_json_or_nil(record['log'])
+            end
+            if record.length == 1 && record.key?('message')
+              record_json = parse_json_or_nil(record['message'])
+            end
+            unless record_json.nil?
+              record = record_json
+              is_json = true
+            end
+            # Restore timestamp if necessary.
+            unless record.key?('time') || timestamp.nil?
+              record['time'] = timestamp
+            end
           end
 
           set_timestamp(record, entry, time)

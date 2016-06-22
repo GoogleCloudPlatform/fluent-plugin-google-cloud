@@ -599,18 +599,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit('message' => "\t" + json_string)
     d.emit('message' => '  ' + json_string)
     d.run
-    log_index = 0
     verify_log_entries(4, COMPUTE_PARAMS, '') do |entry|
-      log_index += 1
-      if log_index == 1
-        assert entry.key?('textPayload'), 'Entry did not have textPayload'
-      else
-        assert entry.key?('structPayload'), 'Entry did not have structPayload'
-        assert_equal 3, entry['structPayload'].size, entry
-        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-        assert_equal 'test', entry['structPayload']['tag2'], entry
-        assert_equal 5000, entry['structPayload']['data'], entry
-      end
+      assert entry.key?('textPayload'), 'Entry did not have textPayload'
     end
   end
 
