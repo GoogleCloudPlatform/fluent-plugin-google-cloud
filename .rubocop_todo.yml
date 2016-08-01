@@ -5,9 +5,14 @@
 # Note that changes in the inspected code, or installation of new
 # versions of RuboCop, may require this file to be generated again.
 
+AllCops:
+  Exclude:
+    # Generated files.
+    - lib/google/**/*
+
 # Offense count: 2
 Metrics/AbcSize:
-  Max: 120
+  Max: 150
 
 # Offense count: 2
 # Configuration parameters: CountComments.
@@ -21,7 +26,7 @@ Metrics/CyclomaticComplexity:
 # Offense count: 5
 # Configuration parameters: CountComments.
 Metrics/MethodLength:
-  Max: 150
+  Max: 200
 
 # Offense count: 3
 Metrics/PerceivedComplexity:
