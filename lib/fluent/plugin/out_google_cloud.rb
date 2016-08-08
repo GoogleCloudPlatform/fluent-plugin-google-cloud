@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'grpc'
 require 'json'
 require 'open-uri'
 require 'socket'
@@ -116,6 +117,10 @@ module Fluent
     #     "label_name_2": "label_value_2"
     #   }
     config_param :labels, :hash, :default => nil
+
+    # Whether to use gRPC instead of REST/JSON to communicate to the
+    # Cloud Logging API.
+    config_param :use_grpc, :bool, :default => false
 
     # DEPRECATED: The following parameters, if present in the config
     # indicate that the plugin configuration must be updated.
@@ -351,23 +356,34 @@ module Fluent
             end
           end
         end
+
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
-          entry = Google::Apis::LoggingV1beta3::LogEntry.new(
-            metadata: Google::Apis::LoggingV1beta3::LogEntryMetadata.new(
-              service_name: @service_name,
-              project_id: @project_id,
-              zone: @zone,
-              labels: {}
-            ))
+          if @use_grpc
+            entry = Google::Logging::V1::LogEntry.new(
+              metadata: Google::Logging::V1::LogEntryMetadata.new(
+                service_name: @service_name.encode('utf-8'),
+                project_id: @project_id.encode('utf-8'),
+                zone: @zone.encode('utf-8'),
+                labels: {}
+              ))
+          else
+            entry = Google::Apis::LoggingV1beta3::LogEntry.new(
+              metadata: Google::Apis::LoggingV1beta3::LogEntryMetadata.new(
+                service_name: @service_name,
+                project_id: @project_id,
+                zone: @zone,
+                labels: {}
+              ))
+          end
 
           if @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
             @cloudfunctions_log_match =
               @cloudfunctions_log_regexp.match(record['log'])
           end
           if @service_name == CONTAINER_SERVICE
-            # Move the stdout/stderr annotation from the record into a label
+            # Move the stdout/stderr annotation from the record into a label.
             field_to_label(record, 'stream', entry.metadata.labels,
                            "#{CONTAINER_SERVICE}/stream")
             # If the record has been annotated by the kubernetes_metadata_filter
@@ -400,9 +416,28 @@ module Fluent
             end
           end
 
-          set_timestamp(record, entry, time)
-          set_severity(record, entry)
-          set_http_request(record, entry)
+          ts_secs, ts_nanos = compute_timestamp(record, time)
+          if @use_grpc
+            entry.metadata.timestamp = Google::Protobuf::Timestamp.new(
+              seconds: ts_secs,
+              nanos: ts_nanos
+            )
+
+            entry.metadata.severity =
+              grpc_severity(compute_severity(record, entry))
+
+            set_http_request_grpc(record, entry) # FIXME
+          else
+            entry.metadata.timestamp = {
+              seconds: ts_secs,
+              nanos: ts_nanos
+            }
+
+            entry.metadata.severity =
+              compute_severity(record, entry)
+
+            set_http_request(record, entry)
+          end
 
           # If a field is present in the label_map, send its value as a label
           # (mapping the field name to label name as specified in the config)
@@ -420,8 +455,12 @@ module Fluent
               @cloudfunctions_log_match['execution_id']
           end
 
-          set_payload(record, entry, is_json)
-          entry.metadata.labels = nil if entry.metadata.labels.empty?
+          if @use_grpc
+            set_payload_grpc(record, entry, is_json)
+          else
+            set_payload(record, entry, is_json)
+            entry.metadata.labels = nil if entry.metadata.labels.empty?
+          end
 
           entries.push(entry)
         end
@@ -430,48 +469,113 @@ module Fluent
 
         log_name = log_name(tag, labels)
 
-        begin
-          # Does the actual write to the cloud logging api.
-          # The URI of the write is constructed by the Google::Api request;
-          # it is equivalent to this URL:
-          # 'https://logging.googleapis.com/v1beta3/projects/' \
-          #   "#{@project_id}/logs/#{log_name}/entries:write"
+        if @use_grpc
+          begin
+            # Does the actual write to the cloud logging api.
 
-          client = api_client
+            client = api_client
 
-          write_request = \
-            Google::Apis::LoggingV1beta3::WriteLogEntriesRequest.new(
-              common_labels: labels,
-              entries: entries)
+            labels_utf8_pairs = labels.map do |k, v|
+              [k.encode('utf-8'), v.encode('utf-8')]
+            end
+            utf8_log_name = log_name.encode('utf-8')
 
-          # TODO: RequestOptions
-          client.write_log_entries(@project_id, log_name, write_request)
+            write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
+              log_name: "projects/#{@project_id}/logs/#{utf8_log_name}",
+              common_labels: Hash[labels_utf8_pairs],
+              entries: entries
+            )
 
-          # Let the user explicitly know when the first call succeeded,
-          # to aid with verification and troubleshooting.
-          unless @successful_call
-            @successful_call = true
-            @log.info 'Successfully sent to Stackdriver Logging API.'
+            client.write_log_entries(write_request)
+
+            # Let the user explicitly know when the first call succeeded,
+            # to aid with verification and troubleshooting.
+            unless @successful_call
+              @successful_call = true
+              @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
+            end
+
+          rescue GRPC::Cancelled => error
+            # RPC cancelled, so retry via re-raising the error.
+            raise error
+
+          rescue GRPC::BadStatus => error
+            case error.code
+            when GRPC::Core::StatusCodes::CANCELLED,
+                 GRPC::Core::StatusCodes::UNAVAILABLE,
+                 GRPC::Core::StatusCodes::DEADLINE_EXCEEDED,
+                 GRPC::Core::StatusCodes::INTERNAL,
+                 GRPC::Core::StatusCodes::UNKNOWN
+              # TODO
+              # Server error, so retry via re-raising the error.
+              raise error
+            when GRPC::Core::StatusCodes::UNIMPLEMENTED,
+                 GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED
+              # Most client errors indicate a problem with the request itself
+              # and should not be retried.
+              dropped = entries.length
+              @log.warn "Dropping #{dropped} log message(s)",
+                        error: error.to_s, error_code: error.code.to_s
+            when GRPC::Core::StatusCodes::UNAUTHENTICATED
+              # Authorization error.
+              # These are usually solved via a `gcloud auth` call, or by
+              # modifying the permissions on the Google Cloud project.
+              dropped = entries.length
+              @log.warn "Dropping #{dropped} log message(s)",
+                        error: error.to_s, error_code: error.code.to_s
+            else
+              # Assume this is a problem with the request itself
+              # and don't retry.
+              dropped = entries.length
+              @log.error "Unknown response code #{error.code} from the "\
+                         "server, dropping #{dropped} log message(s)",
+                         error: error.to_s, error_code: error.code.to_s
+            end
           end
+        else
+          begin
+            # Does the actual write to the cloud logging api.
 
-        rescue Google::Apis::ServerError => error
-          # Server error, so retry via re-raising the error.
-          raise error
+            client = api_client
 
-        rescue Google::Apis::AuthorizationError => error
-          # Authorization error.
-          # These are usually solved via a `gcloud auth` call, or by modifying
-          # the permissions on the Google Cloud project.
-          dropped = entries.length
-          @log.warn "Dropping #{dropped} log message(s)",
-                    error_class: error.class.to_s, error: error.to_s
+            # The URI of the write is constructed by the Google::Api request;
+            # it is equivalent to this URL:
+            # 'https://logging.googleapis.com/v1beta3/projects/' \
+            #   "#{@project_id}/logs/#{log_name}/entries:write"
+            write_request = \
+              Google::Apis::LoggingV1beta3::WriteLogEntriesRequest.new(
+                common_labels: labels,
+                entries: entries)
 
-        rescue Google::Apis::ClientError => error
-          # Most ClientErrors indicate a problem with the request itself and
-          # should not be retried.
-          dropped = entries.length
-          @log.warn "Dropping #{dropped} log message(s)",
-                    error_class: error.class.to_s, error: error.to_s
+            # TODO: RequestOptions
+            client.write_log_entries(@project_id, log_name, write_request)
+
+            # Let the user explicitly know when the first call succeeded,
+            # to aid with verification and troubleshooting.
+            unless @successful_call
+              @successful_call = true
+              @log.info 'Successfully sent to Stackdriver Logging API.'
+            end
+
+          rescue Google::Apis::ServerError => error
+            # Server error, so retry via re-raising the error.
+            raise error
+
+          rescue Google::Apis::AuthorizationError => error
+            # Authorization error.
+            # These are usually solved via a `gcloud auth` call, or by modifying
+            # the permissions on the Google Cloud project.
+            dropped = entries.length
+            @log.warn "Dropping #{dropped} log message(s)",
+                      error_class: error.class.to_s, error: error.to_s
+
+          rescue Google::Apis::ClientError => error
+            # Most ClientErrors indicate a problem with the request itself and
+            # should not be retried.
+            dropped = entries.length
+            @log.warn "Dropping #{dropped} log message(s)",
+                      error_class: error.class.to_s, error: error.to_s
+          end
         end
       end
     end
@@ -605,7 +709,7 @@ module Fluent
       instance_prefix
     end
 
-    def set_timestamp(record, entry, time)
+    def compute_timestamp(record, time)
       if record.key?('timestamp') &&
          record['timestamp'].is_a?(Hash) &&
          record['timestamp'].key?('seconds') &&
@@ -648,41 +752,36 @@ module Fluent
         ts_secs = timestamp.tv_sec
         ts_nanos = timestamp.tv_nsec
       end
-      entry.metadata.timestamp = {
-        seconds: ts_secs,
-        nanos: ts_nanos
-      }
+      [ts_secs, ts_nanos]
     end
 
-    def set_severity(record, entry)
+    def compute_severity(record, entry)
       if @service_name == CLOUDFUNCTIONS_SERVICE
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
-          entry.metadata.severity =
-            parse_severity(@cloudfunctions_log_match['severity'])
+          return parse_severity(@cloudfunctions_log_match['severity'])
         elsif record.key?('stream') && record['stream'] == 'stdout'
-          entry.metadata.severity = 'INFO'
           record.delete('stream')
+          return 'INFO'
         elsif record.key?('stream') && record['stream'] == 'stderr'
-          entry.metadata.severity = 'ERROR'
           record.delete('stream')
+          return 'ERROR'
         else
-          entry.metadata.severity = 'DEFAULT'
+          return 'DEFAULT'
         end
       elsif record.key?('severity')
-        entry.metadata.severity = parse_severity(record['severity'])
-        record.delete('severity')
+        return parse_severity(record.delete('severity'))
       elsif @service_name == CONTAINER_SERVICE && \
             entry.metadata.labels.key?("#{CONTAINER_SERVICE}/stream")
         stream = entry.metadata.labels["#{CONTAINER_SERVICE}/stream"]
         if stream == 'stdout'
-          entry.metadata.severity = 'INFO'
+          return 'INFO'
         elsif stream == 'stderr'
-          entry.metadata.severity = 'ERROR'
+          return 'ERROR'
         else
-          entry.metadata.severity = 'DEFAULT'
+          return 'DEFAULT'
         end
       else
-        entry.metadata.severity = 'DEFAULT'
+        return 'DEFAULT'
       end
     end
 
@@ -701,6 +800,25 @@ module Fluent
       output.cache_hit = input.delete('cacheHit')
       output.validated_with_origin_server = \
         input.delete('validatedWithOriginServer')
+      record.delete('httpRequest') if input.empty?
+      entry.http_request = output
+    end
+
+    def set_http_request_grpc(record, entry)
+      return nil unless record['httpRequest'].is_a?(Hash)
+      input = record['httpRequest']
+      output = Google::Logging::Type::HttpRequest.new
+      output.request_method = input.delete('requestMethod')
+      output.request_url = input.delete('requestUrl')
+      output.request_size = input.delete('requestSize').to_i
+      output.status = input.delete('status').to_i
+      output.response_size = input.delete('responseSize').to_i
+      output.user_agent = input.delete('userAgent')
+      output.remote_ip = input.delete('remoteIp')
+      output.referer = input.delete('referer')
+      output.cache_hit = input.delete('cacheHit') == 'true'
+      output.validated_with_origin_server = \
+        input.delete('validatedWithOriginServer') == 'true'
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
@@ -768,6 +886,38 @@ module Fluent
       'DEFAULT'
     end
 
+    GRPC_SEVERITY_MAPPING = {
+      'DEFAULT' => Google::Logging::Type::LogSeverity::DEFAULT,
+      'DEBUG' => Google::Logging::Type::LogSeverity::DEBUG,
+      'INFO' => Google::Logging::Type::LogSeverity::INFO,
+      'NOTICE' => Google::Logging::Type::LogSeverity::NOTICE,
+      'WARNING' => Google::Logging::Type::LogSeverity::WARNING,
+      'ERROR' => Google::Logging::Type::LogSeverity::ERROR,
+      'CRITICAL' => Google::Logging::Type::LogSeverity::CRITICAL,
+      'ALERT' => Google::Logging::Type::LogSeverity::ALERT,
+      'EMERGENCY' => Google::Logging::Type::LogSeverity::EMERGENCY,
+      0 => Google::Logging::Type::LogSeverity::DEFAULT,
+      100 => Google::Logging::Type::LogSeverity::DEBUG,
+      200 => Google::Logging::Type::LogSeverity::INFO,
+      300 => Google::Logging::Type::LogSeverity::NOTICE,
+      400 => Google::Logging::Type::LogSeverity::WARNING,
+      500 => Google::Logging::Type::LogSeverity::ERROR,
+      600 => Google::Logging::Type::LogSeverity::CRITICAL,
+      700 => Google::Logging::Type::LogSeverity::ALERT,
+      800 => Google::Logging::Type::LogSeverity::EMERGENCY
+    }
+
+    def grpc_severity(severity)
+      # TODO: find out why this doesn't work.
+      # if severity.is_a? String
+      #   return Google::Logging::Type::LogSeverity.resolve(severity)
+      # end
+      if GRPC_SEVERITY_MAPPING.key?(severity)
+        return GRPC_SEVERITY_MAPPING[severity]
+      end
+      severity
+    end
+
     def decode_cloudfunctions_function_name(function_name)
       function_name.gsub(/c\.[a-z]/) { |s| s.upcase[-1] }
         .gsub('u.u', '_').gsub('d.d', '$').gsub('a.a', '@').gsub('p.p', '.')
@@ -821,6 +971,72 @@ module Fluent
       end
     end
 
+    def value_from_ruby(value)
+      ret = Google::Protobuf::Value.new
+      case value
+      when NilClass
+        ret.null_value = 0
+      when Numeric
+        ret.number_value = value
+      when String
+        ret.string_value = value.encode('utf-8')
+      when TrueClass
+        ret.bool_value = true
+      when FalseClass
+        ret.bool_value = false
+      when Google::Protobuf::Struct
+        ret.struct_value = value
+      when Hash
+        ret.struct_value = struct_from_ruby(value)
+      when Google::Protobuf::ListValue
+        ret.list_value = value
+      when Array
+        ret.list_value = list_from_ruby(value)
+      else
+        @log.error "Unknown type: #{value.class}"
+        fail Google::Protobuf::Error, "Unknown type: #{value.class}"
+      end
+      ret
+    end
+
+    def list_from_ruby(arr)
+      ret = Google::Protobuf::ListValue.new
+      arr.each do |v|
+        ret.values << value_from_ruby(v)
+      end
+      ret
+    end
+
+    def struct_from_ruby(hash)
+      ret = Google::Protobuf::Struct.new
+      hash.each do |k, v|
+        ret.fields[k] ||= value_from_ruby(v)
+      end
+      ret
+    end
+
+    def set_payload_grpc(record, entry, is_json)
+      # If this is a Cloud Functions log that matched the expected regexp,
+      # use text payload. Otherwise, use JSON if we found valid JSON, or text
+      # payload in the following cases:
+      # 1. This is a Cloud Functions log and the 'log' key is available
+      # 2. This is an unstructured Container log and the 'log' key is available
+      # 3. The only remaining key is 'message'
+      if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
+        entry.text_payload = @cloudfunctions_log_match['text']
+      elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
+        entry.text_payload = record['log']
+      elsif is_json
+        entry.struct_payload = struct_from_ruby(record)
+      elsif @service_name == CONTAINER_SERVICE && record.key?('log')
+        entry.text_payload = record['log']
+      elsif record.size == 1 && record.key?('message')
+        entry.text_payload = record['message']
+      else
+        entry.struct_payload = struct_from_ruby(record)
+      end
+    end
+
     def log_name(tag, common_labels)
       if @service_name == CLOUDFUNCTIONS_SERVICE
         return 'cloud-functions'
@@ -839,6 +1055,7 @@ module Fluent
     end
 
     def init_api_client
+      return if @use_grpc
       # TODO: Use a non-default ClientOptions object.
       Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
       Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
@@ -848,14 +1065,23 @@ module Fluent
     end
 
     def api_client
-      unless @client.authorization.expired?
-        begin
-          @client.authorization.fetch_access_token!
-        rescue MultiJson::ParseError
-          # Workaround an issue in the API client; just re-raise a more
-          # descriptive error for the user (which will still cause a retry).
-          raise Google::APIClient::ClientError, 'Unable to fetch access ' \
-            'token (no scopes configured?)'
+      if @use_grpc
+        ssl_creds = GRPC::Core::ChannelCredentials.new
+        authentication = Google::Auth.get_application_default
+        creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
+        creds = ssl_creds.compose(creds)
+        @client = Google::Logging::V1::LoggingService::Stub.new(
+          'logging.googleapis.com', creds)
+      else
+        unless @client.authorization.expired?
+          begin
+            @client.authorization.fetch_access_token!
+          rescue MultiJson::ParseError
+            # Workaround an issue in the API client; just re-raise a more
+            # descriptive error for the user (which will still cause a retry).
+            raise Google::APIClient::ClientError, 'Unable to fetch access ' \
+              'token (no scopes configured?)'
+          end
         end
       end
       @client
