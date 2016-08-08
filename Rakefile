@@ -18,15 +18,25 @@ end
 
 # Building the gem will use the local file mode, so ensure it's world-readable.
 # https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud/issues/53
-desc 'Check plugin file permissions'
-task :check_perms do
-  plugin = 'lib/fluent/plugin/out_google_cloud.rb'
-  mode = File.stat(plugin).mode & 0777
-  fail "Unexpected mode #{mode.to_s(8)} for #{plugin}" unless
-    mode & 0444 == 0444
+desc 'Fix file permissions'
+task :fix_perms do
+  files = [
+    'lib/fluent/plugin/out_google_cloud.rb',
+    'lib/google/**/*.rb'
+  ].flat_map do |file|
+    file.include?('*') ? Dir.glob(file) : [file]
+  end
+
+  files.each do |file|
+    mode = File.stat(file).mode & 0777
+    next unless mode & 0444 != 0444
+    puts "Changing mode of #{file} from #{mode.to_s(8)} to "\
+         "#{(mode | 0444).to_s(8)}"
+    chmod mode | 0444, file
+  end
 end
 
 desc 'Run unit tests and RuboCop to check for style violations'
-task all: [:test, :rubocop, :check_perms]
+task all: [:test, :rubocop, :fix_perms]
 
 task default: :all
