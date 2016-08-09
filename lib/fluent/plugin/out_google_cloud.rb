@@ -30,7 +30,7 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.3'
+    PLUGIN_VERSION = '0.5.3.grpc.alpha.1'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
@@ -486,11 +486,7 @@ module Fluent
               entries: entries
             )
 
-            @log.debug "About to send gRPC: #{write_request.log_name}"\
-                       " #{write_request.common_labels}"
             client.write_log_entries(write_request)
-            @log.debug "Successfully sent gRPC: #{write_request.log_name}"\
-                       " #{write_request.common_labels}"
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
