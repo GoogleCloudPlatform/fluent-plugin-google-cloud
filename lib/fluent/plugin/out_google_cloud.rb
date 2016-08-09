@@ -478,14 +478,19 @@ module Fluent
             labels_utf8_pairs = labels.map do |k, v|
               [k.encode('utf-8'), v.encode('utf-8')]
             end
+            utf8_log_name = log_name.encode('utf-8')
 
             write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
-              log_name: log_name.encode('utf-8'),
+              log_name: "projects/#{@project_id}/logs/#{utf8_log_name}",
               common_labels: Hash[labels_utf8_pairs],
               entries: entries
             )
 
+            @log.debug "About to send gRPC: #{write_request.log_name}"\
+                       " #{write_request.common_labels}"
             client.write_log_entries(write_request)
+            @log.debug "Successfully sent gRPC: #{write_request.log_name}"\
+                       " #{write_request.common_labels}"
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -523,7 +528,11 @@ module Fluent
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
-              @log.error "Unknown response code #{error.code} from the server",
+              # Assume this is a problem with the request itself
+              # and don't retry.
+              dropped = entries.length
+              @log.error "Unknown response code #{error.code} from the "\
+                         "server, dropping #{dropped} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
             end
           end
@@ -1298,6 +1307,50 @@ module Fluent
       end
     end
 
+    def value_from_ruby(value)
+      ret = Google::Protobuf::Value.new
+      case value
+      when NilClass
+        ret.null_value = 0
+      when Numeric
+        ret.number_value = value
+      when String
+        ret.string_value = value.encode('utf-8')
+      when TrueClass
+        ret.bool_value = true
+      when FalseClass
+        ret.bool_value = false
+      when Google::Protobuf::Struct
+        ret.struct_value = value
+      when Hash
+        ret.struct_value = struct_from_ruby(value)
+      when Google::Protobuf::ListValue
+        ret.list_value = value
+      when Array
+        ret.list_value = list_from_ruby(value)
+      else
+        @log.error "Unknown type: #{value.class}"
+        fail Google::Protobuf::Error, "Unknown type: #{value.class}"
+      end
+      ret
+    end
+
+    def list_from_ruby(arr)
+      ret = Google::Protobuf::ListValue.new
+      arr.each do |v|
+        ret.values << value_from_ruby(v)
+      end
+      ret
+    end
+
+    def struct_from_ruby(hash)
+      ret = Google::Protobuf::Struct.new
+      hash.each do |k, v|
+        ret.fields[k] ||= value_from_ruby(v)
+      end
+      ret
+    end
+
     def set_payload_grpc(record, entry, is_json)
       # If this is a Cloud Functions log that matched the expected regexp,
       # use text payload. Otherwise, use JSON if we found valid JSON, or text
@@ -1310,13 +1363,13 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
         entry.text_payload = record['log']
       elsif is_json
-        entry.struct_payload = Google::Protobuf::Struct.decode_json(record)
+        entry.struct_payload = struct_from_ruby(record)
       elsif @service_name == CONTAINER_SERVICE && record.key?('log')
         entry.text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = record['message']
       else
-        entry.struct_payload = Google::Protobuf::Struct.decode_json(record)
+        entry.struct_payload = struct_from_ruby(record)
       end
     end
 
