@@ -726,7 +726,9 @@ module Fluent
       'A' => 'ALERT',
       # other misc. translations.
       'ERR' => 'ERROR',
-      'F' => 'CRITICAL'
+      'F' => 'CRITICAL',
+      'CRIT' => 'CRITICAL',
+      'EMERG' => 'CRITICAL'
     }
 
     def parse_severity(severity_str)
