@@ -728,7 +728,7 @@ module Fluent
       'ERR' => 'ERROR',
       'F' => 'CRITICAL',
       'CRIT' => 'CRITICAL',
-      'EMERG' => 'CRITICAL'
+      'EMERG' => 'EMERGENCY'
     }
 
     def parse_severity(severity_str)
