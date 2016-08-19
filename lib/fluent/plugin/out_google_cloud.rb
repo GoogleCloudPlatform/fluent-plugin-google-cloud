@@ -716,6 +716,9 @@ module Fluent
       'FINE' => 'DEBUG',
       'FINER' => 'DEBUG',
       'FINEST' => 'DEBUG',
+      # nginx levels (only missing ones listed).
+      'CRIT' => 'CRITICAL',
+      'EMERG' => 'EMERGENCY',
       # single-letter levels.  Note E->ERROR and D->DEBUG.
       'D' => 'DEBUG',
       'I' => 'INFO',
@@ -726,9 +729,7 @@ module Fluent
       'A' => 'ALERT',
       # other misc. translations.
       'ERR' => 'ERROR',
-      'F' => 'CRITICAL',
-      'CRIT' => 'CRITICAL',
-      'EMERG' => 'EMERGENCY'
+      'F' => 'CRITICAL'
     }
 
     def parse_severity(severity_str)
