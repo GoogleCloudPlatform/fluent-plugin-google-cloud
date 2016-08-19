@@ -716,7 +716,7 @@ module Fluent
       'FINE' => 'DEBUG',
       'FINER' => 'DEBUG',
       'FINEST' => 'DEBUG',
-      # nginx levels (only missing ones listed).
+      # nginx levels (only missing ones from above listed).
       'CRIT' => 'CRITICAL',
       'EMERG' => 'EMERGENCY',
       # single-letter levels.  Note E->ERROR and D->DEBUG.
