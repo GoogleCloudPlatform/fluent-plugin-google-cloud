@@ -363,10 +363,12 @@ module Fluent
             @cloudfunctions_log_match =
               @cloudfunctions_log_regexp.match(record['log'])
           end
-          if @service_name == CONTAINER_SERVICE
-            # Move the stdout/stderr annotation from the record into a label
-            field_to_label(record, 'stream', entry.metadata.labels,
-                           "#{CONTAINER_SERVICE}/stream")
+          if @service_name == CONTAINER_SERVICE || @service_name == EC2_SERVICE
+            if @service_name == CONTAINER_SERVICE
+              # Move the stdout/stderr annotation from the record into a label
+              field_to_label(record, 'stream', entry.metadata.labels,
+                             "#{CONTAINER_SERVICE}/stream")
+            end
             # If the record has been annotated by the kubernetes_metadata_filter
             # plugin, then use that metadata. Otherwise, rely on commonLabels
             # populated at the grouped_entries level from the group's tag.
