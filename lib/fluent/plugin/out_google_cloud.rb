@@ -307,7 +307,8 @@ module Fluent
         common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
       end
       resource_labels = extract_resource_labels(@resource.type, common_labels)
-      @resource.labels.merge(resource_labels) unless resource_labels.nil?
+      @resource.labels.merge!(resource_labels) unless
+        resource_labels.nil? || resource_labels.empty?
 
       # The resource and labels are now set up; ensure they can't be modified
       # without first duping them.
@@ -361,9 +362,8 @@ module Fluent
           if match_data
             # Service name is set to Cloud Functions only for logs actually
             # coming from a function, otherwise we leave it as 'container'.
-            resource = resource.dup
+            resource = dup_resource(resource)
             resource.type = 'cloud_function'
-            resource.labels = resource.labels.dup
             resource.labels['region'] = @gcf_region
             resource.labels['function_name'] =
               decode_cloudfunctions_function_name(
@@ -385,8 +385,7 @@ module Fluent
           # Do this here to avoid having to repeat it for each record.
           match_data = @compiled_kubernetes_tag_regexp.match(tag)
           if match_data
-            resource = resource.dup
-            resource.labels = resource.labels.dup
+            resource = dup_resource(resource)
             resource.labels['container_name'] = match_data['container_name']
             common_labels = common_labels.dup
             %w(namespace_name pod_name).each do |field|
@@ -394,6 +393,13 @@ module Fluent
             end
           end
         end
+
+        # freeze the per-request state.  Any further changes must be made
+        # on a per-entry basis.
+        resource.freeze
+        resource.labels.freeze
+        common_labels.freeze
+
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
@@ -412,8 +418,7 @@ module Fluent
             # plugin, then use that metadata. Otherwise, rely on commonLabels
             # populated at the grouped_entries level from the group's tag.
             if record.key?('kubernetes')
-              entry.resource = resource.clone
-              entry.resource.labels = resource.labels.clone
+              entry.resource = dup_resource(resource)
               resource = entry.resource
               handle_container_metadata(record, entry)
             end
@@ -463,9 +468,9 @@ module Fluent
 
           set_payload(resource, record, entry, is_json)
           resource_labels = extract_resource_labels(resource.type, entry.labels)
-          if resource_labels
-            entry.resource = resource.clone
-            entry.resource.labels.merge(resource_labels)
+          if !resource_labels.nil? && !resource_labels.empty?
+            entry.resource = dup_resource(resource)
+            entry.resource.labels.merge!(resource_labels)
           end
           entry.labels = nil if entry.labels.empty?
           entries.push(entry)
@@ -882,28 +887,31 @@ module Fluent
     # Hash of labels to be merged into the MonitoredResource labels.
     # Otherwise, return nil and leave 'labels' unmodified.
     def extract_resource_labels(resource_type, labels)
-      if resource_type == 'cloud_function'
-        resource_labels = {}
-        %w(region job_name job_id step).each do |label|
-          name = "dataflow.googleapis.com/#{label}"
-          value = labels.delete(name)
-          next unless value
-          # v1 label 'step' is 'step_id' in v2; others are the same
-          resource_name = name == 'step' ? 'step_id' : name
-          resource_labels[resource_name] = value
-        end
-        return resource_labels
+      if resource_type == 'dataflow_step'
+        label_prefix = 'dataflow.googleapis.com'
+        labels_to_extract = %w(region job_name job_id step_id)
       elsif resource_type == 'ml_job'
-        resource_labels = {}
-        %w(job_id task_name).each do |label|
-          name = "ml.googleapis.com/#{label}"
-          value = labels.delete(name)
-          next unless value
-          resource_labels[resource_name] = value
-        end
-        return resource_labels
+        label_prefix = 'ml.googleapis.com'
+        labels_to_extract = %w(job_id task_name)
+      else
+        return nil
       end
-      nil
+
+      resource_labels = {}
+      labels_to_extract.each do |label|
+        value = labels.delete("#{label_prefix}/#{label}")
+        next unless value
+        resource_labels[label] = value
+      end
+      resource_labels
+    end
+
+    # makes a deep copy of a MonitoredResource.   Ideally the class itself
+    # would override 'dup' and do this, but it does not.
+    def dup_resource(resource)
+      ret = resource.dup
+      ret.labels = ret.labels.dup
+      ret
     end
 
     def init_api_client

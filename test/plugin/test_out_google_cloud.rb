@@ -43,6 +43,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   HOSTNAME = Socket.gethostname
   WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
 
+  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
+  APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
+  CONTAINER_SERVICE_NAME = 'container.googleapis.com'
+  CLOUDFUNCTIONS_SERVICE_NAME = 'cloudfunctions.googleapis.com'
+  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
+  DATAFLOW_SERVICE_NAME = 'dataflow.googleapis.com'
+  ML_SERVICE_NAME = 'ml.googleapis.com'
+
   # attributes used for the GCE metadata service
   PROJECT_ID = 'test-project-id'
   ZONE = 'us-central1-b'
@@ -98,6 +106,21 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'
   CLOUDFUNCTIONS_POD_NAME = 'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'
   CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'
+
+  # Dataflow specific labels
+  DATAFLOW_REGION = 'us-central1'
+  DATAFLOW_JOB_NAME = 'job_name_1'
+  DATAFLOW_JOB_ID = 'job_id_1'
+  DATAFLOW_STEP_ID = 'step_1'
+  DATAFLOW_TAG = 'dataflow.googleapis.com/worker'
+
+  # ML specific labels
+  ML_REGION = 'us-central1'
+  ML_JOB_ID = 'job_name_1'
+  ML_TASK_NAME = 'task_name_1'
+  ML_TRIAL_ID = 'trial_id_1'
+  ML_LOG_AREA = 'log_area_1'
+  ML_TAG = 'master-replica-0'
 
   # Parameters used for authentication
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
@@ -170,15 +193,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     vm_id #{CUSTOM_VM_ID}
   )
 
+  CONFIG_DATAFLOW = %(
+    subservice_name "#{DATAFLOW_SERVICE_NAME}"
+    labels {
+      "#{DATAFLOW_SERVICE_NAME}/region" : "#{DATAFLOW_REGION}",
+      "#{DATAFLOW_SERVICE_NAME}/job_name" : "#{DATAFLOW_JOB_NAME}",
+      "#{DATAFLOW_SERVICE_NAME}/job_id" : "#{DATAFLOW_JOB_ID}"
+    }
+    label_map { "step": "#{DATAFLOW_SERVICE_NAME}/step_id" }
+  )
+
+  CONFIG_ML = %(
+    subservice_name "#{ML_SERVICE_NAME}"
+    labels {
+      "#{ML_SERVICE_NAME}/job_id" : "#{ML_JOB_ID}",
+      "#{ML_SERVICE_NAME}/task_name" : "#{ML_TASK_NAME}",
+      "#{ML_SERVICE_NAME}/trial_id" : "#{ML_TRIAL_ID}"
+    }
+    label_map { "name": "#{ML_SERVICE_NAME}/job_id/log_area" }
+  )
+
   # Service configurations for various services
-  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
-  APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
-  CONTAINER_SERVICE_NAME = 'container.googleapis.com'
-  CLOUDFUNCTIONS_SERVICE_NAME = 'cloudfunctions.googleapis.com'
-  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
-
-  COMPUTE_RESOURCE_TYPE = 'gce_instance'
-
   COMPUTE_PARAMS = {
     resource: {
       type: 'gce_instance',
@@ -301,6 +336,44 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   }
 
+  DATAFLOW_PARAMS = {
+    resource: {
+      type: 'dataflow_step',
+      labels: {
+        'job_name' => DATAFLOW_JOB_NAME,
+        'job_id' => DATAFLOW_JOB_ID,
+        'step_id' => DATAFLOW_STEP_ID,
+        'region' => DATAFLOW_REGION
+      }
+    },
+    log_name: DATAFLOW_TAG,
+    project_id: PROJECT_ID,
+    labels: {
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
+      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+    }
+  }
+
+  ML_PARAMS = {
+    resource: {
+      type: 'ml_job',
+      labels: {
+        'job_id' => ML_JOB_ID,
+        'task_name' => ML_TASK_NAME
+      }
+    },
+    log_name: ML_TAG,
+    project_id: PROJECT_ID,
+    labels: {
+      "#{ML_SERVICE_NAME}/trial_id" => ML_TRIAL_ID,
+      "#{ML_SERVICE_NAME}/job_id/log_area" => ML_LOG_AREA,
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
+      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+    }
+  }
+
   CUSTOM_PARAMS = {
     resource: {
       type: 'gce_instance',
@@ -331,8 +404,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{EC2_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
-
-  # TODO: add tests for dataflow and ml
 
   HTTP_REQUEST_MESSAGE = {
     'requestMethod' => 'POST',
@@ -473,7 +544,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_container_metadata_stubs
     d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
     d.run
-    assert_equal COMPUTE_RESOURCE_TYPE, d.instance.resource.type
+    assert_equal 'gce_instance', d.instance.resource.type
   end
 
   def test_metadata_overrides_on_gce
@@ -1134,6 +1205,24 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_one_dataflow_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(CONFIG_DATAFLOW, DATAFLOW_TAG)
+    d.emit(dataflow_log_entry(0))
+    d.run
+    verify_log_entries(1, DATAFLOW_PARAMS)
+  end
+
+  def test_one_ml_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(CONFIG_ML, ML_TAG)
+    d.emit(ml_log_entry(0))
+    d.run
+    verify_log_entries(1, ML_PARAMS)
+  end
+
   def test_http_request_from_record
     setup_gce_metadata_stubs
     setup_logging_stubs
@@ -1392,6 +1481,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     {
       stream: 'stdout',
       log: log_entry(i)
+    }
+  end
+
+  def dataflow_log_entry(i)
+    {
+      step: DATAFLOW_STEP_ID,
+      message: log_entry(i)
+    }
+  end
+
+  def ml_log_entry(i)
+    {
+      name: ML_LOG_AREA,
+      message: log_entry(i)
     }
   end
 
