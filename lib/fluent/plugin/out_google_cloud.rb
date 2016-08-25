@@ -33,7 +33,17 @@ module Fluent
     CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'
     COMPUTE_SERVICE = 'compute.googleapis.com'
     CONTAINER_SERVICE = 'container.googleapis.com'
+    DATAFLOW_SERVICE = 'dataflow.googleapis.com'
     EC2_SERVICE = 'ec2.amazonaws.com'
+    ML_SERVICE = 'ml.googleapis.com'
+
+    APPENGINE_RESOURCE_TYPE = 'gae_app'
+    CLOUDFUNCTIONS_RESOURCE_TYPE = 'cloud_function'
+    COMPUTE_RESOURCE_TYPE = 'gce_instance'
+    CONTAINER_RESOURCE_TYPE = 'container'
+    DATAFLOW_RESOURCE_TYPE = 'dataflow_step'
+    EC2_RESOURCE_TYPE = 'aws_ec2_instance'
+    ML_RESOURCE_TYPE = 'ml_job'
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
@@ -242,16 +252,16 @@ module Fluent
       case @platform
       when Platform::GCE
         logviewer_service_name = COMPUTE_SERVICE
-        @resource.type = 'gce_instance'
-        # TODO: migrate existing uses of this to something that aligns better
-        # with MonitoredResource; for now, translate known users.
+        @resource.type = COMPUTE_RESOURCE_TYPE
+        # TODO: introduce a new MonitoredResource-centric configuration and
+        # deprecate subservice-name; for now, translate known uses.
         if @subservice_name
           logviewer_service_name = @subservice_name
           # TODO: what should we do if we encounter an unknown value?
-          if @subservice_name == 'dataflow.googleapis.com'
-            @resource.type = 'dataflow_step'
-          elsif @subservice_name == 'ml.googleapis.com'
-            @resource.type = 'ml_job'
+          if @subservice_name == DATAFLOW_SERVICE
+            @resource.type = DATAFLOW_RESOURCE_TYPE
+          elsif @subservice_name == ML_SERVICE
+            @resource.type = ML_RESOURCE_TYPE
           end
         elsif @detect_subservice
           # Check for specialized GCE environments.
@@ -267,13 +277,13 @@ module Fluent
             @gae_backend_version =
                 fetch_gce_metadata('instance/attributes/gae_backend_version')
             logviewer_service_name = APPENGINE_SERVICE
-            @resource.type = 'gae_app'
+            @resource.type = APPENGINE_RESOURCE_TYPE
             @resource.labels['module_id'] = @gae_backend_name
             @resource.labels['version_id'] = @gae_backend_version
           elsif attributes.include?('kube-env')
             # Kubernetes/Container Engine
             logviewer_service_name = CONTAINER_SERVICE
-            @resource.type = 'container'
+            @resource.type = CONTAINER_RESOURCE_TYPE
             @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
             @kube_env = YAML.load(@raw_kube_env)
             @resource.labels['cluster_name'] =
@@ -283,7 +293,8 @@ module Fluent
         end
         # Some services have the GCE instance_id and zone as MonitoredResource
         # labels; for other services we send them as entry labels.
-        if @resource.type == 'gce_instance' || @resource.type == 'container'
+        if @resource.type == COMPUTE_RESOURCE_TYPE ||
+           @resource.type == CONTAINER_RESOURCE_TYPE
           @resource.labels['instance_id'] = @vm_id
           @resource.labels['zone'] = @zone
         else
@@ -293,15 +304,15 @@ module Fluent
         common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
       when Platform::EC2
         logviewer_service_name = EC2_SERVICE
-        @resource.type = 'aws_ec2_instance'
+        @resource.type = EC2_RESOURCE_TYPE
         @resource.labels['instance_id'] = @vm_id
         @resource.labels['region'] = @zone
         # the aws_account label is populated above.
         common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
       when Platform::OTHER
-        # Use gce_instance as the default environment.
+        # Use GCE as the default environment.
         logviewer_service_name = COMPUTE_SERVICE
-        @resource.type = 'gce_instance'
+        @resource.type = COMPUTE_RESOURCE_TYPE
         @resource.labels['instance_id'] = @vm_id
         @resource.labels['zone'] = @zone
         common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
@@ -360,10 +371,10 @@ module Fluent
           # function, the function name can be extracted from the tag.
           match_data = @cloudfunctions_tag_regexp.match(tag)
           if match_data
-            # Service name is set to Cloud Functions only for logs actually
-            # coming from a function, otherwise we leave it as 'container'.
-            resource = dup_resource(resource)
-            resource.type = 'cloud_function'
+            # Resource type is set to Cloud Functions only for logs actually
+            # coming from a function, otherwise we leave it as Container.
+            resource = resource.dup
+            resource.type = CLOUDFUNCTIONS_RESOURCE_TYPE
             resource.labels['region'] = @gcf_region
             resource.labels['function_name'] =
               decode_cloudfunctions_function_name(
@@ -379,13 +390,14 @@ module Fluent
               resource.labels.delete('zone')
           end
         end
-        if resource.type == 'container' && @compiled_kubernetes_tag_regexp
+        if resource.type == CONTAINER_RESOURCE_TYPE &&
+           @compiled_kubernetes_tag_regexp
           # Container logs in Kubernetes are tagged based on where they came
           # from, so we can extract useful metadata from the tag.
           # Do this here to avoid having to repeat it for each record.
           match_data = @compiled_kubernetes_tag_regexp.match(tag)
           if match_data
-            resource = dup_resource(resource)
+            resource = resource.dup
             resource.labels['container_name'] = match_data['container_name']
             common_labels = common_labels.dup
             %w(namespace_name pod_name).each do |field|
@@ -406,11 +418,11 @@ module Fluent
           entry = Google::Apis::LoggingV2beta1::LogEntry.new(
             labels: {})
 
-          if resource.type == 'cloud_function' && record.key?('log')
+          if resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE && record.key?('log')
             @cloudfunctions_log_match =
               @cloudfunctions_log_regexp.match(record['log'])
           end
-          if resource.type == 'container'
+          if resource.type == CONTAINER_RESOURCE_TYPE
             # Move the stdout/stderr annotation from the record into a label
             field_to_label(record, 'stream', entry.labels,
                            "#{CONTAINER_SERVICE}/stream")
@@ -418,7 +430,7 @@ module Fluent
             # plugin, then use that metadata. Otherwise, rely on commonLabels
             # populated at the grouped_entries level from the group's tag.
             if record.key?('kubernetes')
-              entry.resource = dup_resource(resource)
+              entry.resource = resource.dup
               resource = entry.resource
               handle_container_metadata(record, entry)
             end
@@ -459,7 +471,7 @@ module Fluent
             end
           end
 
-          if resource.type == 'cloud_function' &&
+          if resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
              @cloudfunctions_log_match &&
              @cloudfunctions_log_match['execution_id']
             entry.labels['execution_id'] =
@@ -469,7 +481,7 @@ module Fluent
           set_payload(resource, record, entry, is_json)
           resource_labels = extract_resource_labels(resource.type, entry.labels)
           if !resource_labels.nil? && !resource_labels.empty?
-            entry.resource = dup_resource(resource)
+            entry.resource = resource.dup
             entry.resource.labels.merge!(resource_labels)
           end
           entry.labels = nil if entry.labels.empty?
@@ -674,7 +686,7 @@ module Fluent
           @log.warn 'timeNanos is deprecated - please use ' \
             'timestampSeconds and timestampNanos instead.'
         end
-      elsif resource.type == 'cloud_function' &&
+      elsif resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
             @cloudfunctions_log_match
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
         ts_secs = timestamp.strftime('%s')
@@ -700,7 +712,7 @@ module Fluent
     end
 
     def set_severity(resource, record, entry)
-      if resource.type == 'cloud_function'
+      if resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
           entry.severity = parse_severity(@cloudfunctions_log_match['severity'])
         elsif record.key?('stream') && record['stream'] == 'stdout'
@@ -715,7 +727,7 @@ module Fluent
       elsif record.key?('severity')
         entry.severity = parse_severity(record['severity'])
         record.delete('severity')
-      elsif resource.type == 'container' && \
+      elsif resource.type == CONTAINER_RESOURCE_TYPE &&
             entry.labels.key?("#{CONTAINER_SERVICE}/stream")
         stream = entry.labels["#{CONTAINER_SERVICE}/stream"]
         if stream == 'stdout'
@@ -853,13 +865,14 @@ module Fluent
       # 1. This is a Cloud Functions log and the 'log' key is available
       # 2. This is an unstructured Container log and the 'log' key is available
       # 3. The only remaining key is 'message'
-      if resource.type == 'cloud_function' && @cloudfunctions_log_match
+      if resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+         @cloudfunctions_log_match
         entry.text_payload = @cloudfunctions_log_match['text']
-      elsif resource.type == 'cloud_function' && record.key?('log')
+      elsif resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE && record.key?('log')
         entry.text_payload = record['log']
       elsif is_json
         entry.json_payload = record
-      elsif resource.type == 'container' && record.key?('log')
+      elsif resource.type == CONTAINER_RESOURCE_TYPE && record.key?('log')
         entry.text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = record['message']
@@ -869,12 +882,12 @@ module Fluent
     end
 
     def log_name(tag, resource)
-      if resource.type == 'cloud_function'
+      if resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE
         return 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
         return "#{APPENGINE_SERVICE}/#{tag}"
-      elsif resource.type == 'container'
+      elsif resource.type == CONTAINER_RESOURCE_TYPE
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         if resource.labels && resource.labels.key?('container_name')
@@ -890,11 +903,11 @@ module Fluent
     # Hash of labels to be merged into the MonitoredResource labels.
     # Otherwise, return nil and leave 'labels' unmodified.
     def extract_resource_labels(resource_type, labels)
-      if resource_type == 'dataflow_step'
-        label_prefix = 'dataflow.googleapis.com'
+      if resource_type == DATAFLOW_RESOURCE_TYPE
+        label_prefix = DATAFLOW_SERVICE
         labels_to_extract = %w(region job_name job_id step_id)
-      elsif resource_type == 'ml_job'
-        label_prefix = 'ml.googleapis.com'
+      elsif resource_type == ML_RESOURCE_TYPE
+        label_prefix = ML_SERVICE
         labels_to_extract = %w(job_id task_name)
       else
         return nil
@@ -907,14 +920,6 @@ module Fluent
         resource_labels[label] = value
       end
       resource_labels
-    end
-
-    # makes a deep copy of a MonitoredResource.   Ideally the class itself
-    # would override 'dup' and do this, but it does not.
-    def dup_resource(resource)
-      ret = resource.dup
-      ret.labels = ret.labels.dup
-      ret
     end
 
     def init_api_client
@@ -938,6 +943,21 @@ module Fluent
         end
       end
       @client
+    end
+  end
+end
+
+module Google
+  module Apis
+    module LoggingV2beta1
+      # Override MonitoredResource::dup to make a deep copy.
+      class MonitoredResource
+        def dup
+          ret = super
+          ret.labels = labels.dup
+          ret
+        end
+      end
     end
   end
 end

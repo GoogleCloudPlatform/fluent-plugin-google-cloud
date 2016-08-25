@@ -43,13 +43,21 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   HOSTNAME = Socket.gethostname
   WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
 
-  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
   APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
+  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
   CONTAINER_SERVICE_NAME = 'container.googleapis.com'
   CLOUDFUNCTIONS_SERVICE_NAME = 'cloudfunctions.googleapis.com'
-  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
   DATAFLOW_SERVICE_NAME = 'dataflow.googleapis.com'
+  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
   ML_SERVICE_NAME = 'ml.googleapis.com'
+
+  APPENGINE_RESOURCE_TYPE = 'gae_app'
+  CLOUDFUNCTIONS_RESOURCE_TYPE = 'cloud_function'
+  COMPUTE_RESOURCE_TYPE = 'gce_instance'
+  CONTAINER_RESOURCE_TYPE = 'container'
+  DATAFLOW_RESOURCE_TYPE = 'dataflow_step'
+  EC2_RESOURCE_TYPE = 'aws_ec2_instance'
+  ML_RESOURCE_TYPE = 'ml_job'
 
   # attributes used for the GCE metadata service
   PROJECT_ID = 'test-project-id'
@@ -216,7 +224,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Service configurations for various services
   COMPUTE_PARAMS = {
     resource: {
-      type: 'gce_instance',
+      type: COMPUTE_RESOURCE_TYPE,
       labels: {
         'instance_id' => VM_ID,
         'zone' => ZONE
@@ -231,7 +239,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   VMENGINE_PARAMS = {
     resource: {
-      type: 'gae_app',
+      type: APPENGINE_RESOURCE_TYPE,
       labels: {
         'module_id' => MANAGED_VM_BACKEND_NAME,
         'version_id' => MANAGED_VM_BACKEND_VERSION
@@ -251,7 +259,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   CONTAINER_FROM_METADATA_PARAMS = {
     resource: {
-      type: 'container',
+      type: CONTAINER_RESOURCE_TYPE,
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_ID,
@@ -275,7 +283,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Almost the same as from metadata, but missing namespace_id and pod_id.
   CONTAINER_FROM_TAG_PARAMS = {
     resource: {
-      type: 'container',
+      type: CONTAINER_RESOURCE_TYPE,
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'instance_id' => VM_ID,
@@ -299,7 +307,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   CLOUDFUNCTIONS_PARAMS = {
     resource: {
-      type: 'cloud_function',
+      type: CLOUDFUNCTIONS_RESOURCE_TYPE,
       labels: {
         'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
         'region' => CLOUDFUNCTIONS_REGION
@@ -319,7 +327,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
     resource: {
-      type: 'cloud_function',
+      type: CLOUDFUNCTIONS_RESOURCE_TYPE,
       labels: {
         'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
         'region' => CLOUDFUNCTIONS_REGION
@@ -338,7 +346,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   DATAFLOW_PARAMS = {
     resource: {
-      type: 'dataflow_step',
+      type: DATAFLOW_RESOURCE_TYPE,
       labels: {
         'job_name' => DATAFLOW_JOB_NAME,
         'job_id' => DATAFLOW_JOB_ID,
@@ -357,7 +365,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   ML_PARAMS = {
     resource: {
-      type: 'ml_job',
+      type: ML_RESOURCE_TYPE,
       labels: {
         'job_id' => ML_JOB_ID,
         'task_name' => ML_TASK_NAME
@@ -376,7 +384,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   CUSTOM_PARAMS = {
     resource: {
-      type: 'gce_instance',
+      type: COMPUTE_RESOURCE_TYPE,
       labels: {
         'instance_id' => CUSTOM_VM_ID,
         'zone' => CUSTOM_ZONE
@@ -391,7 +399,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   EC2_PARAMS = {
     resource: {
-      type: 'aws_ec2_instance',
+      type: EC2_RESOURCE_TYPE,
       labels: {
         'instance_id' => EC2_VM_ID,
         'region' => EC2_PREFIXED_ZONE,
@@ -539,12 +547,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_gce_used_when_detect_subservice_is_false
     setup_gce_metadata_stubs
-    # This would cause the service to be container.googleapis.com if not for the
-    # detect_subservice=false config.
+    # This would cause the resource type to be CONTAINER_RESOURCE_TYPE if not
+    # for the detect_subservice=false config.
     setup_container_metadata_stubs
     d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
     d.run
-    assert_equal 'gce_instance', d.instance.resource.type
+    assert_equal COMPUTE_RESOURCE_TYPE, d.instance.resource.type
   end
 
   def test_metadata_overrides_on_gce
