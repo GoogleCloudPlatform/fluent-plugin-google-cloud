@@ -363,7 +363,7 @@ module Fluent
         resource = @resource
         entries = []
         # Note that we assume that labels added to common_labels below are not
-        # 'service' labels (i.e. we do not call extract_resource_labels again)
+        # 'service' labels (i.e. we do not call extract_resource_labels again).
         common_labels = @common_labels
 
         if @running_cloudfunctions
@@ -379,7 +379,8 @@ module Fluent
             resource.labels['function_name'] =
               decode_cloudfunctions_function_name(
                 match_data['encoded_function_name'])
-            # Move labels from the MonitoredResource to the LogEntry.
+            # Move GKE container labels from the MonitoredResource to the
+            # LogEntry.
             instance_id = resource.labels.delete('instance_id')
             common_labels = common_labels.dup
             common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
@@ -897,7 +898,7 @@ module Fluent
       tag
     end
 
-    # Some services set labels (via configuring 'labels' or 'label_map' which
+    # Some services set labels (via configuring 'labels' or 'label_map') which
     # are now MonitoredResource labels in v2.
     # For these services, remove resource labels from 'labels' and return a
     # Hash of labels to be merged into the MonitoredResource labels.
