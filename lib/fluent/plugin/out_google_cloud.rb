@@ -19,9 +19,9 @@ require 'time'
 require 'yaml'
 require 'google/apis'
 require 'google/apis/logging_v1beta3'
-require 'google/logging/v1/logging'
-require 'google/logging/v1/logging_services'
-require 'google/logging/v1/log_entry'
+require 'google/logging/v1/logging_pb'
+require 'google/logging/v1/logging_services_pb'
+require 'google/logging/v1/log_entry_pb'
 require 'googleauth'
 
 module Fluent

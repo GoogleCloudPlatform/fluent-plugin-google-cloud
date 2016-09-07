@@ -2,7 +2,7 @@
 # Source: google/logging/v1/logging.proto for package 'google.logging.v1'
 
 require 'grpc'
-require 'google/logging/v1/logging'
+require 'google/logging/v1/logging_pb'
 
 module Google
   module Logging
