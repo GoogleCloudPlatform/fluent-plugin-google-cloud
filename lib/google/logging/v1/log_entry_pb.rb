@@ -3,11 +3,11 @@
 
 require 'google/protobuf'
 
-require 'google/logging/type/http_request'
-require 'google/logging/type/log_severity'
-require 'google/protobuf/any'
-require 'google/protobuf/struct'
-require 'google/protobuf/timestamp'
+require 'google/logging/type/http_request_pb'
+require 'google/logging/type/log_severity_pb'
+require 'google/protobuf/any_pb'
+require 'google/protobuf/struct_pb'
+require 'google/protobuf/timestamp_pb'
 Google::Protobuf::DescriptorPool.generated_pool.build do
   add_message "google.logging.v1.LogEntry" do
     optional :metadata, :message, 1, "google.logging.v1.LogEntryMetadata"

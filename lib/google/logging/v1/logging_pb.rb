@@ -3,10 +3,10 @@
 
 require 'google/protobuf'
 
-require 'google/logging/v1/log_entry'
-require 'google/protobuf/empty'
-require 'google/protobuf/timestamp'
-require 'google/rpc/status'
+require 'google/logging/v1/log_entry_pb'
+require 'google/protobuf/empty_pb'
+require 'google/protobuf/timestamp_pb'
+require 'google/rpc/status_pb'
 Google::Protobuf::DescriptorPool.generated_pool.build do
   add_message "google.logging.v1.Log" do
     optional :name, :string, 1
