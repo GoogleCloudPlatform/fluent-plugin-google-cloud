@@ -1,12 +1,12 @@
 Gem::Specification.new do |gem|
   gem.name          = 'fluent-plugin-google-cloud'
   gem.description   = <<-eos
-   Fluentd output plugin for the Google Cloud Logging API, which will make
+   Fluentd output plugin for the Stackdriver Logging API, which will make
    logs viewable in the Developer Console's log viewer and can optionally
    store them in Google Cloud Storage and/or BigQuery.
    This is an official Google Ruby gem.
 eos
-  gem.summary       = 'fluentd output plugin for the Google Cloud Logging API'
+  gem.summary       = 'fluentd output plugin for the Stackdriver Logging API'
   gem.homepage      = \
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache-2.0'

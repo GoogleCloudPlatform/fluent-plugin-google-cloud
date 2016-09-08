@@ -21,7 +21,7 @@ require 'google/apis/logging_v1beta3'
 require 'googleauth'
 
 module Fluent
-  # fluentd output plugin for the Google Cloud Logging API
+  # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
 
@@ -448,7 +448,7 @@ module Fluent
           # to aid with verification and troubleshooting.
           unless @successful_call
             @successful_call = true
-            @log.info 'Successfully sent to Google Cloud Logging API.'
+            @log.info 'Successfully sent to Stackdriver Logging API.'
           end
 
         rescue Google::Apis::ServerError => error
