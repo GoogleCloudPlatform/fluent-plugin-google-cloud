@@ -887,7 +887,7 @@ module Fluent
         return 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
-        return "#{APPENGINE_SERVICE}/#{tag}"
+        return "#{APPENGINE_SERVICE}%2F#{tag}"
       elsif resource.type == CONTAINER_RESOURCE_TYPE
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.

@@ -245,7 +245,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         'version_id' => MANAGED_VM_BACKEND_VERSION
       }
     },
-    log_name: "#{APPENGINE_SERVICE_NAME}/test",
+    log_name: "#{APPENGINE_SERVICE_NAME}%2Ftest",
     project_id: PROJECT_ID,
     labels: {
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
