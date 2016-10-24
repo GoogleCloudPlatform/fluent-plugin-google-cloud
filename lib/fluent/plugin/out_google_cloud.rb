@@ -423,6 +423,9 @@ module Fluent
             @cloudfunctions_log_match =
               @cloudfunctions_log_regexp.match(record['log'])
           end
+
+          set_timestamp(resource, record, entry, time)
+
           if resource.type == CONTAINER_RESOURCE_TYPE ||
              resource.type == APPENGINE_RESOURCE_TYPE
             # Move the stdout/stderr annotation from the record into a label
@@ -441,10 +444,6 @@ module Fluent
             # determining whether we should parse the log or message field.
             timestamp = record.key?('time') ? record['time'] : nil
             record.delete('time')
-            if timestamp.nil?
-              timestamp = record.key?('timestamp') ? record['timestamp'] : nil
-              record.delete('timestamp')
-            end
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
             is_json = false
@@ -464,7 +463,6 @@ module Fluent
             end
           end
 
-          set_timestamp(resource, record, entry, time)
           set_severity(resource, record, entry)
           set_http_request(record, entry)
 
