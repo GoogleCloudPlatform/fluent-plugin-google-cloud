@@ -30,7 +30,7 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.3.grpc.alpha.1'
+    PLUGIN_VERSION = '0.5.3.grpc.alpha.3'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
@@ -121,6 +121,16 @@ module Fluent
     # Whether to use gRPC instead of REST/JSON to communicate to the
     # Cloud Logging API.
     config_param :use_grpc, :bool, :default => false
+
+    # Whether to allow non-UTF-8 characters in user logs. If set to true, any
+    # non-UTF-8 character would be replaced by the string specified by
+    # 'non_utf8_replacement_string'. If set to false, any non-UTF-8 character
+    # would trigger the plugin to error out.
+    config_param :coerce_to_utf8, :bool, :default => true
+
+    # If 'coerce_to_utf8' is set to true, any non-UTF-8 character would be
+    # replaced by the string specified here.
+    config_param :non_utf8_replacement_string, :string, :default => ' '
 
     # DEPRECATED: The following parameters, if present in the config
     # indicate that the plugin configuration must be updated.
@@ -363,9 +373,9 @@ module Fluent
           if @use_grpc
             entry = Google::Logging::V1::LogEntry.new(
               metadata: Google::Logging::V1::LogEntryMetadata.new(
-                service_name: @service_name.encode('utf-8'),
-                project_id: @project_id.encode('utf-8'),
-                zone: @zone.encode('utf-8'),
+                service_name: convert_to_utf8(@service_name),
+                project_id: convert_to_utf8(@project_id),
+                zone: convert_to_utf8(@zone),
                 labels: {}
               ))
           else
@@ -476,9 +486,9 @@ module Fluent
             client = api_client
 
             labels_utf8_pairs = labels.map do |k, v|
-              [k.encode('utf-8'), v.encode('utf-8')]
+              [k.encode('utf-8'), convert_to_utf8(v)]
             end
-            utf8_log_name = log_name.encode('utf-8')
+            utf8_log_name = convert_to_utf8(log_name)
 
             write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
               log_name: "projects/#{@project_id}/logs/#{utf8_log_name}",
@@ -1311,7 +1321,7 @@ module Fluent
       when Numeric
         ret.number_value = value
       when String
-        ret.string_value = value.encode('utf-8')
+        ret.string_value = convert_to_utf8(value)
       when TrueClass
         ret.bool_value = true
       when FalseClass
@@ -1355,15 +1365,16 @@ module Fluent
       # 2. This is an unstructured Container log and the 'log' key is available
       # 3. The only remaining key is 'message'
       if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
-        entry.text_payload = @cloudfunctions_log_match['text']
+        entry.text_payload = convert_to_utf8(
+          @cloudfunctions_log_match['text'])
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
-        entry.text_payload = record['log']
+        entry.text_payload = convert_to_utf8(record['log'])
       elsif is_json
         entry.struct_payload = struct_from_ruby(record)
       elsif @service_name == CONTAINER_SERVICE && record.key?('log')
-        entry.text_payload = record['log']
+        entry.text_payload = convert_to_utf8(record['log'])
       elsif record.size == 1 && record.key?('message')
-        entry.text_payload = record['message']
+        entry.text_payload = convert_to_utf8(record['message'])
       else
         entry.struct_payload = struct_from_ruby(record)
       end
@@ -1417,6 +1428,30 @@ module Fluent
         end
       end
       @client
+    end
+
+    # Encode as UTF-8. If 'coerce_to_utf8' is set to true in the config, any
+    # non-UTF-8 character would be replaced by the string specified by
+    # 'non_utf8_replacement_string'. If 'coerce_to_utf8' is set to false, any
+    # non-UTF-8 character would trigger the plugin to error out.
+    def convert_to_utf8(input)
+      if @coerce_to_utf8
+        input.encode(
+          'utf-8',
+          invalid: :replace,
+          undef: :replace,
+          replace: @non_utf8_replacement_string)
+      else
+        begin
+          input.encode('utf-8')
+        rescue EncodingError
+          @log.error 'Encountered encoding issues potentially due to non ' \
+                     'UTF-8 characters. To allow non-UTF-8 characters and ' \
+                     'replace them with spaces, please set "coerce_to_utf8" ' \
+                     'to true.'
+          raise
+        end
+      end
     end
   end
 end
