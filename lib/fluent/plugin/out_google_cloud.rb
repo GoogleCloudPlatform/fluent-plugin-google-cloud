@@ -124,6 +124,14 @@ module Fluent
     #   }
     config_param :labels, :hash, :default => nil
 
+    # insert_id_field is a field name that points to each event's unique key.
+    # The unique key is sent as the Stackdriver insertId. If multiple
+    # events have the same insertId, Stackdriver may ignore all but one of them.
+    #
+    # Example:
+    #   insert_id_field event_hash
+    config_param :insert_id_field, :string, :default => nil
+
     # DEPRECATED: The following parameters, if present in the config
     # indicate that the plugin configuration must be updated.
     config_param :auth_method, :string, :default => nil
@@ -462,6 +470,7 @@ module Fluent
           set_timestamp(resource, record, entry, time)
           set_severity(resource, record, entry)
           set_http_request(record, entry)
+          set_insert_id(record, entry)
 
           # If a field is present in the label_map, send its value as a label
           # (mapping the field name to label name as specified in the config)
@@ -760,6 +769,12 @@ module Fluent
         input.delete('cacheValidatedWithOriginServer')
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
+    end
+
+    def set_insert_id(record, entry)
+      return nil unless record.key?(@insert_id_field)
+      entry.insert_id = record[@insert_id_field]
+      record.delete(@insert_id_field)
     end
 
     # Values permitted by the API for 'severity' (which is an enum).

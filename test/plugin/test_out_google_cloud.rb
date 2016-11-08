@@ -888,6 +888,49 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_insert_id_without_field_present
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %(insert_id_field event_hash)
+    d = create_driver(config)
+    d.emit('message' => log_entry(0), 'not_event_hash' => 'value1')
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      check_insert_id(entry, 'event_hash', nil)
+    end
+  end
+
+  def test_insert_id_with_field_present
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %(insert_id_field event_hash)
+    d = create_driver(config)
+    d.emit('message' => log_entry(0), 'event_hash' => 'deadbeef9')
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS) do |entry|
+      check_insert_id(entry, 'event_hash', 'deadbeef9')
+    end
+  end
+
+  def test_insert_id_with_multiple_fields
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    config = %(insert_id_field event_hash)
+    d = create_driver(config)
+    d.emit('message' => log_entry(0),
+           'field1' => 'value1',
+           'field_number_two' => 'value2',
+           'not_a_unique_key' => 'value4',
+           'event_hash' => 'abc123XYZ')
+    d.run
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      check_insert_id(entry, 'event_hash', 'abc123XYZ')
+      assert_equal 4, entry['jsonPayload'].size, entry
+      assert_equal 'test log entry 0', entry['jsonPayload']['message'], entry
+      assert_equal 'value4', entry['jsonPayload']['not_a_unique_key'], entry
+    end
+  end
+
   def test_multiple_logs
     setup_gce_metadata_stubs
     setup_logging_stubs
@@ -1521,6 +1564,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal expected_labels.length, labels.length, 'Expected ' \
       "#{expected_labels.length} labels: #{expected_labels}, got " \
       "#{labels.length} labels: #{labels}"
+  end
+
+  def check_insert_id(entry, insert_id_field, insert_id)
+    assert_equal entry['insertId'], insert_id, entry unless insert_id.nil?
+    assert !entry['jsonPayload'].key?(insert_id_field),
+           'insert id field still in payload' if entry.key?('jsonPayload')
   end
 
   # The caller can optionally provide a block which is called for each entry.
