@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'google/apis'
+require 'grpc'
 require 'helper'
 require 'json'
-require 'time'
 require 'mocha/test_unit'
+require 'time'
 require 'webmock/test_unit'
-require 'google/apis'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
@@ -136,6 +137,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   NO_DETECT_SUBSERVICE_CONFIG = %(
     detect_subservice false
+  )
+
+  USE_GRPC_CONFIG = %(
+    use_grpc true
   )
 
   CUSTOM_METADATA_CONFIG = %(
@@ -322,9 +327,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'validatedWithOriginServer' => true
   }
 
+  GRPC_MOCK_HOST = 'localhost:56789'
+
+  WriteLogEntriesRequest = Google::Logging::V1::WriteLogEntriesRequest
+  WriteLogEntriesResponse = Google::Logging::V1::WriteLogEntriesResponse
+
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
     Fluent::Test::BufferedOutputTestDriver.new(
       Fluent::GoogleCloudOutput, tag).configure(conf, true)
+  end
+
+  class GoogleCloudOutputWithGRPCMock < Fluent::GoogleCloudOutput
+    def api_client
+      GRPCLoggingMockService.rpc_stub_class.new(
+        GRPC_MOCK_HOST, :this_channel_is_insecure)
+    end
+  end
+
+  def create_driver_with_grpc_mock(conf = APPLICATION_DEFAULT_CONFIG,
+                                   tag = 'test')
+    Fluent::Test::BufferedOutputTestDriver.new(
+      GoogleCloudOutputWithGRPCMock, tag).configure(conf, use_v1_config: true)
   end
 
   def test_configure_service_account_application_default
@@ -451,6 +474,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal COMPUTE_SERVICE_NAME, d.instance.service_name
   end
 
+  def test_grpc_used_when_use_grpc_is_true
+    setup_gce_metadata_stubs
+    d = create_driver(USE_GRPC_CONFIG)
+    assert_true d.instance.instance_variable_get(:@use_grpc)
+  end
+
+  def test_grpc_not_used_when_use_grpc_is_not_specified
+    setup_gce_metadata_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG)
+    assert_false d.instance.instance_variable_get(:@use_grpc)
+  end
+
   def test_metadata_overrides_on_gce
     # In this case we are overriding all configured parameters so we should
     # see all "custom" values rather than the ones from the metadata server.
@@ -525,6 +560,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit('message' => log_entry(0))
     d.run
     verify_log_entries(1, COMPUTE_PARAMS)
+  end
+
+  def test_one_log_with_grpc_on
+    setup_gce_metadata_stubs
+    service = setup_grpc_logging_stubs
+
+    d = create_driver_with_grpc_mock(USE_GRPC_CONFIG)
+    d.emit('message' => log_entry(0))
+    d.run
+
+    @requests_sent = service.requests_received
+    verify_grpc_log_entries(1, COMPUTE_PARAMS)
+    teardown_grpc_logging_stubs
   end
 
   def test_one_log_with_json_credentials
@@ -1300,6 +1348,51 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  class GRPCLoggingMockService < Google::Logging::V1::LoggingService::Service
+    attr_reader :requests_received
+
+    def initialize
+      super
+      @requests_received = []
+    end
+
+    def write_log_entries(request, _call)
+      @requests_received << request
+      WriteLogEntriesResponse.new
+    end
+
+    def list_logs(_request, _call)
+      Google::Logging::V1::ListLogServicesResponse.new
+    end
+
+    def list_log_services(_request, _call)
+      Google::Logging::V1::ListLogServicesResponse.new
+    end
+
+    def list_log_service_indexes(_request, _call)
+      Google::Logging::V1::ListLogServiceIndexesResponse.new
+    end
+
+    def delete_log(_request, _call)
+      Google::Protobuf::Empty.new
+    end
+  end
+
+  def setup_grpc_logging_stubs
+    @srv = GRPC::RpcServer.new
+    service = GRPCLoggingMockService.new
+    @srv.handle(service)
+    @srv.add_http2_port(GRPC_MOCK_HOST, :this_port_is_insecure)
+    @thread = Thread.new { @srv.run }
+    @srv.wait_till_running
+    service
+  end
+
+  def teardown_grpc_logging_stubs
+    @srv.stop
+    @thread.join
+  end
+
   def setup_auth_stubs
     # Used when loading credentials from a JSON file.
     stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
@@ -1410,6 +1503,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       "#{expected_labels.length} labels, got #{all_labels.length}"
   end
 
+  def check_grpc_labels(entry, common_labels, expected_labels)
+    all_labels ||= common_labels
+    all_labels.merge(entry.metadata.labels || {})
+    all_labels.each do |key, value|
+      assert value.is_a?(String), "Value '#{value}' for label '#{key}' " \
+        'is not a string: ' + value.class.name
+      assert expected_labels.key?(key), "Unexpected label '#{key}'"
+      assert_equal expected_labels[key], value, 'Value mismatch - expected ' \
+        "'#{expected_labels[key]}' in '#{key}' => '#{value}'"
+    end
+    assert_equal expected_labels.length, all_labels.length, 'Expected ' \
+      "#{expected_labels.length} labels, got #{all_labels.length}"
+  end
+
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload')
     i = 0
@@ -1428,6 +1535,41 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         assert_equal params[:service_name], entry['metadata']['serviceName']
         check_labels entry, batch['commonLabels'], params[:labels]
         yield(entry) if block_given?
+        i += 1
+        assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
+      end
+    end
+    assert i == n, "Number of entries #{i} does not match expected number #{n}"
+  end
+
+  def underscore(camel_cased_word)
+    camel_cased_word.to_s.gsub(/::/, '/')
+      .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+      .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+      .downcase
+  end
+
+  # The caller can optionally provide a block which is called for each entry.
+  def verify_grpc_log_entries(n, params, payload_type = 'textPayload')
+    i = 0
+    @requests_sent.each do |batch|
+      batch.entries.each do |entry|
+        unless payload_type.empty?
+          key = underscore(payload_type)
+          assert entry.send(key), 'LogEntry did not contain expected ' \
+            "#{key} key: " + entry.to_json
+          # Check the payload for textPayload, otherwise it's up to the caller.
+          if payload_type == 'textPayload'
+            assert_equal "test log entry #{i}", entry.text_payload,
+                         'Text payload not as expected'
+          end
+        end
+
+        assert_equal params[:zone], entry.metadata.zone
+        assert_equal params[:service_name], entry.metadata.service_name
+        check_grpc_labels entry, batch.common_labels, params[:labels]
+        yield(entry) if block_given?
+
         i += 1
         assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
       end
