@@ -31,3 +31,8 @@ Metrics/MethodLength:
 # Offense count: 3
 Metrics/PerceivedComplexity:
   Max: 50
+
+# Disable this because Google::Protobuf::Map has a method 'has_key?', and we do
+# not wanna get errors like '"has_key?" is deprecated, use 'key?' instead'.
+Style/DeprecatedHashMethods:
+  Enabled: false

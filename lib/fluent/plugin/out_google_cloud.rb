@@ -1078,8 +1078,8 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE &&
             @cloudfunctions_log_match
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
-        ts_secs = timestamp.strftime('%s')
-        ts_nanos = timestamp.strftime('%N')
+        ts_secs = Integer(timestamp.strftime('%s'))
+        ts_nanos = Integer(timestamp.strftime('%N'))
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1113,7 +1113,7 @@ module Fluent
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
       elsif @service_name == CONTAINER_SERVICE && \
-            entry.metadata.labels.key?("#{CONTAINER_SERVICE}/stream")
+            entry.metadata.labels.has_key?("#{CONTAINER_SERVICE}/stream")
         stream = entry.metadata.labels["#{CONTAINER_SERVICE}/stream"]
         if stream == 'stdout'
           return 'INFO'
@@ -1159,8 +1159,8 @@ module Fluent
       output.remote_ip = input.delete('remoteIp')
       output.referer = input.delete('referer')
       output.cache_hit = input.delete('cacheHit') == 'true'
-      output.validated_with_origin_server = \
-        input.delete('validatedWithOriginServer') == 'true'
+      output.cache_validated_with_origin_server = \
+        input.delete('cacheValidatedWithOriginServer') == 'true'
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
