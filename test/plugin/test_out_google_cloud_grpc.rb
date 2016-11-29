@@ -1,4 +1,4 @@
-# Copyright 2014 Google Inc. All rights reserved.
+# Copyright 2016 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,62 +51,27 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
   end
 
-  def test_configure_invalid_metadata_missing_project_id_grpc
-    setup_no_metadata_service_stubs
-    exception_count = 0
-    Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
-    begin
-      create_grpc_driver(USE_GRPC_CONFIG + CONFIG_MISSING_METADATA_PROJECT_ID)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Unable to obtain metadata parameters:'
-      assert error.message.include? 'project_id'
-      exception_count += 1
-    end
-    assert_equal 1, exception_count
-  end
-
-  def test_configure_invalid_metadata_missing_zone_no_metadata_service_grpc
-    setup_no_metadata_service_stubs
-    exception_count = 0
-    Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
-    begin
-      create_grpc_driver(USE_GRPC_CONFIG + CONFIG_MISSING_METADATA_ZONE)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Unable to obtain metadata parameters:'
-      assert error.message.include? 'zone'
-      exception_count += 1
-    end
-    assert_equal 1, exception_count
-  end
-
-  def test_configure_invalid_metadata_missing_vm_id_no_metadata_service_grpc
-    setup_no_metadata_service_stubs
-    exception_count = 0
-    Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
-    begin
-      create_grpc_driver(USE_GRPC_CONFIG + CONFIG_MISSING_METADATA_VM_ID)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Unable to obtain metadata parameters:'
-      assert error.message.include? 'vm_id'
-      exception_count += 1
-    end
-    assert_equal 1, exception_count
-  end
-
-  def test_configure_invalid_metadata_missing_all_no_metadata_service_grpc
+  def test_configure_invalid_metadata_missing_parts_grpc
     setup_no_metadata_service_stubs
     Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
-    exception_count = 0
-    begin
-      create_grpc_driver(USE_GRPC_CONFIG + CONFIG_MISSING_METADATA_ALL)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Unable to obtain metadata parameters:'
-      assert error.message.include? 'project_id'
-      assert error.message.include? 'zone'
-      assert error.message.include? 'vm_id'
-      exception_count += 1
+    { CONFIG_MISSING_METADATA_PROJECT_ID => ['project_id'],
+      CONFIG_MISSING_METADATA_ZONE => ['zone'],
+      CONFIG_MISSING_METADATA_VM_ID => ['vm_id'],
+      CONFIG_MISSING_METADATA_ALL => %w(project_id zone vm_id)
+    }.each_with_index do |(config, parts), index|
+      exception_count = 0
+      begin
+        create_grpc_driver(USE_GRPC_CONFIG + config)
+      rescue Fluent::ConfigError => error
+        assert error.message.include?('Unable to obtain metadata parameters:'),
+               "Index #{index} failed."
+        parts.each do |part|
+          assert error.message.include?(part), "Index #{index} failed."
+        end
+        exception_count += 1
+      end
+      assert_equal 1, exception_count, "Index #{index} failed."
     end
-    assert_equal 1, exception_count
   end
 
   def test_metadata_loading_grpc
@@ -153,61 +118,38 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
     assert_equal COMPUTE_SERVICE_NAME, d.instance.service_name
   end
 
-  def test_grpc_used_when_use_grpc_is_true_grpc
+  def test_configure_use_grpc
     setup_gce_metadata_stubs
-    d = create_grpc_driver
-    assert_true d.instance.instance_variable_get(:@use_grpc)
+    { create_driver => false,
+      create_grpc_driver => true }.each do |driver, value|
+      assert_equal value, driver.instance.instance_variable_get(:@use_grpc)
+    end
   end
 
-  def test_grpc_not_used_when_use_grpc_is_not_specified_grpc
-    setup_gce_metadata_stubs
-    d = create_driver
-    assert_false d.instance.instance_variable_get(:@use_grpc)
-  end
-
-  def test_metadata_overrides_on_gce_grpc
-    # In this case we are overriding all configured parameters so we should
-    # see all "custom" values rather than the ones from the metadata server.
-    setup_gce_metadata_stubs
-    d = create_grpc_driver(USE_GRPC_CONFIG + CUSTOM_METADATA_CONFIG)
-    d.run
-    assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
-    assert_equal CUSTOM_ZONE, d.instance.zone
-    assert_equal CUSTOM_VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
-  end
-
-  def test_metadata_partial_overrides_on_gce_grpc
-    # Similar to above, but we are not overriding project_id in this config
-    # so we should see the metadata value for project_id and "custom" otherwise.
-    setup_gce_metadata_stubs
-    d = create_grpc_driver(USE_GRPC_CONFIG + CONFIG_MISSING_METADATA_PROJECT_ID)
-    d.run
-    assert_equal PROJECT_ID, d.instance.project_id
-    assert_equal CUSTOM_ZONE, d.instance.zone
-    assert_equal CUSTOM_VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
-  end
-
-  def test_ec2_metadata_loading_grpc
-    setup_ec2_metadata_stubs
-    d = create_grpc_driver(USE_GRPC_CONFIG + CONFIG_EC2_PROJECT_ID)
-    d.run
-    assert_equal EC2_PROJECT_ID, d.instance.project_id
-    assert_equal EC2_PREFIXED_ZONE, d.instance.zone
-    assert_equal EC2_VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
-  end
-
-  def test_ec2_metadata_partial_override_grpc
-    setup_ec2_metadata_stubs
-    d = create_grpc_driver(USE_GRPC_CONFIG +
-                           CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID)
-    d.run
-    assert_equal EC2_PROJECT_ID, d.instance.project_id
-    assert_equal EC2_PREFIXED_ZONE, d.instance.zone
-    assert_equal CUSTOM_VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
+  def test_metadata_overrides_grpc
+    {
+      # In this case we are overriding all configured parameters so we should
+      # see all "custom" values rather than the ones from the metadata server.
+      CUSTOM_METADATA_CONFIG =>
+        ['gce', CUSTOM_PROJECT_ID, CUSTOM_ZONE, CUSTOM_VM_ID],
+      # Similar to above, but we are not overriding project_id in this config so
+      # we should see the metadata value for project_id and "custom" otherwise.
+      CONFIG_MISSING_METADATA_PROJECT_ID =>
+        ['gce', PROJECT_ID, CUSTOM_ZONE, CUSTOM_VM_ID],
+      CONFIG_EC2_PROJECT_ID =>
+        ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_ZONE, EC2_VM_ID],
+      CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID =>
+        ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_ZONE, CUSTOM_VM_ID]
+    }.each_with_index do |(config, parts), index|
+      send("setup_#{parts[0]}_metadata_stubs")
+      d = create_grpc_driver(USE_GRPC_CONFIG + config)
+      d.run
+      assert_equal parts[1], d.instance.project_id, "Index #{index} failed."
+      assert_equal parts[2], d.instance.zone, "Index #{index} failed."
+      assert_equal parts[3], d.instance.vm_id, "Index #{index} failed."
+      assert_equal false, d.instance.running_on_managed_vm,
+                   "Index #{index} failed."
+    end
   end
 
   def test_ec2_metadata_requires_project_id_grpc
@@ -571,15 +513,15 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
     setup_gce_metadata_stubs
     { 8 => 'ResourceExhausted',
       12 => 'Unimplemented',
-      16 => 'Unauthenticated' }.each do |code, message|
+      16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
       setup_grpc_logging_stubs(true, code, message) do
         d = create_grpc_driver(USE_GRPC_CONFIG, 'test',
                                GRPCLoggingMockFailingService.rpc_stub_class)
-        # The API Client should not retry this and the plugin should consume
-        # the exception.
+        # The API Client should not retry this and the plugin should consume the
+        # exception.
         d.emit('message' => log_entry(0))
         d.run
-        assert_equal 1, @failed_attempts.size
+        assert_equal 1, @failed_attempts.size, "Index #{index} failed."
       end
     end
   end
@@ -590,7 +532,7 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
       2 => 'Unknown',
       4 => 'DeadlineExceeded',
       13 => 'Internal',
-      14 => 'Unavailable' }.each do |code, message|
+      14 => 'Unavailable' }.each_with_index do |(code, message), index|
       setup_grpc_logging_stubs(true, code, message) do
         d = create_grpc_driver(USE_GRPC_CONFIG, 'test',
                                GRPCLoggingMockFailingService.rpc_stub_class)
@@ -607,8 +549,8 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
           assert_equal "#{code}:#{message}", error.message
           exception_count += 1
         end
-        assert_equal 1, @failed_attempts.size
-        assert_equal 1, exception_count
+        assert_equal 1, @failed_attempts.size, "Index #{index} failed."
+        assert_equal 1, exception_count, "Index #{index} failed."
       end
     end
   end
@@ -791,23 +733,10 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
     end
   end
 
-  def test_one_cloudfunctions_log_grpc
+  def test_cloudfunctions_log_grpc
     setup_gce_metadata_stubs
     setup_cloudfunctions_metadata_stubs
-    setup_grpc_logging_stubs do
-      d = create_grpc_driver(USE_GRPC_CONFIG, CLOUDFUNCTIONS_TAG)
-      d.emit(cloudfunctions_log_entry(0))
-      d.run
-      verify_grpc_log_entries(1, CLOUDFUNCTIONS_PARAMS) do |entry|
-        assert_equal 'DEBUG', entry['metadata']['severity'], entry
-      end
-    end
-  end
-
-  def test_multiple_cloudfunctions_logs_grpc
-    setup_gce_metadata_stubs
-    setup_cloudfunctions_metadata_stubs
-    [2, 3, 5, 11, 50].each do |n|
+    [1, 2, 3, 5, 11, 50].each do |n|
       setup_grpc_logging_stubs do
         d = create_grpc_driver(USE_GRPC_CONFIG, CLOUDFUNCTIONS_TAG)
         # The test driver doesn't clear its buffer of entries after running, so
@@ -817,30 +746,17 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
         n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
         d.run
         verify_grpc_log_entries(n, CLOUDFUNCTIONS_PARAMS) do |entry|
-          assert_equal 'DEBUG', entry['metadata']['severity'], entry
+          assert_equal 'DEBUG', entry['metadata']['severity'],
+                       "Test with #{n} logs failed. \n#{entry}"
         end
       end
     end
   end
 
-  def test_one_cloudfunctions_log_text_not_matched_grpc
+  def test_cloudfunctions_logs_text_not_matched_grpc
     setup_gce_metadata_stubs
     setup_cloudfunctions_metadata_stubs
-    setup_grpc_logging_stubs do
-      d = create_grpc_driver(USE_GRPC_CONFIG, CLOUDFUNCTIONS_TAG)
-      d.emit(cloudfunctions_log_entry_text_not_matched(0))
-      d.run
-      verify_grpc_log_entries(
-        1, CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS) do |entry|
-        assert_equal 'INFO', entry['metadata']['severity'], entry
-      end
-    end
-  end
-
-  def test_multiple_cloudfunctions_logs_text_not_matched_grpc
-    setup_gce_metadata_stubs
-    setup_cloudfunctions_metadata_stubs
-    [2, 3, 5, 11, 50].each do |n|
+    [1, 2, 3, 5, 11, 50].each do |n|
       setup_grpc_logging_stubs do
         d = create_grpc_driver(USE_GRPC_CONFIG, CLOUDFUNCTIONS_TAG)
         # The test driver doesn't clear its buffer of entries after running, so
@@ -851,22 +767,9 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
         d.run
         verify_grpc_log_entries(
           n, CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS) do |entry|
-          assert_equal 'INFO', entry['metadata']['severity'], entry
+          assert_equal 'INFO', entry['metadata']['severity'],
+                       "Test with #{n} logs failed. \n#{entry}"
         end
-      end
-    end
-  end
-
-  def test_one_cloudfunctions_log_tag_not_matched_grpc
-    setup_gce_metadata_stubs
-    setup_cloudfunctions_metadata_stubs
-    setup_grpc_logging_stubs do
-      d = create_grpc_driver(USE_GRPC_CONFIG, CONTAINER_TAG)
-      d.emit(cloudfunctions_log_entry(0))
-      d.run
-      verify_grpc_log_entries(1, CONTAINER_FROM_TAG_PARAMS, '') do |entry|
-        assert_equal '[D][2015-09-25T12:34:56.789Z][123-0] test log entry 0',
-                     entry['textPayload'], entry
       end
     end
   end
@@ -874,7 +777,7 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
   def test_multiple_cloudfunctions_logs_tag_not_matched_grpc
     setup_gce_metadata_stubs
     setup_cloudfunctions_metadata_stubs
-    [2, 3, 5, 11, 50].each do |n|
+    [1, 2, 3, 5, 11, 50].each do |n|
       setup_grpc_logging_stubs do
         d = create_grpc_driver(USE_GRPC_CONFIG, CONTAINER_TAG)
         # The test driver doesn't clear its buffer of entries after running, so
@@ -887,7 +790,8 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
         params = CONTAINER_FROM_TAG_PARAMS
         verify_grpc_log_entries(n, params, '') do |entry|
           assert_equal '[D][2015-09-25T12:34:56.789Z][123-0] test log entry ' \
-                       "#{i}", entry['textPayload'], entry
+                       "#{i}", entry['textPayload'],
+                       "Test with #{n} logs failed. \n#{entry}"
           i += 1
         end
       end
