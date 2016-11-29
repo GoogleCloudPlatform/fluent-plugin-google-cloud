@@ -923,6 +923,22 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
     end
   end
 
+  def test_http_request_without_referer_from_record_grpc
+    setup_gce_metadata_stubs
+    setup_grpc_logging_stubs do
+      d = create_grpc_driver
+      message_without_referer = HTTP_REQUEST_MESSAGE_GRPC.reject do |key, _|
+        key == 'referer'
+      end
+      d.emit('httpRequest' => message_without_referer)
+      d.run
+      verify_grpc_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+        assert_equal message_without_referer, entry['httpRequest'], entry
+        assert_nil entry['structPayload']['fields']['httpRequest'], entry
+      end
+    end
+  end
+
   def test_http_request_when_not_hash_grpc
     setup_gce_metadata_stubs
     setup_grpc_logging_stubs do

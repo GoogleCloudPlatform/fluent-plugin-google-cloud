@@ -337,7 +337,9 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
     'responseSize' => 65,
     'userAgent' => 'USER AGENT 1.0',
     'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/'
+    'referer' => 'http://referer/',
+    'cacheHit' => true,
+    'cacheValidatedWithOriginServer' => true
   }
 
   def uri_for_log(params)
