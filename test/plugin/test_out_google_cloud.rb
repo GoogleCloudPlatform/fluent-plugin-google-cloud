@@ -41,6 +41,23 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # generic attributes
   HOSTNAME = Socket.gethostname
+  WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
+
+  APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
+  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
+  CONTAINER_SERVICE_NAME = 'container.googleapis.com'
+  CLOUDFUNCTIONS_SERVICE_NAME = 'cloudfunctions.googleapis.com'
+  DATAFLOW_SERVICE_NAME = 'dataflow.googleapis.com'
+  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
+  ML_SERVICE_NAME = 'ml.googleapis.com'
+
+  APPENGINE_RESOURCE_TYPE = 'gae_app'
+  CLOUDFUNCTIONS_RESOURCE_TYPE = 'cloud_function'
+  COMPUTE_RESOURCE_TYPE = 'gce_instance'
+  CONTAINER_RESOURCE_TYPE = 'container'
+  DATAFLOW_RESOURCE_TYPE = 'dataflow_step'
+  EC2_RESOURCE_TYPE = 'aws_ec2_instance'
+  ML_RESOURCE_TYPE = 'ml_job'
 
   # attributes used for the GCE metadata service
   PROJECT_ID = 'test-project-id'
@@ -97,6 +114,21 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'
   CLOUDFUNCTIONS_POD_NAME = 'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'
   CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'
+
+  # Dataflow specific labels
+  DATAFLOW_REGION = 'us-central1'
+  DATAFLOW_JOB_NAME = 'job_name_1'
+  DATAFLOW_JOB_ID = 'job_id_1'
+  DATAFLOW_STEP_ID = 'step_1'
+  DATAFLOW_TAG = 'dataflow.googleapis.com/worker'
+
+  # ML specific labels
+  ML_REGION = 'us-central1'
+  ML_JOB_ID = 'job_name_1'
+  ML_TASK_NAME = 'task_name_1'
+  ML_TRIAL_ID = 'trial_id_1'
+  ML_LOG_AREA = 'log_area_1'
+  ML_TAG = 'master-replica-0'
 
   # Parameters used for authentication
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
@@ -169,36 +201,56 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     vm_id #{CUSTOM_VM_ID}
   )
 
-  # Service configurations for various services
-  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
-  APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
-  CONTAINER_SERVICE_NAME = 'container.googleapis.com'
-  CLOUDFUNCTIONS_SERVICE_NAME = 'cloudfunctions.googleapis.com'
-  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
+  CONFIG_DATAFLOW = %(
+    subservice_name "#{DATAFLOW_SERVICE_NAME}"
+    labels {
+      "#{DATAFLOW_SERVICE_NAME}/region" : "#{DATAFLOW_REGION}",
+      "#{DATAFLOW_SERVICE_NAME}/job_name" : "#{DATAFLOW_JOB_NAME}",
+      "#{DATAFLOW_SERVICE_NAME}/job_id" : "#{DATAFLOW_JOB_ID}"
+    }
+    label_map { "step": "#{DATAFLOW_SERVICE_NAME}/step_id" }
+  )
 
+  CONFIG_ML = %(
+    subservice_name "#{ML_SERVICE_NAME}"
+    labels {
+      "#{ML_SERVICE_NAME}/job_id" : "#{ML_JOB_ID}",
+      "#{ML_SERVICE_NAME}/task_name" : "#{ML_TASK_NAME}",
+      "#{ML_SERVICE_NAME}/trial_id" : "#{ML_TRIAL_ID}"
+    }
+    label_map { "name": "#{ML_SERVICE_NAME}/job_id/log_area" }
+  )
+
+  # Service configurations for various services
   COMPUTE_PARAMS = {
-    service_name: COMPUTE_SERVICE_NAME,
+    resource: {
+      type: COMPUTE_RESOURCE_TYPE,
+      labels: {
+        'instance_id' => VM_ID,
+        'zone' => ZONE
+      }
+    },
     log_name: 'test',
     project_id: PROJECT_ID,
-    zone: ZONE,
     labels: {
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
 
   VMENGINE_PARAMS = {
-    service_name: APPENGINE_SERVICE_NAME,
+    resource: {
+      type: APPENGINE_RESOURCE_TYPE,
+      labels: {
+        'module_id' => MANAGED_VM_BACKEND_NAME,
+        'version_id' => MANAGED_VM_BACKEND_VERSION
+      }
+    },
     log_name: "#{APPENGINE_SERVICE_NAME}%2Ftest",
     project_id: PROJECT_ID,
-    zone: ZONE,
     labels: {
-      "#{APPENGINE_SERVICE_NAME}/module_id" => MANAGED_VM_BACKEND_NAME,
-      "#{APPENGINE_SERVICE_NAME}/version_id" => MANAGED_VM_BACKEND_VERSION,
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
+      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
     }
   }
 
@@ -206,41 +258,45 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                   "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
 
   CONTAINER_FROM_METADATA_PARAMS = {
-    service_name: CONTAINER_SERVICE_NAME,
+    resource: {
+      type: CONTAINER_RESOURCE_TYPE,
+      labels: {
+        'cluster_name' => CONTAINER_CLUSTER_NAME,
+        'namespace_id' => CONTAINER_NAMESPACE_ID,
+        'instance_id' => VM_ID,
+        'pod_id' => CONTAINER_POD_ID,
+        'container_name' => CONTAINER_CONTAINER_NAME,
+        'zone' => ZONE
+      }
+    },
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
-    zone: ZONE,
     labels: {
-      "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
-      "#{CONTAINER_SERVICE_NAME}/cluster_name" => CONTAINER_CLUSTER_NAME,
       "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
-      "#{CONTAINER_SERVICE_NAME}/namespace_id" => CONTAINER_NAMESPACE_ID,
       "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/pod_id" => CONTAINER_POD_ID,
-      "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
       "#{CONTAINER_SERVICE_NAME}/stream" => CONTAINER_STREAM,
       "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
 
   # Almost the same as from metadata, but missing namespace_id and pod_id.
   CONTAINER_FROM_TAG_PARAMS = {
-    service_name: CONTAINER_SERVICE_NAME,
+    resource: {
+      type: CONTAINER_RESOURCE_TYPE,
+      labels: {
+        'cluster_name' => CONTAINER_CLUSTER_NAME,
+        'instance_id' => VM_ID,
+        'container_name' => CONTAINER_CONTAINER_NAME,
+        'zone' => ZONE
+      }
+    },
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
-    zone: ZONE,
     labels: {
-      "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
-      "#{CONTAINER_SERVICE_NAME}/cluster_name" => CONTAINER_CLUSTER_NAME,
       "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
       "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/container_name" => CONTAINER_CONTAINER_NAME,
       "#{CONTAINER_SERVICE_NAME}/stream" => CONTAINER_STREAM,
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
@@ -250,61 +306,109 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                         "#{CLOUDFUNCTIONS_CONTAINER_NAME}"
 
   CLOUDFUNCTIONS_PARAMS = {
-    service_name: CLOUDFUNCTIONS_SERVICE_NAME,
+    resource: {
+      type: CLOUDFUNCTIONS_RESOURCE_TYPE,
+      labels: {
+        'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
+        'region' => CLOUDFUNCTIONS_REGION
+      }
+    },
     log_name: 'cloud-functions',
     project_id: PROJECT_ID,
-    zone: ZONE,
     labels: {
       'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
-      "#{CLOUDFUNCTIONS_SERVICE_NAME}/function_name" =>
-        CLOUDFUNCTIONS_FUNCTION_NAME,
-      "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
+      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
     }
   }
 
   CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
-    service_name: CLOUDFUNCTIONS_SERVICE_NAME,
+    resource: {
+      type: CLOUDFUNCTIONS_RESOURCE_TYPE,
+      labels: {
+        'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
+        'region' => CLOUDFUNCTIONS_REGION
+      }
+    },
     log_name: 'cloud-functions',
     project_id: PROJECT_ID,
-    zone: ZONE,
     labels: {
-      "#{CLOUDFUNCTIONS_SERVICE_NAME}/function_name" =>
-        CLOUDFUNCTIONS_FUNCTION_NAME,
-      "#{CLOUDFUNCTIONS_SERVICE_NAME}/region" => CLOUDFUNCTIONS_REGION,
       "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
       "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
       "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
+      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+    }
+  }
+
+  DATAFLOW_PARAMS = {
+    resource: {
+      type: DATAFLOW_RESOURCE_TYPE,
+      labels: {
+        'job_name' => DATAFLOW_JOB_NAME,
+        'job_id' => DATAFLOW_JOB_ID,
+        'step_id' => DATAFLOW_STEP_ID,
+        'region' => DATAFLOW_REGION
+      }
+    },
+    log_name: DATAFLOW_TAG,
+    project_id: PROJECT_ID,
+    labels: {
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
+      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+    }
+  }
+
+  ML_PARAMS = {
+    resource: {
+      type: ML_RESOURCE_TYPE,
+      labels: {
+        'job_id' => ML_JOB_ID,
+        'task_name' => ML_TASK_NAME
+      }
+    },
+    log_name: ML_TAG,
+    project_id: PROJECT_ID,
+    labels: {
+      "#{ML_SERVICE_NAME}/trial_id" => ML_TRIAL_ID,
+      "#{ML_SERVICE_NAME}/job_id/log_area" => ML_LOG_AREA,
+      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
+      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
+      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
     }
   }
 
   CUSTOM_PARAMS = {
-    service_name: COMPUTE_SERVICE_NAME,
+    resource: {
+      type: COMPUTE_RESOURCE_TYPE,
+      labels: {
+        'instance_id' => CUSTOM_VM_ID,
+        'zone' => CUSTOM_ZONE
+      }
+    },
     log_name: 'test',
     project_id: CUSTOM_PROJECT_ID,
-    zone: CUSTOM_ZONE,
     labels: {
-      "#{COMPUTE_SERVICE_NAME}/resource_type" => 'instance',
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => CUSTOM_VM_ID,
       "#{COMPUTE_SERVICE_NAME}/resource_name" => CUSTOM_HOSTNAME
     }
   }
 
   EC2_PARAMS = {
-    service_name: EC2_SERVICE_NAME,
+    resource: {
+      type: EC2_RESOURCE_TYPE,
+      labels: {
+        'instance_id' => EC2_VM_ID,
+        'region' => EC2_PREFIXED_ZONE,
+        'aws_account' => EC2_ACCOUNT_ID
+      }
+    },
     log_name: 'test',
     project_id: EC2_PROJECT_ID,
-    zone: EC2_PREFIXED_ZONE,
     labels: {
-      "#{EC2_SERVICE_NAME}/resource_type" => 'instance',
-      "#{EC2_SERVICE_NAME}/resource_id" => EC2_VM_ID,
-      "#{EC2_SERVICE_NAME}/account_id" => EC2_ACCOUNT_ID,
       "#{EC2_SERVICE_NAME}/resource_name" => HOSTNAME
     }
   }
@@ -319,7 +423,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'remoteIp' => '55.55.55.55',
     'referer' => 'http://referer/',
     'cacheHit' => false,
-    'validatedWithOriginServer' => true
+    'cacheValidatedWithOriginServer' => true
   }
 
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
@@ -443,12 +547,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_gce_used_when_detect_subservice_is_false
     setup_gce_metadata_stubs
-    # This would cause the service to be container.googleapis.com if not for the
-    # detect_subservice=false config.
+    # This would cause the resource type to be CONTAINER_RESOURCE_TYPE if not
+    # for the detect_subservice=false config.
     setup_container_metadata_stubs
     d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
     d.run
-    assert_equal COMPUTE_SERVICE_NAME, d.instance.service_name
+    assert_equal COMPUTE_RESOURCE_TYPE, d.instance.resource.type
   end
 
   def test_metadata_overrides_on_gce
@@ -581,11 +685,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver
     d.emit('msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000)
     d.run
-    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      assert_equal 3, entry['structPayload'].size, entry
-      assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-      assert_equal 'test', entry['structPayload']['tag2'], entry
-      assert_equal 5000, entry['structPayload']['data'], entry
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      assert_equal 3, entry['jsonPayload'].size, entry
+      assert_equal 'test log entry 0', entry['jsonPayload']['msg'], entry
+      assert_equal 'test', entry['jsonPayload']['tag2'], entry
+      assert_equal 5000, entry['jsonPayload']['data'], entry
     end
   end
 
@@ -620,11 +724,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       if log_index == 1
         assert entry.key?('textPayload'), 'Entry did not have textPayload'
       else
-        assert entry.key?('structPayload'), 'Entry did not have structPayload'
-        assert_equal 3, entry['structPayload'].size, entry
-        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-        assert_equal 'test', entry['structPayload']['tag2'], entry
-        assert_equal 5000, entry['structPayload']['data'], entry
+        assert entry.key?('jsonPayload'), 'Entry did not have jsonPayload'
+        assert_equal 3, entry['jsonPayload'].size, entry
+        assert_equal 'test log entry 0', entry['jsonPayload']['msg'], entry
+        assert_equal 'test', entry['jsonPayload']['tag2'], entry
+        assert_equal 5000, entry['jsonPayload']['data'], entry
       end
     end
   end
@@ -659,9 +763,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
       assert_equal expected_ts[verify_index].tv_sec,
-                   entry['metadata']['timestamp']['seconds'], entry
+                   entry['timestamp']['seconds'], entry
       assert_equal expected_ts[verify_index].tv_nsec,
-                   entry['metadata']['timestamp']['nanos'], entry
+                   entry['timestamp']['nanos'], entry
       verify_index += 1
     end
   end
@@ -673,9 +777,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     # if timestamp is not a hash it is passed through to the struct payload.
     d.emit('message' => log_entry(0), 'timestamp' => 'not-a-hash')
     d.run
-    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      assert_equal 2, entry['structPayload'].size, entry
-      assert_equal 'not-a-hash', entry['structPayload']['timestamp'], entry
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      assert_equal 2, entry['jsonPayload'].size, entry
+      assert_equal 'not-a-hash', entry['jsonPayload']['timestamp'], entry
     end
   end
 
@@ -696,7 +800,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
       assert_equal expected_severity[verify_index],
-                   entry['metadata']['severity'], entry
+                   entry['severity'], entry
       verify_index += 1
     end
   end
@@ -777,10 +881,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     params[:labels]['sent_label_1'] = 'value1'
     params[:labels]['foo.googleapis.com/bar'] = 'value2'
     params[:labels]['label3'] = 'value3'
-    verify_log_entries(1, params, 'structPayload') do |entry|
-      assert_equal 2, entry['structPayload'].size, entry
-      assert_equal 'test log entry 0', entry['structPayload']['message'], entry
-      assert_equal 'value4', entry['structPayload']['not_a_label'], entry
+    verify_log_entries(1, params, 'jsonPayload') do |entry|
+      assert_equal 2, entry['jsonPayload'].size, entry
+      assert_equal 'test log entry 0', entry['jsonPayload']['message'], entry
+      assert_equal 'value4', entry['jsonPayload']['not_a_label'], entry
     end
   end
 
@@ -814,18 +918,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 400, body: 'Bad Request')
     d = create_driver
     d.emit('message' => log_entry(0))
     d.run
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
   # All credentials errors resolve to a 401.
   def test_client_401
     setup_gce_metadata_stubs
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 401, body: 'Unauthorized')
     d = create_driver
     d.emit('message' => log_entry(0))
@@ -834,14 +938,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     rescue Google::Apis::AuthorizationError => error
       assert_equal 'Unauthorized', error.message
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
   end
 
   def test_server_error
     setup_gce_metadata_stubs
     # The API client should retry this once, then throw an exception which
     # gets propagated through the plugin.
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 500, body: 'Server Error')
     d = create_driver
     d.emit('message' => log_entry(0))
@@ -852,7 +956,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal 'Server error', error.message
       exception_count += 1
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
     assert_equal 1, exception_count
   end
 
@@ -890,11 +994,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit(container_log_entry_with_metadata(log_entry(0)))
     d.run
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS) do |entry|
-      assert_equal CONTAINER_SECONDS_EPOCH, \
-                   entry['metadata']['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, \
-                   entry['metadata']['timestamp']['nanos'], entry
-      assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal CONTAINER_SEVERITY, entry['severity'], entry
     end
   end
 
@@ -912,10 +1014,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       d.run
       verify_log_entries(n, CONTAINER_FROM_METADATA_PARAMS) do |entry|
         assert_equal CONTAINER_SECONDS_EPOCH, \
-                     entry['metadata']['timestamp']['seconds'], entry
-        assert_equal CONTAINER_NANOS, \
-                     entry['metadata']['timestamp']['nanos'], entry
-        assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+                     entry['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
       end
     end
   end
@@ -929,10 +1030,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.run
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS) do |entry|
       assert_equal CONTAINER_SECONDS_EPOCH, \
-                   entry['metadata']['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, \
-                   entry['metadata']['timestamp']['nanos'], entry
-      assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+                   entry['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal CONTAINER_SEVERITY, entry['severity'], entry
     end
   end
 
@@ -950,10 +1050,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       d.run
       verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS) do |entry|
         assert_equal CONTAINER_SECONDS_EPOCH, \
-                     entry['metadata']['timestamp']['seconds'], entry
-        assert_equal CONTAINER_NANOS, \
-                     entry['metadata']['timestamp']['nanos'], entry
-        assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+                     entry['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
       end
     end
   end
@@ -970,10 +1069,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     ) { |_, oldval, newval| oldval.merge(newval) }
     verify_log_entries(1, expected_params) do |entry|
       assert_equal CONTAINER_SECONDS_EPOCH, \
-                   entry['metadata']['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, \
-                   entry['metadata']['timestamp']['nanos'], entry
-      assert_equal 'ERROR', entry['metadata']['severity'], entry
+                   entry['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal 'ERROR', entry['severity'], entry
     end
   end
 
@@ -987,16 +1085,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                                              '"severity": "WARNING"}'))
     d.run
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS,
-                       'structPayload') do |entry|
-      assert_equal 3, entry['structPayload'].size, entry
-      assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-      assert_equal 'test', entry['structPayload']['tag2'], entry
-      assert_equal 5000, entry['structPayload']['data'], entry
+                       'jsonPayload') do |entry|
+      assert_equal 3, entry['jsonPayload'].size, entry
+      assert_equal 'test log entry 0', entry['jsonPayload']['msg'], entry
+      assert_equal 'test', entry['jsonPayload']['tag2'], entry
+      assert_equal 5000, entry['jsonPayload']['data'], entry
       assert_equal CONTAINER_SECONDS_EPOCH, \
-                   entry['metadata']['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, \
-                   entry['metadata']['timestamp']['nanos'], entry
-      assert_equal 'WARNING', entry['metadata']['severity'], entry
+                   entry['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal 'WARNING', entry['severity'], entry
     end
   end
 
@@ -1010,16 +1107,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                                '"severity": "W"}'))
     d.run
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS,
-                       'structPayload') do |entry|
-      assert_equal 3, entry['structPayload'].size, entry
-      assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-      assert_equal 'test', entry['structPayload']['tag2'], entry
-      assert_equal 5000, entry['structPayload']['data'], entry
-      assert_equal CONTAINER_SECONDS_EPOCH, \
-                   entry['metadata']['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, \
-                   entry['metadata']['timestamp']['nanos'], entry
-      assert_equal 'WARNING', entry['metadata']['severity'], entry
+                       'jsonPayload') do |entry|
+      assert_equal 3, entry['jsonPayload'].size, entry
+      assert_equal 'test log entry 0', entry['jsonPayload']['msg'], entry
+      assert_equal 'test', entry['jsonPayload']['tag2'], entry
+      assert_equal 5000, entry['jsonPayload']['data'], entry
+      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal 'WARNING', entry['severity'], entry
     end
   end
 
@@ -1031,7 +1126,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit(cloudfunctions_log_entry(0))
     d.run
     verify_log_entries(1, CLOUDFUNCTIONS_PARAMS) do |entry|
-      assert_equal 'DEBUG', entry['metadata']['severity'], entry
+      assert_equal 'DEBUG', entry['severity'], entry
     end
   end
 
@@ -1048,7 +1143,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
       d.run
       verify_log_entries(n, CLOUDFUNCTIONS_PARAMS) do |entry|
-        assert_equal 'DEBUG', entry['metadata']['severity'], entry
+        assert_equal 'DEBUG', entry['severity'], entry
       end
     end
   end
@@ -1061,7 +1156,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit(cloudfunctions_log_entry_text_not_matched(0))
     d.run
     verify_log_entries(1, CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS) do |entry|
-      assert_equal 'INFO', entry['metadata']['severity'], entry
+      assert_equal 'INFO', entry['severity'], entry
     end
   end
 
@@ -1078,7 +1173,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       n.times { |i| d.emit(cloudfunctions_log_entry_text_not_matched(i)) }
       d.run
       verify_log_entries(n, CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS) do |entry|
-        assert_equal 'INFO', entry['metadata']['severity'], entry
+        assert_equal 'INFO', entry['severity'], entry
       end
     end
   end
@@ -1118,6 +1213,24 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_one_dataflow_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(CONFIG_DATAFLOW, DATAFLOW_TAG)
+    d.emit(dataflow_log_entry(0))
+    d.run
+    verify_log_entries(1, DATAFLOW_PARAMS)
+  end
+
+  def test_one_ml_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs
+    d = create_driver(CONFIG_ML, ML_TAG)
+    d.emit(ml_log_entry(0))
+    d.run
+    verify_log_entries(1, ML_PARAMS)
+  end
+
   def test_http_request_from_record
     setup_gce_metadata_stubs
     setup_logging_stubs
@@ -1126,7 +1239,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.run
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
       assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
-      assert_equal nil, entry['structPayload']['httpRequest'], entry
+      assert_equal nil, entry['jsonPayload']['httpRequest'], entry
     end
   end
 
@@ -1138,7 +1251,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.run
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
       assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
-      assert_equal 'value', entry['structPayload']['httpRequest']['otherKey'],
+      assert_equal 'value', entry['jsonPayload']['httpRequest']['otherKey'],
                    entry
     end
   end
@@ -1149,8 +1262,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver(APPLICATION_DEFAULT_CONFIG)
     d.emit('httpRequest' => 'a_string')
     d.run
-    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      assert_equal 'a_string', entry['structPayload']['httpRequest'], entry
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      assert_equal 'a_string', entry['jsonPayload']['httpRequest'], entry
       assert_equal nil, entry['httpRequest'], entry
     end
   end
@@ -1235,11 +1348,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
-  def uri_for_log(params)
-    'https://logging.googleapis.com/v1beta3/projects/' + params[:project_id] +
-      '/logs/' + params[:log_name] + '/entries:write'
-  end
-
   def stub_metadata_request(metadata_path, response_body)
     stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' +
                  metadata_path)
@@ -1287,13 +1395,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
-     CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
-     EC2_PARAMS].each do |params|
-      stub_request(:post, uri_for_log(params)).to_return do |request|
-        @logs_sent << JSON.parse(request.body)
-        { body: '' }
-      end
+    stub_request(:post, WRITE_LOG_ENTRIES_URI).to_return do |request|
+      @logs_sent << JSON.parse(request.body)
+      { body: '' }
     end
   end
 
@@ -1388,42 +1492,68 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     }
   end
 
+  def dataflow_log_entry(i)
+    {
+      step: DATAFLOW_STEP_ID,
+      message: log_entry(i)
+    }
+  end
+
+  def ml_log_entry(i)
+    {
+      name: ML_LOG_AREA,
+      message: log_entry(i)
+    }
+  end
+
   def log_entry(i)
     'test log entry ' + i.to_s
   end
 
-  def check_labels(entry, common_labels, expected_labels)
-    # TODO(salty) test/handle overlap between common_labels and entry labels
-    all_labels ||= common_labels
-    all_labels.merge!(entry['metadata']['labels'] || {})
-    all_labels.each do |key, value|
+  def check_labels(labels, expected_labels)
+    labels.each do |key, value|
       assert value.is_a?(String), "Value #{value} for label #{key} " \
         'is not a string: ' + value.class.name
       assert expected_labels.key?(key), "Unexpected label #{key} => #{value}"
       assert_equal expected_labels[key], value, 'Value mismatch - expected ' \
         "#{expected_labels[key]} in #{key} => #{value}"
     end
-    assert_equal expected_labels.length, all_labels.length, 'Expected ' \
-      "#{expected_labels.length} labels, got #{all_labels.length}"
+    assert_equal expected_labels.length, labels.length, 'Expected ' \
+      "#{expected_labels.length} labels: #{expected_labels}, got " \
+      "#{labels.length} labels: #{labels}"
   end
 
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload')
     i = 0
-    @logs_sent.each do |batch|
-      batch['entries'].each do |entry|
+    @logs_sent.each do |request|
+      request['entries'].each do |entry|
         unless payload_type.empty?
           assert entry.key?(payload_type), 'Entry did not contain expected ' \
             "#{payload_type} key: " + entry.to_s
           # Check the payload for textPayload, otherwise it's up to the caller.
           if payload_type == 'textPayload'
-            assert_equal "test log entry #{i}", entry['textPayload'], batch
+            assert_equal "test log entry #{i}", entry['textPayload'], request
           end
         end
 
-        assert_equal params[:zone], entry['metadata']['zone']
-        assert_equal params[:service_name], entry['metadata']['serviceName']
-        check_labels entry, batch['commonLabels'], params[:labels]
+        # per-entry resource or log_name overrides the corresponding field
+        # from the request.  Labels are merged, with the per-entry label
+        # taking precedence in case of overlap.
+        resource = \
+          entry.key?('resource') ? entry['resource'] : request['resource']
+        log_name = \
+          entry.key?('logName') ? entry['logName'] : request['logName']
+        # TODO: test/handle overlap between common_labels and entry labels?
+        labels ||= request['labels']
+        labels.merge!(entry['labels'] || {})
+
+        assert_equal \
+          "projects/#{params[:project_id]}/logs/#{params[:log_name]}",
+          log_name
+        assert_equal params[:resource][:type], resource['type']
+        check_labels resource['labels'], params[:resource][:labels]
+        check_labels labels, params[:labels]
         yield(entry) if block_given?
         i += 1
         assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
