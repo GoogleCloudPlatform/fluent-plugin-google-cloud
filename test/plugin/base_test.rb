@@ -40,8 +40,6 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
     @logs_sent = []
   end
 
-  private
-
   # generic attributes
   HOSTNAME = Socket.gethostname
 
@@ -342,6 +340,8 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
     'cacheValidatedWithOriginServer' => true
   }
 
+  private
+
   def uri_for_log(params)
     'https://logging.googleapis.com/v1beta3/projects/' + params[:project_id] +
       '/logs/' + params[:log_name] + '/entries:write'
@@ -382,7 +382,7 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
   end
 
   def setup_ec2_metadata_stubs
-    # Stub the root, used for platform detection
+    # Stub the root, used for platform detection.
     stub_request(:get, 'http://169.254.169.254')
       .to_return(status: 200, headers: { 'Server' => 'EC2ws' })
 
@@ -404,6 +404,7 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
   WriteLogEntriesRequest = Google::Logging::V1::WriteLogEntriesRequest
   WriteLogEntriesResponse = Google::Logging::V1::WriteLogEntriesResponse
 
+  # Google Cloud Fluent output stub with grpc mock.
   class GoogleCloudOutputWithGRPCMock < Fluent::GoogleCloudOutput
     def initialize(grpc_stub)
       @grpc_stub = grpc_stub
@@ -421,8 +422,9 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
     end
   end
 
-  def create_grpc_driver(conf = USE_GRPC_CONFIG, tag = 'test',
+  def create_grpc_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
                          grpc_stub = GRPCLoggingMockService.rpc_stub_class)
+    conf += USE_GRPC_CONFIG
     Fluent::Test::BufferedOutputTestDriver.new(
       GoogleCloudOutputWithGRPCMock.new(grpc_stub), tag).configure(
         conf, use_v1_config: true)
@@ -437,8 +439,10 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
         { body: '' }
       end
     end
+    yield
   end
 
+  # GRPC logging mock that successfully logs the records.
   class GRPCLoggingMockService < Google::Logging::V1::LoggingService::Service
     def initialize(requests_received)
       super()
@@ -467,6 +471,7 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
     end
   end
 
+  # GRPC logging mock that fails and returns server side or client side errors.
   class GRPCLoggingMockFailingService <
       Google::Logging::V1::LoggingService::Service
     # 'code_sent' and 'message_sent' are references of external variables. We
@@ -673,5 +678,934 @@ class GoogleCloudPluginBaseTest < Test::Unit::TestCase
       @logs_sent << JSON.parse(batch.to_json)
     end
     verify_log_entries(n, params, payload_type, &block)
+  end
+
+  # Shared tests
+
+  def verify_configure_service_account_application_default(create_driver_func)
+    setup_gce_metadata_stubs
+    d = create_driver_func.call
+    assert_equal HOSTNAME, d.instance.vm_name
+  end
+
+  def verify_configure_service_account_private_key(create_driver_func)
+    # Using out-of-date config method.
+    setup_gce_metadata_stubs
+    exception_count = 0
+    begin
+      create_driver_func.call(PRIVATE_KEY_CONFIG)
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Please remove configuration parameters'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
+  end
+
+  def verify_configure_custom_metadata(create_driver_func)
+    setup_no_metadata_service_stubs
+    d = create_driver_func.call(CUSTOM_METADATA_CONFIG)
+    assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
+    assert_equal CUSTOM_ZONE, d.instance.zone
+    assert_equal CUSTOM_VM_ID, d.instance.vm_id
+  end
+
+  def verify_configure_invalid_metadata_missing_parts(create_driver_func)
+    setup_no_metadata_service_stubs
+    Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
+    { CONFIG_MISSING_METADATA_PROJECT_ID => ['project_id'],
+      CONFIG_MISSING_METADATA_ZONE => ['zone'],
+      CONFIG_MISSING_METADATA_VM_ID => ['vm_id'],
+      CONFIG_MISSING_METADATA_ALL => %w(project_id zone vm_id)
+    }.each_with_index do |(config, parts), index|
+      exception_count = 0
+      begin
+        create_driver_func.call(config)
+      rescue Fluent::ConfigError => error
+        assert error.message.include?('Unable to obtain metadata parameters:'),
+               "Index #{index} failed."
+        parts.each do |part|
+          assert error.message.include?(part), "Index #{index} failed."
+        end
+        exception_count += 1
+      end
+      assert_equal 1, exception_count, "Index #{index} failed."
+    end
+  end
+
+  def verify_metadata_loading(create_driver_func)
+    setup_gce_metadata_stubs
+    d = create_driver_func.call
+    d.run
+    assert_equal PROJECT_ID, d.instance.project_id
+    assert_equal ZONE, d.instance.zone
+    assert_equal VM_ID, d.instance.vm_id
+    assert_equal false, d.instance.running_on_managed_vm
+  end
+
+  def verify_managed_vm_metadata_loading(create_driver_func)
+    setup_gce_metadata_stubs
+    setup_managed_vm_metadata_stubs
+    d = create_driver_func.call
+    d.run
+    assert_equal PROJECT_ID, d.instance.project_id
+    assert_equal ZONE, d.instance.zone
+    assert_equal VM_ID, d.instance.vm_id
+    assert_equal true, d.instance.running_on_managed_vm
+    assert_equal MANAGED_VM_BACKEND_NAME, d.instance.gae_backend_name
+    assert_equal MANAGED_VM_BACKEND_VERSION, d.instance.gae_backend_version
+  end
+
+  def verify_gce_metadata_does_not_load_when_use_metadata_service_is_false(
+    create_driver_func)
+    Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
+    d = create_driver_func.call(NO_METADATA_SERVICE_CONFIG +
+                                CUSTOM_METADATA_CONFIG)
+    d.run
+    assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
+    assert_equal CUSTOM_ZONE, d.instance.zone
+    assert_equal CUSTOM_VM_ID, d.instance.vm_id
+    assert_equal false, d.instance.running_on_managed_vm
+  end
+
+  def verify_gce_used_when_detect_subservice_is_false(create_driver_func)
+    setup_gce_metadata_stubs
+    # This would cause the service to be container.googleapis.com if not for the
+    # detect_subservice=false config.
+    setup_container_metadata_stubs
+    d = create_driver_func.call(NO_DETECT_SUBSERVICE_CONFIG)
+    d.run
+    assert_equal COMPUTE_SERVICE_NAME, d.instance.service_name
+  end
+
+  def verify_metadata_overrides(create_driver_func)
+    {
+      # In this case we are overriding all configured parameters so we should
+      # see all "custom" values rather than the ones from the metadata server.
+      CUSTOM_METADATA_CONFIG =>
+        ['gce', CUSTOM_PROJECT_ID, CUSTOM_ZONE, CUSTOM_VM_ID],
+      # Similar to above, but we are not overriding project_id in this config so
+      # we should see the metadata value for project_id and "custom" otherwise.
+      CONFIG_MISSING_METADATA_PROJECT_ID =>
+        ['gce', PROJECT_ID, CUSTOM_ZONE, CUSTOM_VM_ID],
+      CONFIG_EC2_PROJECT_ID =>
+        ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_ZONE, EC2_VM_ID],
+      CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID =>
+        ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_ZONE, CUSTOM_VM_ID]
+    }.each_with_index do |(config, parts), index|
+      send("setup_#{parts[0]}_metadata_stubs")
+      d = create_driver_func.call(config)
+      d.run
+      assert_equal parts[1], d.instance.project_id, "Index #{index} failed."
+      assert_equal parts[2], d.instance.zone, "Index #{index} failed."
+      assert_equal parts[3], d.instance.vm_id, "Index #{index} failed."
+      assert_equal false, d.instance.running_on_managed_vm,
+                   "Index #{index} failed."
+    end
+  end
+
+  def verify_ec2_metadata_requires_project_id(create_driver_func)
+    setup_ec2_metadata_stubs
+    exception_count = 0
+    Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
+    begin
+      create_driver_func.call
+    rescue Fluent::ConfigError => error
+      assert error.message.include? 'Unable to obtain metadata parameters:'
+      assert error.message.include? 'project_id'
+      exception_count += 1
+    end
+    assert_equal 1, exception_count
+  end
+
+  def verify_ec2_metadata_project_id_from_credentials(create_driver_func)
+    setup_ec2_metadata_stubs
+    [IAM_CREDENTIALS, LEGACY_CREDENTIALS].each do |creds|
+      ENV['GOOGLE_APPLICATION_CREDENTIALS'] = creds[:path]
+      d = create_driver_func.call
+      d.run
+      assert_equal creds[:project_id], d.instance.project_id
+    end
+  end
+
+  def verify_one_log(setup_logging_stubs_func, create_driver_func,
+                     verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS)
+  end
+
+  def verify_one_log_with_json_credentials(setup_logging_stubs_func,
+                                           create_driver_func,
+                                           verify_log_entries_func)
+    setup_gce_metadata_stubs
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS)
+  end
+
+  def verify_one_log_with_invalid_json_credentials(setup_logging_stubs_func,
+                                                   create_driver_func)
+    setup_gce_metadata_stubs
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('message' => log_entry(0))
+      exception_count = 0
+      begin
+        d.run
+      rescue RuntimeError => error
+        assert error.message.include? 'Unable to read the credential file'
+        exception_count += 1
+      end
+      assert_equal 1, exception_count
+    end
+  end
+
+  def verify_one_log_custom_metadata(setup_logging_stubs_func,
+                                     create_driver_func,
+                                     verify_log_entries_func)
+    # don't set up any metadata stubs, so the test will fail if we try to
+    # fetch metadata (and explicitly check this as well).
+    Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(NO_METADATA_SERVICE_CONFIG +
+        CUSTOM_METADATA_CONFIG)
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries_func.call(1, CUSTOM_PARAMS)
+  end
+
+  def verify_one_log_ec2(setup_logging_stubs_func, create_driver_func,
+                         verify_log_entries_func)
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    setup_ec2_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(CONFIG_EC2_PROJECT_ID)
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries_func.call(1, EC2_PARAMS)
+  end
+
+  def grpc_on?(create_driver_func)
+    create_driver_func.name == :create_grpc_driver
+  end
+
+  def verify_struct_payload_log(setup_logging_stubs_func, create_driver_func,
+                                verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000)
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      if grpc_on?(create_driver_func)
+        fields = entry['structPayload']['fields']
+        assert_equal 3, fields.size, entry
+        assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
+        assert_equal 'test', fields['tag2']['stringValue'], entry
+        assert_equal 5000, fields['data']['numberValue'], entry
+      else
+        assert_equal 3, entry['structPayload'].size, entry
+        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+        assert_equal 'test', entry['structPayload']['tag2'], entry
+        assert_equal 5000, entry['structPayload']['data'], entry
+      end
+    end
+  end
+
+  def verify_struct_payload_json_log(setup_logging_stubs_func,
+                                     create_driver_func,
+                                     verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      json_string = '{"msg": "test log entry 0", "tag2": "test", "data": 5000}'
+      d.emit('message' => 'notJSON ' + json_string)
+      d.emit('message' => json_string)
+      d.emit('message' => "\t" + json_string)
+      d.emit('message' => '  ' + json_string)
+      d.run
+    end
+    verify_log_entries_func.call(4, COMPUTE_PARAMS, '') do |entry|
+      assert entry.key?('textPayload'), 'Entry did not have textPayload'
+    end
+  end
+
+  def verify_struct_payload_json_container_log(setup_logging_stubs_func,
+                                               create_driver_func,
+                                               verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+      json_string = '{"msg": "test log entry 0", "tag2": "test", "data": 5000}'
+      d.emit(container_log_entry_with_metadata('notJSON' + json_string))
+      d.emit(container_log_entry_with_metadata(json_string))
+      d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
+      d.run
+    end
+    log_index = 0
+    verify_log_entries_func.call(
+      3, CONTAINER_FROM_METADATA_PARAMS, '') do |entry|
+      log_index += 1
+      if log_index == 1
+        assert entry.key?('textPayload'), 'Entry did not have textPayload'
+      else
+        assert entry.key?('structPayload'), 'Entry did not have structPayload'
+        if grpc_on?(create_driver_func)
+          fields = entry['structPayload']['fields']
+          assert_equal 3, fields.size, entry
+          assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
+          assert_equal 'test', fields['tag2']['stringValue'], entry
+          assert_equal 5000, fields['data']['numberValue'], entry
+        else
+          assert_equal 3, entry['structPayload'].size, entry
+          assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+          assert_equal 'test', entry['structPayload']['tag2'], entry
+          assert_equal 5000, entry['structPayload']['data'], entry
+        end
+      end
+    end
+  end
+
+  def verify_timestamps(stub_setup_func, create_driver_func,
+                        verify_log_entries_func)
+    setup_gce_metadata_stubs
+    expected_ts = []
+    emit_index = 0
+    stub_setup_func.call do
+      [Time.at(123_456.789), Time.at(0), Time.now].each do |ts|
+        d = create_driver_func.call
+        # Test the "native" fluentd timestamp as well as our nanosecond tags.
+        d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
+        # The native timestamp currently only supports second granularity
+        # (fluentd issue #461), so strip nanoseconds from the expected value.
+        expected_ts.push(Time.at(ts.tv_sec))
+        emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
+        expected_ts.push(ts)
+        emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timestamp' => { 'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec })
+        expected_ts.push(ts)
+        emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec)
+        expected_ts.push(ts)
+        emit_index += 1
+        d.run
+      end
+    end
+    verify_index = 0
+    verify_log_entries_func.call(emit_index, COMPUTE_PARAMS) do |entry|
+      if expected_ts[verify_index].tv_sec == 0 && grpc_on?(create_driver_func)
+        # For an optional field with default values, protobuf omits the field
+        # when deserialize it to json.
+        assert_nil entry['metadata']['timestamp']['seconds']
+      else
+        assert_equal expected_ts[verify_index].tv_sec,
+                     entry['metadata']['timestamp']['seconds'], entry
+      end
+      if expected_ts[verify_index].tv_nsec == 0 && grpc_on?(create_driver_func)
+        # For an optional field with default values, protobuf omits the field
+        # when deserialize it to json.
+        assert_nil entry['metadata']['timestamp']['nanos']
+      else
+        assert_equal expected_ts[verify_index].tv_nsec,
+                     entry['metadata']['timestamp']['nanos'], entry
+      end
+      verify_index += 1
+    end
+  end
+
+  def verify_malformed_timestamp(setup_logging_stubs_func, create_driver_func,
+                                 verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      # if timestamp is not a hash it is passed through to the struct payload.
+      d.emit('message' => log_entry(0), 'timestamp' => 'not-a-hash')
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      if grpc_on?(create_driver_func)
+        fields = entry['structPayload']['fields']
+        assert_equal 2, fields.size, entry
+        assert_equal 'not-a-hash', fields['timestamp']['stringValue'], entry
+      else
+        assert_equal 2, entry['structPayload'].size, entry
+        assert_equal 'not-a-hash', entry['structPayload']['timestamp'], entry
+      end
+    end
+  end
+
+  def verify_severities(setup_logging_stubs_func, create_driver_func,
+                        verify_log_entries_func)
+    setup_gce_metadata_stubs
+    expected_severity = []
+    emit_index = 0
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      # Array of pairs of [parsed_severity, expected_severity]
+      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
+       %w(105 DEBUG), ['', 'DEFAULT']].each do |sev|
+        d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
+        expected_severity.push(sev[1])
+        emit_index += 1
+      end
+      d.run
+    end
+    verify_index = 0
+    verify_log_entries_func.call(emit_index, COMPUTE_PARAMS) do |entry|
+      if expected_severity[verify_index] == 'DEFAULT' \
+        && grpc_on?(create_driver_func)
+        # For an optional field with default values, protobuf omits the field
+        # when deserialize it to json.
+        assert_nil entry['metadata']['severity'], entry
+      elsif expected_severity[verify_index] == 'DEBUG' \
+        && !grpc_on?(create_driver_func)
+        # For some reason we return '100' instead of 'DEFAULT' for the non-grpc
+        # path. And the original test asserts this.
+        # TODO(lingshi) figure out if this is a bug or expected behavior.
+        assert_equal 100, entry['metadata']['severity'], entry
+      else
+        assert_equal expected_severity[verify_index],
+                     entry['metadata']['severity'], entry
+      end
+      verify_index += 1
+    end
+  end
+
+  def verify_label_map_without_field_present(setup_logging_stubs_func,
+                                             create_driver_func,
+                                             verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      config = %(label_map { "label_field": "sent_label" })
+      d = create_driver_func.call(config)
+      d.emit('message' => log_entry(0))
+      d.run
+      # No additional labels should be present
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS)
+  end
+
+  def verify_label_map_with_field_present(setup_logging_stubs_func,
+                                          create_driver_func,
+                                          verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      config = %(label_map { "label_field": "sent_label" })
+      d = create_driver_func.call(config)
+      d.emit('message' => log_entry(0), 'label_field' => 'label_value')
+      d.run
+    end
+    # make a deep copy of COMPUTE_PARAMS and add the parsed label.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params[:labels]['sent_label'] = 'label_value'
+    verify_log_entries_func.call(1, params)
+  end
+
+  def verify_label_map_with_numeric_field(setup_logging_stubs_func,
+                                          create_driver_func,
+                                          verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      config = %(label_map { "label_field": "sent_label" })
+      d = create_driver_func.call(config)
+      d.emit('message' => log_entry(0), 'label_field' => 123_456_789)
+      d.run
+    end
+    # make a deep copy of COMPUTE_PARAMS and add the parsed label.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params[:labels]['sent_label'] = '123456789'
+    verify_log_entries_func.call(1, params)
+  end
+
+  def verify_label_map_with_hash_field(setup_logging_stubs_func,
+                                       create_driver_func,
+                                       verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      config = %(label_map { "label_field": "sent_label" })
+      d = create_driver_func.call(config)
+      # I'm not sure this actually makes sense for a user to do, but make
+      # sure that it works if they try it.
+      d.emit('message' => log_entry(0),
+             'label_field' => { 'k1' => 10, 'k2' => 'val' })
+      d.run
+    end
+    # make a deep copy of COMPUTE_PARAMS and add the parsed label.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params[:labels]['sent_label'] = '{"k1"=>10, "k2"=>"val"}'
+    verify_log_entries_func.call(1, params)
+  end
+
+  def verify_label_map_with_multiple_fields(setup_logging_stubs_func,
+                                            create_driver_func,
+                                            verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      config = %(
+        label_map {
+          "label1": "sent_label_1",
+          "label_number_two": "foo.googleapis.com/bar",
+          "label3": "label3"
+        }
+      )
+      d = create_driver_func.call(config)
+      # not_a_label passes through to the struct payload
+      d.emit('message' => log_entry(0),
+             'label1' => 'value1',
+             'label_number_two' => 'value2',
+             'not_a_label' => 'value4',
+             'label3' => 'value3')
+      d.run
+    end
+    # make a deep copy of COMPUTE_PARAMS and add the parsed labels.
+    params = Marshal.load(Marshal.dump(COMPUTE_PARAMS))
+    params[:labels]['sent_label_1'] = 'value1'
+    params[:labels]['foo.googleapis.com/bar'] = 'value2'
+    params[:labels]['label3'] = 'value3'
+    verify_log_entries_func.call(1, params, 'structPayload') do |entry|
+      if grpc_on?(create_driver_func)
+        fields = entry['structPayload']['fields']
+        assert_equal 2, fields.size, entry
+        assert_equal 'test log entry 0', fields['message']['stringValue'], entry
+        assert_equal 'value4', fields['not_a_label']['stringValue'], entry
+      else
+        assert_equal 2, entry['structPayload'].size, entry
+        assert_equal 'test log entry 0', entry['structPayload']['message'],
+                     entry
+        assert_equal 'value4', entry['structPayload']['not_a_label'], entry
+      end
+    end
+  end
+
+  def verify_multiple_logs(setup_logging_stubs_func, create_driver_func,
+                           verify_log_entries_func)
+    setup_gce_metadata_stubs
+    # Only test a few values because otherwise the test can take minutes.
+    [2, 3, 5, 11, 50].each do |n|
+      setup_logging_stubs_func.call do
+        d = create_driver_func.call
+        # The test driver doesn't clear its buffer of entries after running, so
+        # do it manually here.
+        d.instance_variable_get('@entries').clear
+        @logs_sent = []
+        n.times { |i| d.emit('message' => log_entry(i)) }
+        d.run
+      end
+      verify_log_entries_func.call(n, COMPUTE_PARAMS)
+    end
+  end
+
+  def verify_malformed_log(setup_logging_stubs_func, create_driver_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      # if the entry is not a hash, the plugin should silently drop it.
+      d.emit('a string is not a valid message')
+      d.run
+    end
+    assert @logs_sent.empty?
+  end
+
+  def verify_one_managed_vm_log(setup_logging_stubs_func, create_driver_func,
+                                verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_managed_vm_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries_func.call(1, VMENGINE_PARAMS)
+  end
+
+  def verify_multiple_managed_vm_logs(setup_logging_stubs_func,
+                                      create_driver_func,
+                                      verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_managed_vm_metadata_stubs
+    [2, 3, 5, 11, 50].each do |n|
+      setup_logging_stubs_func.call do
+        d = create_driver_func.call
+        # The test driver doesn't clear its buffer of entries after running, so
+        # do it manually here.
+        d.instance_variable_get('@entries').clear
+        @logs_sent = []
+        n.times { |i| d.emit('message' => log_entry(i)) }
+        d.run
+      end
+      verify_log_entries_func.call(n, VMENGINE_PARAMS)
+    end
+  end
+
+  def verify_one_container_log_metadata_from_plugin(setup_logging_stubs_func,
+                                                    create_driver_func,
+                                                    verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+      d.emit(container_log_entry_with_metadata(log_entry(0)))
+      d.run
+    end
+    verify_log_entries_func.call(1, CONTAINER_FROM_METADATA_PARAMS) do |entry|
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+      assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+    end
+  end
+
+  def verify_multiple_container_logs_metadata_from_plugin(
+      setup_logging_stubs_func, create_driver_func, verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    [2, 3, 5, 11, 50].each do |n|
+      @logs_sent = []
+      setup_logging_stubs_func.call do
+        d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+        # The test driver doesn't clear its buffer of entries after running, so
+        # do it manually here.
+        d.instance_variable_get('@entries').clear
+        n.times { |i| d.emit(container_log_entry_with_metadata(log_entry(i))) }
+        d.run
+      end
+      verify_log_entries_func.call(n, CONTAINER_FROM_METADATA_PARAMS) do |entry|
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+      end
+    end
+  end
+
+  def verify_multiple_container_logs_metadata_from_tag(setup_logging_stubs_func,
+                                                       create_driver_func,
+                                                       verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    [2, 3, 5, 11, 50].each do |n|
+      @logs_sent = []
+      setup_logging_stubs_func.call do
+        d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+        # The test driver doesn't clear its buffer of entries after running, so
+        # do it manually here.
+        d.instance_variable_get('@entries').clear
+        n.times { |i| d.emit(container_log_entry(log_entry(i))) }
+        d.run
+      end
+      verify_log_entries_func.call(n, CONTAINER_FROM_TAG_PARAMS) do |entry|
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+      end
+    end
+  end
+
+  def verify_one_container_log_metadata_from_tag(setup_logging_stubs_func,
+                                                 create_driver_func,
+                                                 verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+      d.emit(container_log_entry(log_entry(0)))
+      d.run
+    end
+    verify_log_entries_func.call(1, CONTAINER_FROM_TAG_PARAMS) do |entry|
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+      assert_equal CONTAINER_SEVERITY, entry['metadata']['severity'], entry
+    end
+  end
+
+  def verify_one_container_log_from_tag_stderr(setup_logging_stubs_func,
+                                               create_driver_func,
+                                               verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+      d.emit(container_log_entry(log_entry(0), 'stderr'))
+      d.run
+    end
+    expected_params = CONTAINER_FROM_TAG_PARAMS.merge(
+      labels: { "#{CONTAINER_SERVICE_NAME}/stream" => 'stderr' }
+    ) { |_, oldval, newval| oldval.merge(newval) }
+    verify_log_entries_func.call(1, expected_params) do |entry|
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+      assert_equal 'ERROR', entry['metadata']['severity'], entry
+    end
+  end
+
+  def verify_struct_container_log_metadata_from_plugin(setup_logging_stubs_func,
+                                                       create_driver_func,
+                                                       verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+      d.emit(container_log_entry_with_metadata('{"msg": "test log entry 0", ' \
+                                               '"tag2": "test", "data": ' \
+                                               '5000, "severity": "WARNING"}'))
+      d.run
+    end
+    verify_log_entries_func.call(1, CONTAINER_FROM_METADATA_PARAMS,
+                                 'structPayload') do |entry|
+      if grpc_on?(create_driver_func)
+        fields = entry['structPayload']['fields']
+        assert_equal 3, fields.size, entry
+        assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
+        assert_equal 'test', fields['tag2']['stringValue'], entry
+        assert_equal 5000, fields['data']['numberValue'], entry
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+        assert_equal 'WARNING', entry['metadata']['severity'], entry
+      else
+        assert_equal 3, entry['structPayload'].size, entry
+        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+        assert_equal 'test', entry['structPayload']['tag2'], entry
+        assert_equal 5000, entry['structPayload']['data'], entry
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+        assert_equal 'WARNING', entry['metadata']['severity'], entry
+      end
+    end
+  end
+
+  def verify_struct_container_log_metadata_from_tag(setup_logging_stubs_func,
+                                                    create_driver_func,
+                                                    verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+      d.emit(container_log_entry('{"msg": "test log entry 0", ' \
+                                 '"tag2": "test", "data": 5000, ' \
+                                 '"severity": "W"}'))
+      d.run
+    end
+    verify_log_entries_func.call(1, CONTAINER_FROM_TAG_PARAMS,
+                                 'structPayload') do |entry|
+      if grpc_on?(create_driver_func)
+        fields = entry['structPayload']['fields']
+        assert_equal 3, fields.size, entry
+        assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
+        assert_equal 'test', fields['tag2']['stringValue'], entry
+        assert_equal 5000, fields['data']['numberValue'], entry
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+        assert_equal 'WARNING', entry['metadata']['severity'], entry
+      else
+        assert_equal 3, entry['structPayload'].size, entry
+        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
+        assert_equal 'test', entry['structPayload']['tag2'], entry
+        assert_equal 5000, entry['structPayload']['data'], entry
+        assert_equal CONTAINER_SECONDS_EPOCH, \
+                     entry['metadata']['timestamp']['seconds'], entry
+        assert_equal CONTAINER_NANOS, \
+                     entry['metadata']['timestamp']['nanos'], entry
+        assert_equal 'WARNING', entry['metadata']['severity'], entry
+      end
+    end
+  end
+
+  def verify_cloudfunctions_log(setup_logging_stubs_func, create_driver_func,
+                                verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_cloudfunctions_metadata_stubs
+    [1, 2, 3, 5, 11, 50].each do |n|
+      setup_logging_stubs_func.call do
+        d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG,
+                                    CLOUDFUNCTIONS_TAG)
+        # The test driver doesn't clear its buffer of entries after running, so
+        # do it manually here.
+        d.instance_variable_get('@entries').clear
+        @logs_sent = []
+        n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
+        d.run
+      end
+      verify_log_entries_func.call(n, CLOUDFUNCTIONS_PARAMS) do |entry|
+        assert_equal 'DEBUG', entry['metadata']['severity'],
+                     "Test with #{n} logs failed. \n#{entry}"
+      end
+    end
+  end
+
+  def verify_cloudfunctions_logs_text_not_matched(setup_logging_stubs_func,
+                                                  create_driver_func,
+                                                  verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_cloudfunctions_metadata_stubs
+    [1, 2, 3, 5, 11, 50].each do |n|
+      @logs_sent = []
+      setup_logging_stubs_func.call do
+        d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG,
+                                    CLOUDFUNCTIONS_TAG)
+        # The test driver doesn't clear its buffer of entries after running, so
+        # do it manually here.
+        d.instance_variable_get('@entries').clear
+        n.times { |i| d.emit(cloudfunctions_log_entry_text_not_matched(i)) }
+        d.run
+      end
+      verify_log_entries_func.call(
+        n, CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS) do |entry|
+        assert_equal 'INFO', entry['metadata']['severity'],
+                     "Test with #{n} logs failed. \n#{entry}"
+      end
+    end
+  end
+
+  def verify_multiple_cloudfunctions_logs_tag_not_matched(
+      setup_logging_stubs_func, create_driver_func, verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_cloudfunctions_metadata_stubs
+    [1, 2, 3, 5, 11, 50].each do |n|
+      @logs_sent = []
+      setup_logging_stubs_func.call do
+        d = create_driver_func.call(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+        # The test driver doesn't clear its buffer of entries after running, so
+        # do it manually here.
+        d.instance_variable_get('@entries').clear
+        n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
+        d.run
+      end
+      i = 0
+      verify_log_entries_func.call(n, CONTAINER_FROM_TAG_PARAMS, '') do |entry|
+        assert_equal '[D][2015-09-25T12:34:56.789Z][123-0] test log entry ' \
+                     "#{i}", entry['textPayload'],
+                     "Test with #{n} logs failed. \n#{entry}"
+        i += 1
+      end
+    end
+  end
+
+  def get_http_request_message(create_driver_func)
+    if grpc_on?(create_driver_func)
+      HTTP_REQUEST_MESSAGE_GRPC
+    else
+      HTTP_REQUEST_MESSAGE
+    end
+  end
+
+  def verify_http_request_from_record(setup_logging_stubs_func,
+                                      create_driver_func,
+                                      verify_log_entries_func)
+    setup_gce_metadata_stubs
+    message = get_http_request_message(create_driver_func)
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('httpRequest' => message)
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal message, entry['httpRequest'], entry
+      if grpc_on?(create_driver_func)
+        assert_nil entry['structPayload']['fields']['httpRequest'], entry
+      else
+        assert_nil entry['structPayload']['httpRequest'], entry
+      end
+    end
+  end
+
+  def verify_http_request_partial_from_record(setup_logging_stubs_func,
+                                              create_driver_func,
+                                              verify_log_entries_func)
+    setup_gce_metadata_stubs
+    message = get_http_request_message(create_driver_func)
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('httpRequest' => message.merge(
+        'otherKey' => 'value'))
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal message, entry['httpRequest'], entry
+      if grpc_on?(create_driver_func)
+        fields = entry['structPayload']['fields']['httpRequest']['structValue']
+        other_key = fields['fields']['otherKey']['stringValue']
+        assert_equal 'value', other_key, entry
+      else
+        assert_equal 'value', entry['structPayload']['httpRequest']['otherKey'],
+                     entry
+      end
+    end
+  end
+
+  def verify_http_request_without_referer_from_record(setup_logging_stubs_func,
+                                                      create_driver_func,
+                                                      verify_log_entries_func)
+    setup_gce_metadata_stubs
+    message = get_http_request_message(create_driver_func)
+    message_without_referer = message.reject do |key, _|
+      key == 'referer'
+    end
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('httpRequest' => message_without_referer)
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      if grpc_on?(create_driver_func)
+        assert_equal message_without_referer, entry['httpRequest'], entry
+        assert_nil entry['structPayload']['fields']['httpRequest'], entry
+      else
+        assert_equal message_without_referer.merge('referer' => nil),
+                     entry['httpRequest'], entry
+        assert_nil entry['structPayload']['httpRequest'], entry
+      end
+    end
+  end
+
+  def verify_http_request_when_not_hash(setup_logging_stubs_func,
+                                        create_driver_func,
+                                        verify_log_entries_func)
+    setup_gce_metadata_stubs
+    setup_logging_stubs_func.call do
+      d = create_driver_func.call
+      d.emit('httpRequest' => 'a_string')
+      d.run
+    end
+    verify_log_entries_func.call(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      if grpc_on?(create_driver_func)
+        value = entry['structPayload']['fields']['httpRequest']['stringValue']
+      else
+        value = entry['structPayload']['httpRequest']
+      end
+      assert_equal 'a_string', value, entry
+      assert_equal nil, entry['httpRequest'], entry
+    end
   end
 end

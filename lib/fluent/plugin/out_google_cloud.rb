@@ -1078,8 +1078,8 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE &&
             @cloudfunctions_log_match
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
-        ts_secs = Integer(timestamp.strftime('%s'))
-        ts_nanos = Integer(timestamp.strftime('%N'))
+        ts_secs = timestamp.strftime('%s').to_i
+        ts_nanos = timestamp.strftime('%N').to_i
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1166,9 +1166,11 @@ module Fluent
         input.key?('remoteIp')
       output.referer = input.delete('referer') if
         input.key?('referer')
-      output.cache_hit = input.delete('cacheHit') == true
+      output.cache_hit = input.delete('cacheHit') if
+        input.key?('cacheHit')
       output.cache_validated_with_origin_server = \
-        input.delete('cacheValidatedWithOriginServer') == true
+        input.delete('cacheValidatedWithOriginServer') if
+        input.key?('cacheValidatedWithOriginServer')
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
