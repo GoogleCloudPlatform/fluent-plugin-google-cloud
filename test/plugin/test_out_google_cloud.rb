@@ -12,13 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'google/apis'
-require 'helper'
-require 'json'
-require 'mocha/test_unit'
-require 'time'
-require 'webmock/test_unit'
-
 require_relative 'base_test'
 
 # Unit tests for Google Cloud Logging plugin
@@ -184,6 +177,21 @@ class GoogleCloudOutputTest < GoogleCloudPluginBaseTest
     d.emit('message' => log_entry(0))
     d.run
     assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
+  end
+
+  # All credentials errors resolve to a 401.
+  def test_client_401
+    setup_gce_metadata_stubs
+    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+      .to_return(status: 401, body: 'Unauthorized')
+    d = create_driver
+    d.emit('message' => log_entry(0))
+    begin
+      d.run
+    rescue Google::Apis::AuthorizationError => error
+      assert_equal 'Unauthorized', error.message
+    end
+    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
   end
 
   def test_server_error
