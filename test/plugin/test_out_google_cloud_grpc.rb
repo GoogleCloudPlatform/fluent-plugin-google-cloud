@@ -15,175 +15,17 @@
 require_relative 'base_test'
 
 # Unit tests for Google Cloud Logging plugin
-class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
-  def test_configure_service_account_application_default
-    verify_configure_service_account_application_default(
-      method(:create_grpc_driver))
-  end
-
-  def test_configure_service_account_private_key
-    verify_configure_service_account_private_key(method(:create_grpc_driver))
-  end
-
-  def test_configure_custom_metadata
-    verify_configure_custom_metadata(method(:create_grpc_driver))
-  end
-
-  def test_configure_invalid_metadata_missing_parts
-    verify_configure_invalid_metadata_missing_parts(method(:create_grpc_driver))
-  end
-
-  def test_metadata_loading
-    verify_metadata_loading(method(:create_grpc_driver))
-  end
-
-  def test_managed_vm_metadata_loading
-    verify_managed_vm_metadata_loading(method(:create_grpc_driver))
-  end
-
-  def test_gce_metadata_does_not_load_when_use_metadata_service_is_false
-    verify_gce_metadata_does_not_load_when_use_metadata_service_is_false(
-      method(:create_grpc_driver))
-  end
-
-  def test_gce_used_when_detect_subservice_is_false
-    verify_gce_used_when_detect_subservice_is_false(method(:create_grpc_driver))
-  end
-
-  def test_configure_use
-    setup_gce_metadata_stubs
-    { create_driver => false,
-      create_grpc_driver => true }.each do |driver, value|
-      assert_equal value, driver.instance.instance_variable_get(:@use_grpc)
-    end
-  end
-
-  def test_metadata_overrides
-    verify_metadata_overrides(method(:create_grpc_driver))
-  end
-
-  def test_ec2_metadata_requires_project_id
-    verify_ec2_metadata_requires_project_id(method(:create_grpc_driver))
-  end
-
-  def test_ec2_metadata_project_id_from_credentials
-    verify_ec2_metadata_project_id_from_credentials(method(:create_grpc_driver))
-  end
-
-  def test_one_log
-    verify_one_log(method(:setup_grpc_logging_stubs),
-                   method(:create_grpc_driver),
-                   method(:verify_grpc_log_entries))
-  end
-
-  def test_one_log_with_json_credentials
-    verify_one_log_with_json_credentials(method(:setup_grpc_logging_stubs),
-                                         method(:create_grpc_driver),
-                                         method(:verify_grpc_log_entries))
-  end
-
-  def test_one_log_with_invalid_json_credentials
-    verify_one_log_with_invalid_json_credentials(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver))
-  end
-
-  def test_one_log_custom_metadata
-    verify_one_log_custom_metadata(method(:setup_grpc_logging_stubs),
-                                   method(:create_grpc_driver),
-                                   method(:verify_grpc_log_entries))
-  end
-
-  def test_one_log_ec2
-    verify_one_log_ec2(method(:setup_grpc_logging_stubs),
-                       method(:create_grpc_driver),
-                       method(:verify_grpc_log_entries))
-  end
-
-  def test_struct_payload_log
-    verify_struct_payload_log(method(:setup_grpc_logging_stubs),
-                              method(:create_grpc_driver),
-                              method(:verify_grpc_log_entries))
-  end
-
-  def test_struct_payload_json_log
-    verify_struct_payload_json_log(method(:setup_grpc_logging_stubs),
-                                   method(:create_grpc_driver),
-                                   method(:verify_grpc_log_entries))
-  end
-
-  def test_struct_payload_json_container_log
-    verify_struct_payload_json_container_log(method(:setup_grpc_logging_stubs),
-                                             method(:create_grpc_driver),
-                                             method(:verify_grpc_log_entries))
-  end
-
-  def test_timestamps
-    verify_timestamps(method(:setup_grpc_logging_stubs),
-                      method(:create_grpc_driver),
-                      method(:verify_grpc_log_entries))
-  end
-
-  def test_malformed_timestamp
-    verify_malformed_timestamp(method(:setup_grpc_logging_stubs),
-                               method(:create_grpc_driver),
-                               method(:verify_grpc_log_entries))
-  end
-
-  def test_severities
-    verify_severities(method(:setup_grpc_logging_stubs),
-                      method(:create_grpc_driver),
-                      method(:verify_grpc_log_entries))
-  end
-
-  def test_label_map_without_field_present
-    verify_label_map_without_field_present(method(:setup_grpc_logging_stubs),
-                                           method(:create_grpc_driver),
-                                           method(:verify_grpc_log_entries))
-  end
-
-  def test_label_map_with_field_present
-    verify_label_map_with_field_present(method(:setup_grpc_logging_stubs),
-                                        method(:create_grpc_driver),
-                                        method(:verify_grpc_log_entries))
-  end
-
-  def test_label_map_with_numeric_field
-    verify_label_map_with_numeric_field(method(:setup_grpc_logging_stubs),
-                                        method(:create_grpc_driver),
-                                        method(:verify_grpc_log_entries))
-  end
-
-  def test_label_map_with_hash_field
-    verify_label_map_with_hash_field(method(:setup_grpc_logging_stubs),
-                                     method(:create_grpc_driver),
-                                     method(:verify_grpc_log_entries))
-  end
-
-  def test_label_map_with_multiple_fields
-    verify_label_map_with_multiple_fields(method(:setup_grpc_logging_stubs),
-                                          method(:create_grpc_driver),
-                                          method(:verify_grpc_log_entries))
-  end
-
-  def test_multiple_logs
-    verify_multiple_logs(method(:setup_grpc_logging_stubs),
-                         method(:create_grpc_driver),
-                         method(:verify_grpc_log_entries))
-  end
-
-  def test_malformed_log
-    verify_malformed_log(method(:setup_grpc_logging_stubs),
-                         method(:create_grpc_driver))
-  end
+class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
+  include BaseTest
 
   def test_client_error
     setup_gce_metadata_stubs
     { 8 => 'ResourceExhausted',
       12 => 'Unimplemented',
       16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
-      setup_grpc_logging_stubs(true, code, message) do
-        d = create_grpc_driver(USE_GRPC_CONFIG, 'test',
-                               GRPCLoggingMockFailingService.rpc_stub_class)
+      setup_logging_stubs(true, code, message) do
+        d = create_driver(USE_GRPC_CONFIG, 'test',
+                          GRPCLoggingMockFailingService.rpc_stub_class)
         # The API Client should not retry this and the plugin should consume the
         # exception.
         d.emit('message' => log_entry(0))
@@ -201,9 +43,9 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
       13 => 'Internal',
       14 => 'Unavailable' }.each_with_index do |(code, message), index|
       exception_count = 0
-      setup_grpc_logging_stubs(true, code, message) do
-        d = create_grpc_driver(USE_GRPC_CONFIG, 'test',
-                               GRPCLoggingMockFailingService.rpc_stub_class)
+      setup_logging_stubs(true, code, message) do
+        d = create_driver(USE_GRPC_CONFIG, 'test',
+                          GRPCLoggingMockFailingService.rpc_stub_class)
         # The API client should retry this once, then throw an exception which
         # gets propagated through the plugin
         d.emit('message' => log_entry(0))
@@ -222,99 +64,147 @@ class GoogleCloudOutputGRPCTest < GoogleCloudPluginBaseTest
     end
   end
 
-  def test_one_managed_vm_log
-    verify_one_managed_vm_log(method(:setup_grpc_logging_stubs),
-                              method(:create_grpc_driver),
-                              method(:verify_grpc_log_entries))
+  private
+
+  GRPC_MOCK_HOST = 'localhost:56789'
+
+  WriteLogEntriesRequest = Google::Logging::V1::WriteLogEntriesRequest
+  WriteLogEntriesResponse = Google::Logging::V1::WriteLogEntriesResponse
+
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
+                    grpc_stub = GRPCLoggingMockService.rpc_stub_class)
+    conf += USE_GRPC_CONFIG
+    Fluent::Test::BufferedOutputTestDriver.new(
+      GoogleCloudOutputWithGRPCMock.new(grpc_stub), tag).configure(
+        conf, use_v1_config: true)
   end
 
-  def test_multiple_managed_vm_logs
-    verify_multiple_managed_vm_logs(method(:setup_grpc_logging_stubs),
-                                    method(:create_grpc_driver),
-                                    method(:verify_grpc_log_entries))
+  # Google Cloud Fluent output stub with grpc mock.
+  class GoogleCloudOutputWithGRPCMock < Fluent::GoogleCloudOutput
+    def initialize(grpc_stub)
+      @grpc_stub = grpc_stub
+    end
+
+    def api_client
+      ssl_creds = GRPC::Core::ChannelCredentials.new
+      authentication = Google::Auth.get_application_default
+      creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
+      ssl_creds.compose(creds)
+
+      # Here we have obtained the creds, but for the mock, we will leave the
+      # channel insecure.
+      @grpc_stub.new(GRPC_MOCK_HOST, :this_channel_is_insecure)
+    end
   end
 
-  def test_one_container_log_metadata_from_plugin
-    verify_one_container_log_metadata_from_plugin(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
+  # GRPC logging mock that successfully logs the records.
+  class GRPCLoggingMockService < Google::Logging::V1::LoggingService::Service
+    def initialize(requests_received)
+      super()
+      @requests_received = requests_received
+    end
+
+    def write_log_entries(request, _call)
+      @requests_received << request
+      WriteLogEntriesResponse.new
+    end
+
+    def list_logs(_request, _call)
+      fail "Method 'list_logs' should never be called."
+    end
+
+    def list_log_services(_request, _call)
+      fail "Method 'list_log_services' should never be called."
+    end
+
+    def list_log_service_indexes(_request, _call)
+      fail "Method 'list_log_service_indexes' should never be called."
+    end
+
+    def delete_log(_request, _call)
+      fail "Method 'delete_log' should never be called."
+    end
   end
 
-  def test_multiple_container_logs_metadata_from_plugin
-    verify_multiple_container_logs_metadata_from_plugin(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
+  # GRPC logging mock that fails and returns server side or client side errors.
+  class GRPCLoggingMockFailingService <
+      Google::Logging::V1::LoggingService::Service
+    # 'code_sent' and 'message_sent' are references of external variables. We
+    #  will assert the values of them later. 'code_value' and 'message_value'
+    #  are actual error code and message we expect this mock to return.
+    def initialize(code, message, failed_attempts)
+      @code = code
+      @message = message
+      @failed_attempts = failed_attempts
+      super()
+    end
+
+    def write_log_entries(_request, _call)
+      @failed_attempts << 1
+      fail GRPC::BadStatus.new(@code, @message)
+    end
+
+    def list_logs(_request, _call)
+      fail "Method 'list_logs' should never be called."
+    end
+
+    def list_log_services(_request, _call)
+      fail "Method 'list_log_services' should never be called."
+    end
+
+    def list_log_service_indexes(_request, _call)
+      fail "Method 'list_log_service_indexes' should never be called."
+    end
+
+    def delete_log(_request, _call)
+      fail "Method 'delete_log' should never be called."
+    end
   end
 
-  def test_multiple_container_logs_metadata_from_tag
-    verify_multiple_container_logs_metadata_from_tag(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
+  def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
+    srv = GRPC::RpcServer.new
+    @failed_attempts = []
+    @requests_sent = []
+    if should_fail
+      grpc = GRPCLoggingMockFailingService.new(code, message, @failed_attempts)
+    else
+      grpc = GRPCLoggingMockService.new(@requests_sent)
+    end
+    srv.handle(grpc)
+    srv.add_http2_port(GRPC_MOCK_HOST, :this_port_is_insecure)
+    t = Thread.new { srv.run }
+    srv.wait_till_running
+    begin
+      yield
+    rescue Test::Unit::Failure, StandardError => e
+      srv.stop
+      t.join
+      raise e
+    end
+    srv.stop
+    t.join
   end
 
-  def test_one_container_log_metadata_from_tag
-    verify_one_container_log_metadata_from_tag(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
+  def underscore(camel_cased_word)
+    camel_cased_word.to_s.gsub(/::/, '/')
+      .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+      .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+      .downcase
   end
 
-  def test_one_container_log_from_tag_stderr
-    verify_one_container_log_from_tag_stderr(method(:setup_grpc_logging_stubs),
-                                             method(:create_grpc_driver),
-                                             method(:verify_grpc_log_entries))
+  # The caller can optionally provide a block which is called for each entry.
+  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
+    @requests_sent.each do |batch|
+      @logs_sent << JSON.parse(batch.to_json)
+    end
+    verify_json_log_entries(n, params, payload_type, &block)
   end
 
-  def test_struct_container_log_metadata_from_plugin
-    verify_struct_container_log_metadata_from_plugin(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
+  def use_grpc_value
+    true
   end
 
-  def test_struct_container_log_metadata_from_tag
-    verify_struct_container_log_metadata_from_tag(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
-  end
-
-  def test_cloudfunctions_log
-    verify_cloudfunctions_log(method(:setup_grpc_logging_stubs),
-                              method(:create_grpc_driver),
-                              method(:verify_grpc_log_entries))
-  end
-
-  def test_cloudfunctions_logs_text_not_matched
-    verify_cloudfunctions_logs_text_not_matched(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
-  end
-
-  def test_multiple_cloudfunctions_logs_tag_not_matched
-    verify_multiple_cloudfunctions_logs_tag_not_matched(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
-  end
-
-  def test_http_request_from_record
-    verify_http_request_from_record(method(:setup_grpc_logging_stubs),
-                                    method(:create_grpc_driver),
-                                    method(:verify_grpc_log_entries))
-  end
-
-  def test_http_request_partial_from_record
-    verify_http_request_partial_from_record(method(:setup_grpc_logging_stubs),
-                                            method(:create_grpc_driver),
-                                            method(:verify_grpc_log_entries))
-  end
-
-  def test_http_request_without_referer_from_record
-    verify_http_request_without_referer_from_record(
-      method(:setup_grpc_logging_stubs), method(:create_grpc_driver),
-      method(:verify_grpc_log_entries))
-  end
-
-  def test_http_request_when_not_hash
-    verify_http_request_when_not_hash(method(:setup_grpc_logging_stubs),
-                                      method(:create_grpc_driver),
-                                      method(:verify_grpc_log_entries))
+  def grpc_on?
+    true
   end
 end

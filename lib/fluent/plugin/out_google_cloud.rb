@@ -24,6 +24,15 @@ require 'google/logging/v1/logging_services_pb'
 require 'google/logging/v1/log_entry_pb'
 require 'googleauth'
 
+module Google
+  module Protobuf
+    # Alias the has_key method to have the same interface as a regular map.
+    class Map
+      alias_method :key?, :has_key?
+    end
+  end
+end
+
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
@@ -1113,7 +1122,7 @@ module Fluent
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
       elsif @service_name == CONTAINER_SERVICE && \
-            entry.metadata.labels.has_key?("#{CONTAINER_SERVICE}/stream")
+            entry.metadata.labels.key?("#{CONTAINER_SERVICE}/stream")
         stream = entry.metadata.labels["#{CONTAINER_SERVICE}/stream"]
         if stream == 'stdout'
           return 'INFO'
