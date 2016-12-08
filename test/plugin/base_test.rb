@@ -13,11 +13,8 @@
 # limitations under the License.
 
 require 'google/apis'
-require 'grpc'
 require 'helper'
-require 'json'
 require 'mocha/test_unit'
-require 'time'
 require 'webmock/test_unit'
 
 # Unit tests for Google Cloud Logging plugin
