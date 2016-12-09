@@ -3,7 +3,7 @@
 fluent-plugin-google-cloud is an
 {output plugin for fluentd}[http://docs.fluentd.org/articles/output-plugin-overview]
 which sends logs to the
-{Stackdriver Logging API}[https://cloud.google.com/logging/docs/api/].
+{Google Cloud Logging API}[https://cloud.google.com/logging/docs/api/].
 
 This is an official Google Ruby gem.
 
