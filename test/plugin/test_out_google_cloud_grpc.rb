@@ -72,6 +72,33 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  # This test looks similar between the grpc and non-grpc paths except that when
+  # parsing "105", the grpc path responses with "DEBUG", while the non-grpc path
+  # responses with "100".
+  def test_severities
+    setup_gce_metadata_stubs
+    expected_severity = []
+    emit_index = 0
+    setup_logging_stubs do
+      d = create_driver
+      # Array of pairs of [parsed_severity, expected_severity]
+      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
+       %w(105 DEBUG), ['', 'DEFAULT']].each do |sev|
+        d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
+        expected_severity.push(sev[1])
+        emit_index += 1
+      end
+      d.run
+    end
+    verify_index = 0
+    verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
+      assert_equal_with_default(entry['metadata']['severity'],
+                                expected_severity[verify_index],
+                                'DEFAULT', entry)
+      verify_index += 1
+    end
+  end
+
   private
 
   GRPC_MOCK_HOST = 'localhost:56789'
@@ -83,6 +110,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   )
 
+  # This message differs between the grpc and non-grpc paths in that:
+  # The non-grpc path has a unique field 'validatedWithOriginServer', while
+  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
   HTTP_REQUEST_MESSAGE = {
     'requestMethod' => 'POST',
     'requestUrl' => 'http://example/',
@@ -96,18 +126,16 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     'cacheValidatedWithOriginServer' => true
   }
 
-  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'cacheHit' => true,
-    'cacheValidatedWithOriginServer' => true
-  }
+  # In addition of the difference present in HTTP_REQUEST_MESSAGE, this message
+  # also differs between the grpc and non-grpc paths in that:
+  # In the non-grpc path 'referer' is nil, while in the grpc path 'referer' is
+  # absent.
+  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.reject do |k, _|
+    k == 'referer'
+  end
 
+  # Create a Fluentd output test driver with the Google Cloud Output plugin with
+  # grpc enabled.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
                     grpc_stub = GRPCLoggingMockService.rpc_stub_class)
     conf += USE_GRPC_CONFIG
@@ -148,19 +176,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
     # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
     def list_logs(_request, _call)
-      fail "Method 'list_logs' should never be called."
+      _undefined
     end
 
     def list_log_services(_request, _call)
-      fail "Method 'list_log_services' should never be called."
+      _undefined
     end
 
     def list_log_service_indexes(_request, _call)
-      fail "Method 'list_log_service_indexes' should never be called."
+      _undefined
     end
 
     def delete_log(_request, _call)
-      fail "Method 'delete_log' should never be called."
+      _undefined
     end
   end
 
@@ -183,19 +211,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     def list_logs(_request, _call)
-      fail "Method 'list_logs' should never be called."
+      _undefined
     end
 
     def list_log_services(_request, _call)
-      fail "Method 'list_log_services' should never be called."
+      _undefined
     end
 
     def list_log_service_indexes(_request, _call)
-      fail "Method 'list_log_service_indexes' should never be called."
+      _undefined
     end
 
     def delete_log(_request, _call)
-      fail "Method 'delete_log' should never be called."
+      _undefined
     end
   end
 
@@ -238,10 +266,13 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     verify_json_log_entries(n, params, payload_type, &block)
   end
 
-  # For an optional field with default values, Protobuf omits the field when
-  # deserialize it to json. So we need to add an extra check for gRPC which uses
-  # Protobuf.
-  def assert_with_default_check(field, expected_value, default_value, entry)
+  # For an optional field with default values, Protobuf omits the field when it
+  # is deserialized to json. So we need to add an extra check for gRPC which
+  # uses Protobuf.
+  #
+  # An optional block can be passed in if we need to assert something other than
+  # a plain equal. e.g. assert_in_delta.
+  def assert_equal_with_default(field, expected_value, default_value, entry)
     if expected_value == default_value
       assert_nil field
     else
@@ -249,10 +280,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  # This method is just a simple wrapper around a constant, so the definition
+  # can be skipped in the shared module and defined in the test class later.
   def http_request_message
     HTTP_REQUEST_MESSAGE
   end
 
+  # This method is just a simple wrapper around a constant, so the definition
+  # can be skipped in the shared module and defined in the test class later.
   def http_request_message_without_referer
     HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
   end

@@ -70,6 +70,32 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
+  # This test looks similar between the grpc and non-grpc paths except that when
+  # parsing "105", the grpc path responses with "DEBUG", while the non-grpc path
+  # responses with "100".
+  def test_severities
+    setup_gce_metadata_stubs
+    expected_severity = []
+    emit_index = 0
+    setup_logging_stubs do
+      d = create_driver
+      # Array of pairs of [parsed_severity, expected_severity]
+      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
+       ['105', 100], ['', 'DEFAULT']].each do |sev|
+        d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
+        expected_severity.push(sev[1])
+        emit_index += 1
+      end
+      d.run
+    end
+    verify_index = 0
+    verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
+      assert_equal expected_severity[verify_index],
+                   entry['metadata']['severity'], entry
+      verify_index += 1
+    end
+  end
+
   def test_parse_severity
     test_obj = Fluent::GoogleCloudOutput.new
 
@@ -145,6 +171,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
+  # This message differs between the grpc and non-grpc paths in that:
+  # The non-grpc path has a unique field 'validatedWithOriginServer', while
+  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
   HTTP_REQUEST_MESSAGE = {
     'requestMethod' => 'POST',
     'requestUrl' => 'http://example/',
@@ -158,18 +187,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'validatedWithOriginServer' => true
   }
 
-  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => nil,
-    'cacheHit' => false,
-    'validatedWithOriginServer' => true
-  }
+  # In addition of the difference present in HTTP_REQUEST_MESSAGE, this message
+  # also differs between the grpc and non-grpc paths in that:
+  # In the non-grpc path 'referer' is nil, while in the grpc path 'referer' is
+  # absent.
+  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.merge(
+    'referer' => nil)
 
   def setup_logging_stubs
     [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
@@ -183,6 +206,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     yield
   end
 
+  # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
     Fluent::Test::BufferedOutputTestDriver.new(
       Fluent::GoogleCloudOutput, tag).configure(conf, use_v1_config: true)
@@ -193,24 +217,28 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_json_log_entries(n, params, payload_type, &block)
   end
 
-  # For an optional field with default values, Protobuf omits the field when
-  # deserialize it to json. So we need to add an extra check for gRPC which uses
-  # Protobuf.
-  def assert_with_default_check(field, expected_value, _default_value, entry)
-    if expected_value == 'DEBUG'
-      # For some reason we return '100' instead of 'DEBUG' for the non-grpc
-      # path. And the original test asserts this.
-      # TODO(lingshi) figure out if this is a bug or expected behavior.
-      assert_equal 100, field, entry
+  # For an optional field with default values, Protobuf omits the field when it
+  # is deserialized to json. So we need to add an extra check for gRPC which
+  # uses Protobuf.
+  #
+  # An optional block can be passed in if we need to assert something other than
+  # a plain equal. e.g. assert_in_delta.
+  def assert_equal_with_default(field, expected_value, _default_value, entry)
+    if block_given?
+      yield
     else
       assert_equal expected_value, field, entry
     end
   end
 
+  # This method is just a simple wrapper around a constant, so the definition
+  # can be skipped in the shared module and defined in the test class later.
   def http_request_message
     HTTP_REQUEST_MESSAGE
   end
 
+  # This method is just a simple wrapper around a constant, so the definition
+  # can be skipped in the shared module and defined in the test class later.
   def http_request_message_without_referer
     HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
   end

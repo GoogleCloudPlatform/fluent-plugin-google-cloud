@@ -603,10 +603,18 @@ module BaseTest
     end
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
-      assert_with_default_check(entry['metadata']['timestamp']['seconds'],
-                                expected_ts[verify_index].tv_sec, 0, entry)
-      assert_with_default_check(entry['metadata']['timestamp']['nanos'],
-                                expected_ts[verify_index].tv_nsec, 0, entry)
+      assert_equal_with_default entry['metadata']['timestamp']['seconds'],
+                                expected_ts[verify_index].tv_sec, 0, entry
+      assert_equal_with_default entry['metadata']['timestamp']['nanos'],
+                                expected_ts[verify_index].tv_nsec, 0, entry do
+        # Fluentd v0.14 onwards supports nanosecond timestamp values.
+        # Added in 600 ns delta to avoid flaky tests introduced
+        # due to rounding error in double-precision floating-point numbers
+        # (to account for the missing 9 bits of precision ~ 512 ns).
+        # See http://wikipedia.org/wiki/Double-precision_floating-point_format
+        assert_in_delta expected_ts[verify_index].tv_nsec,
+                        entry['metadata']['timestamp']['nanos'], 600, entry
+      end
       verify_index += 1
     end
   end
@@ -629,30 +637,6 @@ module BaseTest
   # Make parse_severity public so we can test it.
   class Fluent::GoogleCloudOutput # rubocop:disable Style/ClassAndModuleChildren
     public :parse_severity
-  end
-
-  def test_severities
-    setup_gce_metadata_stubs
-    expected_severity = []
-    emit_index = 0
-    setup_logging_stubs do
-      d = create_driver
-      # Array of pairs of [parsed_severity, expected_severity]
-      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
-       %w(105 DEBUG), ['', 'DEFAULT']].each do |sev|
-        d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
-        expected_severity.push(sev[1])
-        emit_index += 1
-      end
-      d.run
-    end
-    verify_index = 0
-    verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
-      assert_with_default_check(entry['metadata']['severity'],
-                                expected_severity[verify_index],
-                                'DEFAULT', entry)
-      verify_index += 1
-    end
   end
 
   def test_label_map_without_field_present
@@ -1067,7 +1051,7 @@ module BaseTest
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
       fields = get_fields(entry['structPayload'])
       assert_equal 'a_string', get_string(fields['httpRequest']), entry
-      assert_equal nil, entry['httpRequest'], entry
+      assert_nil entry['httpRequest'], entry
     end
   end
 
@@ -1259,54 +1243,53 @@ module BaseTest
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 
-  # Methods below are unimplemented in this module and need to be overriden.
+  # This module expects the methods below to be overridden.
 
+  # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver
-    fail "Method 'create_driver' is unimplemented and needs to be " \
-         'overridden.'
+    _undefined
   end
 
   def setup_logging_stubs
-    fail "Method 'setup_logging_stubs' is unimplemented and needs to be " \
-         'overridden.'
+    _undefined
   end
 
   def verify_log_entries
-    fail "Method 'verify_log_entries' is unimplemented and needs to be " \
-         'overridden.'
+    _undefined
   end
 
-  # For an optional field with default values, Protobuf omits the field when
-  # deserialize it to json. So we need to add an extra check for gRPC which uses
-  # Protobuf.
-  def assert_with_default_check(_field, _expected_value, _default_value, _entry)
-    fail "Method 'assert_with_default_check' is unimplemented and needs to " \
-         'be overridden.'
+  # For an optional field with default values, Protobuf omits the field when it
+  # is deserialized to json. So we need to add an extra check for gRPC which
+  # uses Protobuf.
+  def assert_equal_with_default(_field, _expected_value, _default_value, _entry)
+    _undefined
   end
 
   def http_request_message
-    fail "Method 'http_request_message' is unimplemented and needs to be " \
-         'overridden.'
+    _undefined
   end
 
   def http_request_message_without_referer
-    fail "Method 'http_request_message_without_referer' is unimplemented and " \
-         'needs to be overridden.'
+    _undefined
   end
 
   def get_fields(_struct_payload)
-    fail "Method 'get_fields' is unimplemented and needs to be overridden."
+    _undefined
   end
 
   def get_struct(_field)
-    fail "Method 'get_struct' is unimplemented and needs to be overridden."
+    _undefined
   end
 
   def get_string(_field)
-    fail "Method 'get_string' is unimplemented and needs to be overridden."
+    _undefined
   end
 
   def get_number(_field)
-    fail "Method 'get_number' is unimplemented and needs to be overridden."
+    _undefined
+  end
+
+  def _undefined
+    fail "Method #{__callee__} is unimplemented and needs to be overridden."
   end
 end
