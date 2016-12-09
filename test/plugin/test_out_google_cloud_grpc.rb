@@ -73,8 +73,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # This test looks similar between the grpc and non-grpc paths except that when
-  # parsing "105", the grpc path responses with "DEBUG", while the non-grpc path
-  # responses with "100".
+  # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
+  # responds with "100".
   def test_severities
     setup_gce_metadata_stubs
     expected_severity = []
@@ -110,7 +110,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   )
 
-  # This message differs between the grpc and non-grpc paths in that:
   # The non-grpc path has a unique field 'validatedWithOriginServer', while
   # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
   HTTP_REQUEST_MESSAGE = {
@@ -126,8 +125,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     'cacheValidatedWithOriginServer' => true
   }
 
-  # In addition of the difference present in HTTP_REQUEST_MESSAGE, this message
-  # also differs between the grpc and non-grpc paths in that:
   # In the non-grpc path 'referer' is nil, while in the grpc path 'referer' is
   # absent.
   HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.reject do |k, _|
@@ -175,21 +172,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
-    def list_logs(_request, _call)
-      _undefined
+    #
+    # These methods should never be called, so they will just fail the tests
+    # with "unimplemented" errors..
+    def _undefined
+      fail "Method #{__callee__} is unimplemented and needs to be overridden."
     end
 
-    def list_log_services(_request, _call)
-      _undefined
-    end
-
-    def list_log_service_indexes(_request, _call)
-      _undefined
-    end
-
-    def delete_log(_request, _call)
-      _undefined
-    end
+    alias_method :list_logs, :_undefined
+    alias_method :list_log_services, :_undefined
+    alias_method :list_log_service_indexes, :_undefined
+    alias_method :delete_log, :_undefined
   end
 
   # GRPC logging mock that fails and returns server side or client side errors.
@@ -210,21 +203,18 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       fail GRPC::BadStatus.new(@code, @message)
     end
 
-    def list_logs(_request, _call)
-      _undefined
+    # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
+    #
+    # These methods should never be called, so they will just fail the tests
+    # with "unimplemented" errors..
+    def _undefined
+      fail "Method #{__callee__} is unimplemented and needs to be overridden."
     end
 
-    def list_log_services(_request, _call)
-      _undefined
-    end
-
-    def list_log_service_indexes(_request, _call)
-      _undefined
-    end
-
-    def delete_log(_request, _call)
-      _undefined
-    end
+    alias_method :list_logs, :_undefined
+    alias_method :list_log_services, :_undefined
+    alias_method :list_log_service_indexes, :_undefined
+    alias_method :delete_log, :_undefined
   end
 
   def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
@@ -249,13 +239,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
     srv.stop
     t.join
-  end
-
-  def underscore(camel_cased_word)
-    camel_cased_word.to_s.gsub(/::/, '/')
-      .gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
-      .gsub(/([a-z\d])([A-Z])/, '\1_\2')
-      .downcase
   end
 
   # The caller can optionally provide a block which is called for each entry.

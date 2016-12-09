@@ -71,8 +71,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # This test looks similar between the grpc and non-grpc paths except that when
-  # parsing "105", the grpc path responses with "DEBUG", while the non-grpc path
-  # responses with "100".
+  # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
+  # responds with "100".
+  #
+  # TODO(lingshi) - consolidate the tests between the grpc path and the non-grpc
+  # path: split it into two tests, one with string severities and one with
+  # numeric severities
   def test_severities
     setup_gce_metadata_stubs
     expected_severity = []
@@ -171,7 +175,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
-  # This message differs between the grpc and non-grpc paths in that:
   # The non-grpc path has a unique field 'validatedWithOriginServer', while
   # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
   HTTP_REQUEST_MESSAGE = {
@@ -187,8 +190,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     'validatedWithOriginServer' => true
   }
 
-  # In addition of the difference present in HTTP_REQUEST_MESSAGE, this message
-  # also differs between the grpc and non-grpc paths in that:
   # In the non-grpc path 'referer' is nil, while in the grpc path 'referer' is
   # absent.
   HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.merge(
