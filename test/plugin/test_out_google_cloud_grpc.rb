@@ -20,6 +20,12 @@ require_relative 'base_test'
 class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   include BaseTest
 
+  def test_configure_use_grpc
+    setup_gce_metadata_stubs
+    d = create_driver
+    assert_true d.instance.instance_variable_get(:@use_grpc)
+  end
+
   def test_client_error
     setup_gce_metadata_stubs
     { 8 => 'ResourceExhausted',
@@ -73,6 +79,35 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   WriteLogEntriesRequest = Google::Logging::V1::WriteLogEntriesRequest
   WriteLogEntriesResponse = Google::Logging::V1::WriteLogEntriesResponse
 
+  USE_GRPC_CONFIG = %(
+    use_grpc true
+  )
+
+  HTTP_REQUEST_MESSAGE = {
+    'requestMethod' => 'POST',
+    'requestUrl' => 'http://example/',
+    'requestSize' => 210,
+    'status' => 200,
+    'responseSize' => 65,
+    'userAgent' => 'USER AGENT 1.0',
+    'remoteIp' => '55.55.55.55',
+    'referer' => 'http://referer/',
+    'cacheHit' => true,
+    'cacheValidatedWithOriginServer' => true
+  }
+
+  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = {
+    'requestMethod' => 'POST',
+    'requestUrl' => 'http://example/',
+    'requestSize' => 210,
+    'status' => 200,
+    'responseSize' => 65,
+    'userAgent' => 'USER AGENT 1.0',
+    'remoteIp' => '55.55.55.55',
+    'cacheHit' => true,
+    'cacheValidatedWithOriginServer' => true
+  }
+
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
                     grpc_stub = GRPCLoggingMockService.rpc_stub_class)
     conf += USE_GRPC_CONFIG
@@ -111,6 +146,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       WriteLogEntriesResponse.new
     end
 
+    # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
     def list_logs(_request, _call)
       fail "Method 'list_logs' should never be called."
     end
@@ -202,11 +238,38 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     verify_json_log_entries(n, params, payload_type, &block)
   end
 
-  def use_grpc_value
-    true
+  # For an optional field with default values, Protobuf omits the field when
+  # deserialize it to json. So we need to add an extra check for gRPC which uses
+  # Protobuf.
+  def assert_with_default_check(field, expected_value, default_value, entry)
+    if expected_value == default_value
+      assert_nil field
+    else
+      assert_equal expected_value, field, entry
+    end
   end
 
-  def grpc_on?
-    true
+  def http_request_message
+    HTTP_REQUEST_MESSAGE
+  end
+
+  def http_request_message_without_referer
+    HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
+  end
+
+  def get_fields(struct_payload)
+    struct_payload['fields']
+  end
+
+  def get_struct(field)
+    field['structValue']
+  end
+
+  def get_string(field)
+    field['stringValue']
+  end
+
+  def get_number(field)
+    field['numberValue']
   end
 end

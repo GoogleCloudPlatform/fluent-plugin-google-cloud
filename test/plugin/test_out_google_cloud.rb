@@ -18,6 +18,12 @@ require_relative 'base_test'
 class GoogleCloudOutputTest < Test::Unit::TestCase
   include BaseTest
 
+  def test_configure_use_grpc
+    setup_gce_metadata_stubs
+    d = create_driver
+    assert_false d.instance.instance_variable_get(:@use_grpc)
+  end
+
   def test_client_400
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
@@ -139,6 +145,32 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
+  HTTP_REQUEST_MESSAGE = {
+    'requestMethod' => 'POST',
+    'requestUrl' => 'http://example/',
+    'requestSize' => 210,
+    'status' => 200,
+    'responseSize' => 65,
+    'userAgent' => 'USER AGENT 1.0',
+    'remoteIp' => '55.55.55.55',
+    'referer' => 'http://referer/',
+    'cacheHit' => false,
+    'validatedWithOriginServer' => true
+  }
+
+  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = {
+    'requestMethod' => 'POST',
+    'requestUrl' => 'http://example/',
+    'requestSize' => 210,
+    'status' => 200,
+    'responseSize' => 65,
+    'userAgent' => 'USER AGENT 1.0',
+    'remoteIp' => '55.55.55.55',
+    'referer' => nil,
+    'cacheHit' => false,
+    'validatedWithOriginServer' => true
+  }
+
   def setup_logging_stubs
     [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
      CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
@@ -161,11 +193,41 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_json_log_entries(n, params, payload_type, &block)
   end
 
-  def use_grpc_value
-    false
+  # For an optional field with default values, Protobuf omits the field when
+  # deserialize it to json. So we need to add an extra check for gRPC which uses
+  # Protobuf.
+  def assert_with_default_check(field, expected_value, _default_value, entry)
+    if expected_value == 'DEBUG'
+      # For some reason we return '100' instead of 'DEBUG' for the non-grpc
+      # path. And the original test asserts this.
+      # TODO(lingshi) figure out if this is a bug or expected behavior.
+      assert_equal 100, field, entry
+    else
+      assert_equal expected_value, field, entry
+    end
   end
 
-  def grpc_on?
-    false
+  def http_request_message
+    HTTP_REQUEST_MESSAGE
+  end
+
+  def http_request_message_without_referer
+    HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
+  end
+
+  def get_fields(struct_payload)
+    struct_payload
+  end
+
+  def get_struct(field)
+    field
+  end
+
+  def get_string(field)
+    field
+  end
+
+  def get_number(field)
+    field
   end
 end

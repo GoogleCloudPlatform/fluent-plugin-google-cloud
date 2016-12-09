@@ -26,7 +26,7 @@ require 'googleauth'
 
 module Google
   module Protobuf
-    # Alias the has_key method to have the same interface as a regular map.
+    # Alias the has_key? method to have the same interface as a regular map.
     class Map
       alias_method :key?, :has_key?
     end

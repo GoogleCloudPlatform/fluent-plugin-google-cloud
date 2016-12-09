@@ -136,10 +136,6 @@ module BaseTest
     detect_subservice false
   )
 
-  USE_GRPC_CONFIG = %(
-    use_grpc true
-  )
-
   CUSTOM_METADATA_CONFIG = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
@@ -311,32 +307,6 @@ module BaseTest
     }
   }
 
-  HTTP_REQUEST_MESSAGE = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/',
-    'cacheHit' => false,
-    'validatedWithOriginServer' => true
-  }
-
-  HTTP_REQUEST_MESSAGE_GRPC = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/',
-    'cacheHit' => true,
-    'cacheValidatedWithOriginServer' => true
-  }
-
   # Shared tests.
 
   def test_configure_service_account_application_default
@@ -481,12 +451,6 @@ module BaseTest
     end
   end
 
-  def test_configure_use_grpc
-    setup_gce_metadata_stubs
-    d = create_driver
-    assert_equal use_grpc_value, d.instance.instance_variable_get(:@use_grpc)
-  end
-
   def test_one_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -557,18 +521,11 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      if grpc_on?
-        fields = entry['structPayload']['fields']
-        assert_equal 3, fields.size, entry
-        assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
-        assert_equal 'test', fields['tag2']['stringValue'], entry
-        assert_equal 5000, fields['data']['numberValue'], entry
-      else
-        assert_equal 3, entry['structPayload'].size, entry
-        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-        assert_equal 'test', entry['structPayload']['tag2'], entry
-        assert_equal 5000, entry['structPayload']['data'], entry
-      end
+      fields = get_fields(entry['structPayload'])
+      assert_equal 3, fields.size, entry
+      assert_equal 'test log entry 0', get_string(fields['msg']), entry
+      assert_equal 'test', get_string(fields['tag2']), entry
+      assert_equal 5000, get_number(fields['data']), entry
     end
   end
 
@@ -607,18 +564,11 @@ module BaseTest
         assert entry.key?('textPayload'), 'Entry did not have textPayload'
       else
         assert entry.key?('structPayload'), 'Entry did not have structPayload'
-        if grpc_on?
-          fields = entry['structPayload']['fields']
-          assert_equal 3, fields.size, entry
-          assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
-          assert_equal 'test', fields['tag2']['stringValue'], entry
-          assert_equal 5000, fields['data']['numberValue'], entry
-        else
-          assert_equal 3, entry['structPayload'].size, entry
-          assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-          assert_equal 'test', entry['structPayload']['tag2'], entry
-          assert_equal 5000, entry['structPayload']['data'], entry
-        end
+        fields = get_fields(entry['structPayload'])
+        assert_equal 3, fields.size, entry
+        assert_equal 'test log entry 0', get_string(fields['msg']), entry
+        assert_equal 'test', get_string(fields['tag2']), entry
+        assert_equal 5000, get_number(fields['data']), entry
       end
     end
   end
@@ -653,22 +603,10 @@ module BaseTest
     end
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
-      if expected_ts[verify_index].tv_sec == 0 && grpc_on?
-        # For an optional field with default values, protobuf omits the field
-        # when deserialize it to json.
-        assert_nil entry['metadata']['timestamp']['seconds']
-      else
-        assert_equal expected_ts[verify_index].tv_sec,
-                     entry['metadata']['timestamp']['seconds'], entry
-      end
-      if expected_ts[verify_index].tv_nsec == 0 && grpc_on?
-        # For an optional field with default values, protobuf omits the field
-        # when deserialize it to json.
-        assert_nil entry['metadata']['timestamp']['nanos']
-      else
-        assert_equal expected_ts[verify_index].tv_nsec,
-                     entry['metadata']['timestamp']['nanos'], entry
-      end
+      assert_with_default_check(entry['metadata']['timestamp']['seconds'],
+                                expected_ts[verify_index].tv_sec, 0, entry)
+      assert_with_default_check(entry['metadata']['timestamp']['nanos'],
+                                expected_ts[verify_index].tv_nsec, 0, entry)
       verify_index += 1
     end
   end
@@ -682,14 +620,9 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      if grpc_on?
-        fields = entry['structPayload']['fields']
-        assert_equal 2, fields.size, entry
-        assert_equal 'not-a-hash', fields['timestamp']['stringValue'], entry
-      else
-        assert_equal 2, entry['structPayload'].size, entry
-        assert_equal 'not-a-hash', entry['structPayload']['timestamp'], entry
-      end
+      fields = get_fields(entry['structPayload'])
+      assert_equal 2, fields.size, entry
+      assert_equal 'not-a-hash', get_string(fields['timestamp']), entry
     end
   end
 
@@ -715,19 +648,9 @@ module BaseTest
     end
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
-      if expected_severity[verify_index] == 'DEFAULT' && grpc_on?
-        # For an optional field with default values, protobuf omits the field
-        # when deserialize it to json.
-        assert_nil entry['metadata']['severity'], entry
-      elsif expected_severity[verify_index] == 'DEBUG' && !grpc_on?
-        # For some reason we return '100' instead of 'DEFAULT' for the non-grpc
-        # path. And the original test asserts this.
-        # TODO(lingshi) figure out if this is a bug or expected behavior.
-        assert_equal 100, entry['metadata']['severity'], entry
-      else
-        assert_equal expected_severity[verify_index],
-                     entry['metadata']['severity'], entry
-      end
+      assert_with_default_check(entry['metadata']['severity'],
+                                expected_severity[verify_index],
+                                'DEFAULT', entry)
       verify_index += 1
     end
   end
@@ -814,17 +737,10 @@ module BaseTest
     params[:labels]['foo.googleapis.com/bar'] = 'value2'
     params[:labels]['label3'] = 'value3'
     verify_log_entries(1, params, 'structPayload') do |entry|
-      if grpc_on?
-        fields = entry['structPayload']['fields']
-        assert_equal 2, fields.size, entry
-        assert_equal 'test log entry 0', fields['message']['stringValue'], entry
-        assert_equal 'value4', fields['not_a_label']['stringValue'], entry
-      else
-        assert_equal 2, entry['structPayload'].size, entry
-        assert_equal 'test log entry 0', entry['structPayload']['message'],
-                     entry
-        assert_equal 'value4', entry['structPayload']['not_a_label'], entry
-      end
+      fields = get_fields(entry['structPayload'])
+      assert_equal 2, fields.size, entry
+      assert_equal 'test log entry 0', get_string(fields['message']), entry
+      assert_equal 'value4', get_string(fields['not_a_label']), entry
     end
   end
 
@@ -996,28 +912,16 @@ module BaseTest
     end
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS,
                        'structPayload') do |entry|
-      if grpc_on?
-        fields = entry['structPayload']['fields']
-        assert_equal 3, fields.size, entry
-        assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
-        assert_equal 'test', fields['tag2']['stringValue'], entry
-        assert_equal 5000, fields['data']['numberValue'], entry
-        assert_equal CONTAINER_SECONDS_EPOCH, \
-                     entry['metadata']['timestamp']['seconds'], entry
-        assert_equal CONTAINER_NANOS, \
-                     entry['metadata']['timestamp']['nanos'], entry
-        assert_equal 'WARNING', entry['metadata']['severity'], entry
-      else
-        assert_equal 3, entry['structPayload'].size, entry
-        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-        assert_equal 'test', entry['structPayload']['tag2'], entry
-        assert_equal 5000, entry['structPayload']['data'], entry
-        assert_equal CONTAINER_SECONDS_EPOCH, \
-                     entry['metadata']['timestamp']['seconds'], entry
-        assert_equal CONTAINER_NANOS, \
-                     entry['metadata']['timestamp']['nanos'], entry
-        assert_equal 'WARNING', entry['metadata']['severity'], entry
-      end
+      fields = get_fields(entry['structPayload'])
+      assert_equal 3, fields.size, entry
+      assert_equal 'test log entry 0', get_string(fields['msg']), entry
+      assert_equal 'test', get_string(fields['tag2']), entry
+      assert_equal 5000, get_number(fields['data']), entry
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+      assert_equal 'WARNING', entry['metadata']['severity'], entry
     end
   end
 
@@ -1033,28 +937,16 @@ module BaseTest
     end
     verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS,
                        'structPayload') do |entry|
-      if grpc_on?
-        fields = entry['structPayload']['fields']
-        assert_equal 3, fields.size, entry
-        assert_equal 'test log entry 0', fields['msg']['stringValue'], entry
-        assert_equal 'test', fields['tag2']['stringValue'], entry
-        assert_equal 5000, fields['data']['numberValue'], entry
-        assert_equal CONTAINER_SECONDS_EPOCH, \
-                     entry['metadata']['timestamp']['seconds'], entry
-        assert_equal CONTAINER_NANOS, \
-                     entry['metadata']['timestamp']['nanos'], entry
-        assert_equal 'WARNING', entry['metadata']['severity'], entry
-      else
-        assert_equal 3, entry['structPayload'].size, entry
-        assert_equal 'test log entry 0', entry['structPayload']['msg'], entry
-        assert_equal 'test', entry['structPayload']['tag2'], entry
-        assert_equal 5000, entry['structPayload']['data'], entry
-        assert_equal CONTAINER_SECONDS_EPOCH, \
-                     entry['metadata']['timestamp']['seconds'], entry
-        assert_equal CONTAINER_NANOS, \
-                     entry['metadata']['timestamp']['nanos'], entry
-        assert_equal 'WARNING', entry['metadata']['severity'], entry
-      end
+      fields = get_fields(entry['structPayload'])
+      assert_equal 3, fields.size, entry
+      assert_equal 'test log entry 0', get_string(fields['msg']), entry
+      assert_equal 'test', get_string(fields['tag2']), entry
+      assert_equal 5000, get_number(fields['data']), entry
+      assert_equal CONTAINER_SECONDS_EPOCH, \
+                   entry['metadata']['timestamp']['seconds'], entry
+      assert_equal CONTAINER_NANOS, \
+                   entry['metadata']['timestamp']['nanos'], entry
+      assert_equal 'WARNING', entry['metadata']['severity'], entry
     end
   end
 
@@ -1122,74 +1014,46 @@ module BaseTest
     end
   end
 
-  def http_request_message
-    if grpc_on?
-      HTTP_REQUEST_MESSAGE_GRPC
-    else
-      HTTP_REQUEST_MESSAGE
-    end
-  end
-
   def test_http_request_from_record
     setup_gce_metadata_stubs
-    message = http_request_message
     setup_logging_stubs do
       d = create_driver
-      d.emit('httpRequest' => message)
+      d.emit('httpRequest' => http_request_message)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal message, entry['httpRequest'], entry
-      if grpc_on?
-        assert_nil entry['structPayload']['fields']['httpRequest'], entry
-      else
-        assert_nil entry['structPayload']['httpRequest'], entry
-      end
+      assert_equal http_request_message, entry['httpRequest'], entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
     end
   end
 
   def test_http_request_partial_from_record
     setup_gce_metadata_stubs
-    message = http_request_message
     setup_logging_stubs do
       d = create_driver
-      d.emit('httpRequest' => message.merge(
+      d.emit('httpRequest' => http_request_message.merge(
         'otherKey' => 'value'))
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal message, entry['httpRequest'], entry
-      if grpc_on?
-        fields = entry['structPayload']['fields']['httpRequest']['structValue']
-        other_key = fields['fields']['otherKey']['stringValue']
-        assert_equal 'value', other_key, entry
-      else
-        assert_equal 'value', entry['structPayload']['httpRequest']['otherKey'],
-                     entry
-      end
+      assert_equal http_request_message, entry['httpRequest'], entry
+      fields = get_fields(entry['structPayload'])
+      request = get_fields(get_struct(fields['httpRequest']))
+      assert_equal 'value', get_string(request['otherKey']), entry
     end
   end
 
   def test_http_request_without_referer_from_record
     setup_gce_metadata_stubs
-    message = http_request_message
-    message_without_referer = message.reject do |key, _|
-      key == 'referer'
-    end
     setup_logging_stubs do
       d = create_driver
-      d.emit('httpRequest' => message_without_referer)
+      d.emit('httpRequest' => http_request_message_without_referer)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      if grpc_on?
-        assert_equal message_without_referer, entry['httpRequest'], entry
-        assert_nil entry['structPayload']['fields']['httpRequest'], entry
-      else
-        assert_equal message_without_referer.merge('referer' => nil),
-                     entry['httpRequest'], entry
-        assert_nil entry['structPayload']['httpRequest'], entry
-      end
+      assert_equal http_request_message_without_referer, entry['httpRequest'],
+                   entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
     end
   end
 
@@ -1201,12 +1065,8 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      if grpc_on?
-        value = entry['structPayload']['fields']['httpRequest']['stringValue']
-      else
-        value = entry['structPayload']['httpRequest']
-      end
-      assert_equal 'a_string', value, entry
+      fields = get_fields(entry['structPayload'])
+      assert_equal 'a_string', get_string(fields['httpRequest']), entry
       assert_equal nil, entry['httpRequest'], entry
     end
   end
@@ -1397,5 +1257,56 @@ module BaseTest
       end
     end
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
+  end
+
+  # Methods below are unimplemented in this module and need to be overriden.
+
+  def create_driver
+    fail "Method 'create_driver' is unimplemented and needs to be " \
+         'overridden.'
+  end
+
+  def setup_logging_stubs
+    fail "Method 'setup_logging_stubs' is unimplemented and needs to be " \
+         'overridden.'
+  end
+
+  def verify_log_entries
+    fail "Method 'verify_log_entries' is unimplemented and needs to be " \
+         'overridden.'
+  end
+
+  # For an optional field with default values, Protobuf omits the field when
+  # deserialize it to json. So we need to add an extra check for gRPC which uses
+  # Protobuf.
+  def assert_with_default_check(_field, _expected_value, _default_value, _entry)
+    fail "Method 'assert_with_default_check' is unimplemented and needs to " \
+         'be overridden.'
+  end
+
+  def http_request_message
+    fail "Method 'http_request_message' is unimplemented and needs to be " \
+         'overridden.'
+  end
+
+  def http_request_message_without_referer
+    fail "Method 'http_request_message_without_referer' is unimplemented and " \
+         'needs to be overridden.'
+  end
+
+  def get_fields(_struct_payload)
+    fail "Method 'get_fields' is unimplemented and needs to be overridden."
+  end
+
+  def get_struct(_field)
+    fail "Method 'get_struct' is unimplemented and needs to be overridden."
+  end
+
+  def get_string(_field)
+    fail "Method 'get_string' is unimplemented and needs to be overridden."
+  end
+
+  def get_number(_field)
+    fail "Method 'get_number' is unimplemented and needs to be overridden."
   end
 end
