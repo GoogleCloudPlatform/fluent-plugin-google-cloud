@@ -1255,7 +1255,7 @@ module BaseTest
     _undefined
   end
 
-  # Verify the number and the concent of the log entries match the expectation.
+  # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(_n, _params, _payload_type = 'textPayload', &_block)
     _undefined

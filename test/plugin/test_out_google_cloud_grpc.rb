@@ -250,7 +250,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     t.join
   end
 
-  # Verify the number and the concent of the log entries match the expectation.
+  # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload', &block)
     @requests_sent.each do |batch|
@@ -274,14 +274,13 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
-  # skipped in the shared module here and defined in the test class later.
+  # skipped in the shared module and defined here.
   def http_request_message
     HTTP_REQUEST_MESSAGE
   end
 
   # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
-  # definition can be skipped in the shared module and defined in the test
-  # classes later.
+  # definition can be skipped in the shared module and defined here.
   def http_request_message_without_referer
     HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
   end
