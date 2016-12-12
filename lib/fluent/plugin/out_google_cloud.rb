@@ -24,13 +24,22 @@ require 'google/logging/v1/logging_services_pb'
 require 'google/logging/v1/log_entry_pb'
 require 'googleauth'
 
+module Google
+  module Protobuf
+    # Alias the has_key? method to have the same interface as a regular map.
+    class Map
+      alias_method :key?, :has_key?
+    end
+  end
+end
+
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.3.grpc.alpha.3'
+    PLUGIN_VERSION = '0.5.3.grpc.alpha.4'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
@@ -1078,8 +1087,8 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE &&
             @cloudfunctions_log_match
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
-        ts_secs = timestamp.strftime('%s')
-        ts_nanos = timestamp.strftime('%N')
+        ts_secs = timestamp.strftime('%s').to_i
+        ts_nanos = timestamp.strftime('%N').to_i
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1150,17 +1159,27 @@ module Fluent
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
       output = Google::Logging::Type::HttpRequest.new
-      output.request_method = input.delete('requestMethod')
-      output.request_url = input.delete('requestUrl')
-      output.request_size = input.delete('requestSize').to_i
-      output.status = input.delete('status').to_i
-      output.response_size = input.delete('responseSize').to_i
-      output.user_agent = input.delete('userAgent')
-      output.remote_ip = input.delete('remoteIp')
-      output.referer = input.delete('referer')
-      output.cache_hit = input.delete('cacheHit') == 'true'
-      output.validated_with_origin_server = \
-        input.delete('validatedWithOriginServer') == 'true'
+      output.request_method = input.delete('requestMethod') if
+        input.key?('requestMethod')
+      output.request_url = input.delete('requestUrl') if
+        input.key?('requestUrl')
+      output.request_size = input.delete('requestSize').to_i if
+        input.key?('requestSize')
+      output.status = input.delete('status').to_i if
+        input.key?('status')
+      output.response_size = input.delete('responseSize').to_i if
+        input.key?('responseSize')
+      output.user_agent = input.delete('userAgent') if
+        input.key?('userAgent')
+      output.remote_ip = input.delete('remoteIp') if
+        input.key?('remoteIp')
+      output.referer = input.delete('referer') if
+        input.key?('referer')
+      output.cache_hit = input.delete('cacheHit') if
+        input.key?('cacheHit')
+      output.cache_validated_with_origin_server = \
+        input.delete('cacheValidatedWithOriginServer') if
+        input.key?('cacheValidatedWithOriginServer')
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
