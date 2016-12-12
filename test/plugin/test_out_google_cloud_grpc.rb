@@ -138,7 +138,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be
-  #  passed in to construct the mock used by the test driver.
+  # passed in to construct the mock used by the test driver.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
                     grpc_stub = GRPCLoggingMockService.rpc_stub_class)
     conf += USE_GRPC_CONFIG
