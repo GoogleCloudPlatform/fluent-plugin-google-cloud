@@ -1250,41 +1250,56 @@ module BaseTest
     _undefined
   end
 
+  # Set up http or grpc stubs to mock the external calls.
   def setup_logging_stubs
     _undefined
   end
 
-  def verify_log_entries
+  # Verify the number and the concent of the log entries match the expectation.
+  # The caller can optionally provide a block which is called for each entry.
+  def verify_log_entries(_n, _params, _payload_type = 'textPayload', &_block)
     _undefined
   end
 
   # For an optional field with default values, Protobuf omits the field when it
   # is deserialized to json. So we need to add an extra check for gRPC which
   # uses Protobuf.
+  #
+  # An optional block can be passed in if we need to assert something other than
+  # a plain equal. e.g. assert_in_delta.
   def assert_equal_with_default(_field, _expected_value, _default_value, _entry)
     _undefined
   end
 
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
+  # skipped in the shared module here and defined in the test class later.
   def http_request_message
     _undefined
   end
 
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
+  # definition can be skipped in the shared module and defined in the test
+  # classes later.
   def http_request_message_without_referer
     _undefined
   end
 
+  # Get the fields of the struct payload.
   def get_fields(_struct_payload)
     _undefined
   end
 
+  # Get the value of a struct field.
   def get_struct(_field)
     _undefined
   end
 
+  # Get the value of a string field.
   def get_string(_field)
     _undefined
   end
 
+  # Get the value of a number field.
   def get_number(_field)
     _undefined
   end

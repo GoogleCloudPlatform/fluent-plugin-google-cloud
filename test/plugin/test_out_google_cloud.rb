@@ -195,6 +195,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.merge(
     'referer' => nil)
 
+  # Set up http stubs to mock the external calls.
   def setup_logging_stubs
     [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
      CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
@@ -213,6 +214,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       Fluent::GoogleCloudOutput, tag).configure(conf, use_v1_config: true)
   end
 
+  # Verify the number and the concent of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload', &block)
     verify_json_log_entries(n, params, payload_type, &block)
@@ -232,30 +234,35 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # This method is just a simple wrapper around a constant, so the definition
-  # can be skipped in the shared module and defined in the test class later.
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
+  # skipped in the shared module here and defined in the test class later.
   def http_request_message
     HTTP_REQUEST_MESSAGE
   end
 
-  # This method is just a simple wrapper around a constant, so the definition
-  # can be skipped in the shared module and defined in the test class later.
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
+  # definition can be skipped in the shared module and defined in the test
+  # classes later.
   def http_request_message_without_referer
     HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
   end
 
+  # Get the fields of the struct payload.
   def get_fields(struct_payload)
     struct_payload
   end
 
+  # Get the value of a struct field.
   def get_struct(field)
     field
   end
 
+  # Get the value of a string field.
   def get_string(field)
     field
   end
 
+  # Get the value of a number field.
   def get_number(field)
     field
   end
