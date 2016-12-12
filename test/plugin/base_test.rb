@@ -582,9 +582,7 @@ module BaseTest
         d = create_driver
         # Test the "native" fluentd timestamp as well as our nanosecond tags.
         d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
-        # The native timestamp currently only supports second granularity
-        # (fluentd issue #461), so strip nanoseconds from the expected value.
-        expected_ts.push(Time.at(ts.tv_sec))
+        expected_ts.push(ts)
         emit_index += 1
         d.emit('message' => log_entry(emit_index),
                'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)

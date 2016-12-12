@@ -143,13 +143,13 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
                     grpc_stub = GRPCLoggingMockService.rpc_stub_class)
     conf += USE_GRPC_CONFIG
     Fluent::Test::BufferedOutputTestDriver.new(
-      GoogleCloudOutputWithGRPCMock.new(grpc_stub), tag).configure(
-        conf, use_v1_config: true)
+      GoogleCloudOutputWithGRPCMock.new(grpc_stub), tag).configure(conf, true)
   end
 
   # Google Cloud Fluent output stub with grpc mock.
   class GoogleCloudOutputWithGRPCMock < Fluent::GoogleCloudOutput
     def initialize(grpc_stub)
+      super()
       @grpc_stub = grpc_stub
     end
 
@@ -268,6 +268,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   def assert_equal_with_default(field, expected_value, default_value, entry)
     if expected_value == default_value
       assert_nil field
+    elsif block_given?
+      yield
     else
       assert_equal expected_value, field, entry
     end

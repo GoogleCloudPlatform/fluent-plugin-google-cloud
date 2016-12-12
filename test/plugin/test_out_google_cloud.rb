@@ -211,7 +211,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
     Fluent::Test::BufferedOutputTestDriver.new(
-      Fluent::GoogleCloudOutput, tag).configure(conf, use_v1_config: true)
+      Fluent::GoogleCloudOutput, tag).configure(conf, true)
   end
 
   # Verify the number and the content of the log entries match the expectation.
