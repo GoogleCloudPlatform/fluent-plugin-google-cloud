@@ -1246,10 +1246,10 @@ module BaseTest
   # This module expects the methods below to be overridden.
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
-  # The signiture of this method is different between the grpc path and the
+  # The signature of this method is different between the grpc path and the
   # non-grpc path. For grpc, an additional grpc stub class can be passed in to
   # construct the mock used by the test driver.
-  def create_driver
+  def create_driver(_conf = APPLICATION_DEFAULT_CONFIG, _tag = 'test')
     _undefined
   end
 

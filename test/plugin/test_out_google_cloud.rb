@@ -74,9 +74,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
   #
-  # TODO(lingshi) - consolidate the tests between the grpc path and the non-grpc
-  # path: split it into two tests, one with string severities and one with
-  # numeric severities
+  # TODO(lingshi) consolidate the tests between the grpc path and the non-grpc
+  # path, or at least split into two tests, one with string severities and one
+  # with numeric severities.
   def test_severities
     setup_gce_metadata_stubs
     expected_severity = []

@@ -75,6 +75,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
+  #
+  # TODO(lingshi) consolidate the tests between the grpc path and the non-grpc
+  # path, or at least split into two tests, one with string severities and one
+  # with numeric severities.
   def test_severities
     setup_gce_metadata_stubs
     expected_severity = []
@@ -183,6 +187,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     alias_method :list_log_services, :_undefined
     alias_method :list_log_service_indexes, :_undefined
     alias_method :delete_log, :_undefined
+    undef_method :_undefined
   end
 
   # GRPC logging mock that fails and returns server side or client side errors.
@@ -215,6 +220,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     alias_method :list_log_services, :_undefined
     alias_method :list_log_service_indexes, :_undefined
     alias_method :delete_log, :_undefined
+    undef_method :_undefined
   end
 
   def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
