@@ -129,11 +129,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     'cacheValidatedWithOriginServer' => true
   }
 
-  # In the non-grpc path 'referer' is nil, while in the grpc path 'referer' is
-  # absent.
-  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.reject do |k, _|
-    k == 'referer'
-  end
+  # Field 'referer' in the expected response of the non-grpc path is nil, while
+  # in the grpc path it is absent.
+  HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER = \
+    HTTP_REQUEST_MESSAGE.reject do |k, _|
+      k == 'referer'
+    end
+
+  # Struct payload in the expected response of the non-grpc path is nil, while
+  # in the grpc path it is nullValue.
+  HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD = \
+    '{"structValue":{"fields":{"referer":{"nullValue":"NULL_VALUE"}}}}'
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
@@ -281,10 +287,16 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     HTTP_REQUEST_MESSAGE
   end
 
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
-  # definition can be skipped in the shared module and defined here.
-  def http_request_message_without_referer
-    HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER,
+  # so the definition can be skipped in the shared module and defined here.
+  def http_request_message_expected_without_referer
+    HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER
+  end
+
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD,
+  # so the definition can be skipped in the shared module and defined here.
+  def http_request_message_expected_struct_payload
+    HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD
   end
 
   # Get the fields of the struct payload.

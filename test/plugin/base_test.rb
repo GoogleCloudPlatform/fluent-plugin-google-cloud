@@ -1025,17 +1025,26 @@ module BaseTest
     end
   end
 
-  def test_http_request_without_referer_from_record
+  def test_http_request_from_record_with_referer_nil_or_absent
     setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => http_request_message_without_referer)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal http_request_message_without_referer, entry['httpRequest'],
-                   entry
-      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+    {
+      http_request_message_with_referer_nil => \
+        http_request_message_expected_struct_payload,
+      http_request_message_with_referer_absent => 'null'
+    }.each do |message, expected|
+      @logs_sent = []
+      setup_logging_stubs do
+        d = create_driver
+        d.emit('httpRequest' => message)
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+        assert_equal http_request_message_expected_without_referer,
+                     entry['httpRequest'], entry
+        assert_equal expected,
+                     get_fields(entry['structPayload'])['httpRequest'].to_json,
+                     entry
+      end
     end
   end
 
@@ -1241,6 +1250,18 @@ module BaseTest
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 
+  # Replace the 'referer' field with nil.
+  def http_request_message_with_referer_nil
+    http_request_message.merge('referer' => nil)
+  end
+
+  # Unset the 'referer' field.
+  def http_request_message_with_referer_absent
+    http_request_message.reject do |k, _|
+      k == 'referer'
+    end
+  end
+
   # This module expects the methods below to be overridden.
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
@@ -1275,10 +1296,17 @@ module BaseTest
     _undefined
   end
 
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
-  # definition can be skipped in the shared module and defined in the test
-  # classes later.
-  def http_request_message_without_referer
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER,
+  # so the definition can be skipped in the shared module and defined in the
+  # test classes later.
+  def http_request_message_expected_without_referer
+    _undefined
+  end
+
+  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD,
+  # so the definition can be skipped in the shared module and defined in the
+  # test classes later.
+  def http_request_message_expected_struct_payload
     _undefined
   end
 
