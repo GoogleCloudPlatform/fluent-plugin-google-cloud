@@ -827,28 +827,27 @@ module Fluent
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
       output = Google::Logging::Type::HttpRequest.new
-      output.request_method = input.delete('requestMethod') if
-        input.key?('requestMethod') && !input['requestMethod'].nil?
-      output.request_url = input.delete('requestUrl') if
-        input.key?('requestUrl') && !input['requestUrl'].nil?
-      output.request_size = input.delete('requestSize').to_i if
-        input.key?('requestSize') && !input['requestSize'].nil?
-      output.status = input.delete('status').to_i if
-        input.key?('status') && !input['status'].nil?
-      output.response_size = input.delete('responseSize').to_i if
-        input.key?('responseSize') && !input['responseSize'].nil?
-      output.user_agent = input.delete('userAgent') if
-        input.key?('userAgent') && !input['userAgent'].nil?
-      output.remote_ip = input.delete('remoteIp') if
-        input.key?('remoteIp') && !input['remoteIp'].nil?
-      output.referer = input.delete('referer') if
-        input.key?('referer') && !input['referer'].nil?
-      output.cache_hit = input.delete('cacheHit') if
-        input.key?('cacheHit') && !input['cacheHit'].nil?
+      output.request_method = input.delete('requestMethod') unless
+        input['requestMethod'].nil?
+      output.request_url = input.delete('requestUrl') unless
+        input['requestUrl'].nil?
+      output.request_size = input.delete('requestSize').to_i unless
+        input['requestSize'].nil?
+      output.status = input.delete('status').to_i unless
+        input['status'].nil?
+      output.response_size = input.delete('responseSize').to_i unless
+        input['responseSize'].nil?
+      output.user_agent = input.delete('userAgent') unless
+        input['userAgent'].nil?
+      output.remote_ip = input.delete('remoteIp') unless
+        input['remoteIp'].nil?
+      output.referer = input.delete('referer') unless
+        input['referer'].nil?
+      output.cache_hit = input.delete('cacheHit') unless
+        input['cacheHit'].nil?
       output.cache_validated_with_origin_server = \
-        input.delete('cacheValidatedWithOriginServer') if
-        input.key?('cacheValidatedWithOriginServer') \
-          && !input['cacheValidatedWithOriginServer'].nil?
+        input.delete('cacheValidatedWithOriginServer') unless
+          input['cacheValidatedWithOriginServer'].nil?
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end

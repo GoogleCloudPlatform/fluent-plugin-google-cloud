@@ -307,6 +307,19 @@ module BaseTest
     }
   }
 
+  HTTP_REQUEST_MESSAGE = {
+    'requestMethod' => 'POST',
+    'requestUrl' => 'http://example/',
+    'requestSize' => 210,
+    'status' => 200,
+    'responseSize' => 65,
+    'userAgent' => 'USER AGENT 1.0',
+    'remoteIp' => '55.55.55.55',
+    'referer' => 'http://referer/',
+    'cacheHit' => false,
+    'validatedWithOriginServer' => true
+  }
+
   # Shared tests.
 
   def test_configure_service_account_application_default
@@ -1250,16 +1263,14 @@ module BaseTest
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 
-  # Replace the 'referer' field with nil.
-  def http_request_message_with_referer_nil
-    http_request_message.merge('referer' => nil)
+  # The http request message to test against.
+  def http_request_message
+    HTTP_REQUEST_MESSAGE
   end
 
-  # Unset the 'referer' field.
-  def http_request_message_with_referer_absent
-    http_request_message.reject do |k, _|
-      k == 'referer'
-    end
+  # Replace the 'referer' field with nil.
+  def http_request_message_with_nil_referer
+    http_request_message.merge('referer' => nil)
   end
 
   # This module expects the methods below to be overridden.
@@ -1287,26 +1298,6 @@ module BaseTest
   # An optional block can be passed in if we need to assert something other than
   # a plain equal. e.g. assert_in_delta.
   def assert_equal_with_default(_field, _expected_value, _default_value, _entry)
-    _undefined
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
-  # skipped in the shared module here and defined in the test class later.
-  def http_request_message
-    _undefined
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER,
-  # so the definition can be skipped in the shared module and defined in the
-  # test classes later.
-  def http_request_message_expected_without_referer
-    _undefined
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD,
-  # so the definition can be skipped in the shared module and defined in the
-  # test classes later.
-  def http_request_message_expected_struct_payload
     _undefined
   end
 

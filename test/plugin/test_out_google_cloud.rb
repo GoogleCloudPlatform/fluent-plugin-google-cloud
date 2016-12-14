@@ -70,6 +70,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
+  def test_http_request_from_record_with_referer_nil_or_absent
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('httpRequest' => http_request_message_with_nil_referer)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal http_request_message_with_nil_referer,
+                   entry['httpRequest'], entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+    end
+  end
+
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
@@ -175,30 +189,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
-  # The non-grpc path has a unique field 'validatedWithOriginServer', while
-  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
-  HTTP_REQUEST_MESSAGE = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/',
-    'cacheHit' => false,
-    'validatedWithOriginServer' => true
-  }
-
-  # Field 'referer' in the expected response of the non-grpc path is nil, while
-  # in the grpc path it is absent.
-  HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.merge(
-    'referer' => nil)
-
-  # Struct payload in the expected response of the non-grpc path is nil, while
-  # in the grpc path it is nullValue.
-  HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD = 'null'
-
   # Set up http stubs to mock the external calls.
   def setup_logging_stubs
     [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
@@ -236,24 +226,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     else
       assert_equal expected_value, field, entry
     end
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
-  # skipped in the shared module and defined here.
-  def http_request_message
-    HTTP_REQUEST_MESSAGE
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER,
-  # so the definition can be skipped in the shared module and defined here.
-  def http_request_message_expected_without_referer
-    HTTP_REQUEST_MESSAGE_EXPECTED_WITHOUT_REFERER
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD,
-  # so the definition can be skipped in the shared module and defined here.
-  def http_request_message_expected_struct_payload
-    HTTP_REQUEST_MESSAGE_EXPECTED_STRUCT_PAYLOAD
   end
 
   # Get the fields of the struct payload.
