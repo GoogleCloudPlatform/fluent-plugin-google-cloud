@@ -1067,12 +1067,16 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif is_json
-        # 'reduce=false' is passed to the struct_from_ruby method because we
-        # need to make an exception here not to fold all empty structs into
-        # nil, which is the default implementation of struct_from_ruby. Instead
-        # we will leave the root struct as it is just to be consistent with the
-        # behavior in the non-grpc path. In other words, struct_payload would be
+        # In the non-grpc path, "struct_payload={}" is returned when there is no
+        # struct_payload. To make sure the proto in the grpc path is
+        # deserialized to the same thing, struct_payload should be
         # <Google::Protobuf::Struct: fields: {}> instead of null.
+        #
+        # So we need to pass in 'reduce=false' to the `struct_from_ruby` method
+        # to make an exception not to fold all empty structs into nil, which is
+        # the default implementation of `struct_from_ruby`. Instead we will
+        # leave the root struct as it is just to be consistent with the
+        # behavior in the non-grpc path.
         entry.struct_payload = struct_from_ruby(record, false)
       elsif @service_name == CONTAINER_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
