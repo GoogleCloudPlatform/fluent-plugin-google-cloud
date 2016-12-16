@@ -74,13 +74,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_http_request_from_record_with_referer_nil_or_absent
     setup_gce_metadata_stubs
-    {
-      # Struct payload in the expected response of the non-grpc path is nil,
-      # while in the grpc path it is nullValue.
-      http_request_message_with_nil_referer => \
-        '{"structValue":{"fields":{"referer":{"nullValue":"NULL_VALUE"}}}}',
-      http_request_message_with_absent_referer => 'null'
-    }.each do |message, expected|
+    [
+      http_request_message_with_nil_referer,
+      http_request_message_with_absent_referer
+    ].each do |message|
       @logs_sent = []
       setup_logging_stubs do
         d = create_driver
@@ -90,9 +87,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
         assert_equal http_request_message_with_absent_referer,
                      entry['httpRequest'], entry
-        assert_equal expected,
-                     get_fields(entry['structPayload'])['httpRequest'].to_json,
-                     entry
+        assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
       end
     end
   end

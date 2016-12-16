@@ -1016,7 +1016,12 @@ module Fluent
       when Google::Protobuf::Struct
         ret.struct_value = value
       when Hash
-        ret.struct_value = struct_from_ruby(value)
+        struct = struct_from_ruby(value)
+        if struct.nil?
+          ret = nil
+        else
+          ret.struct_value = struct
+        end
       when Google::Protobuf::ListValue
         ret.list_value = value
       when Array
@@ -1036,11 +1041,16 @@ module Fluent
       ret
     end
 
-    def struct_from_ruby(hash)
+    # If reduce is true, nil will be returned for hash like
+    # {"httpRequest"=>{"referer"=>nil}} instead of layers of empty structs.
+    def struct_from_ruby(hash, reduce = true)
       ret = Google::Protobuf::Struct.new
       hash.each do |k, v|
-        ret.fields[k] ||= value_from_ruby(v)
+        ret.fields[k] ||= value_from_ruby(v) \
+          if !v.nil? && !value_from_ruby(v).nil?
       end
+
+      ret = nil if reduce && ret.fields.count { |_, v| !v.nil? } == 0
       ret
     end
 
@@ -1057,13 +1067,19 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif is_json
-        entry.struct_payload = struct_from_ruby(record)
+        # 'reduce=false' is passed to the struct_from_ruby method because we
+        # need to make an exception here not to fold all empty structs into
+        # nil, which is the default implementation of struct_from_ruby. Instead
+        # we will leave the root struct as it is just to be consistent with the
+        # behavior in the non-grpc path. In other words, struct_payload would be
+        # <Google::Protobuf::Struct: fields: {}> instead of null.
+        entry.struct_payload = struct_from_ruby(record, false)
       elsif @service_name == CONTAINER_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = convert_to_utf8(record['message'])
       else
-        entry.struct_payload = struct_from_ruby(record)
+        entry.struct_payload = struct_from_ruby(record, false)
       end
     end
 
