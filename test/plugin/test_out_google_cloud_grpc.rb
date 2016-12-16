@@ -139,21 +139,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   )
 
-  # The non-grpc path has a unique field 'validatedWithOriginServer', while
-  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
-  HTTP_REQUEST_MESSAGE = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/',
-    'cacheHit' => true,
-    'cacheValidatedWithOriginServer' => true
-  }
-
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be
@@ -292,12 +277,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     else
       assert_equal expected_value, field, entry
     end
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
-  # skipped in the shared module and defined here.
-  def http_request_message
-    HTTP_REQUEST_MESSAGE
   end
 
   # Unset the 'referer' field.

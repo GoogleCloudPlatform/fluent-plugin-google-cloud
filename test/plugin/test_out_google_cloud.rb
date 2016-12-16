@@ -189,6 +189,17 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
+  def rename_key(hash, old_key, new_key)
+    hash.merge(new_key => hash[old_key]).reject { |k, _| k == old_key }
+  end
+
+  # The non-grpc path has a unique field 'validatedWithOriginServer', while
+  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
+  def http_request_message
+    rename_key(super, 'cacheValidatedWithOriginServer',
+               'validatedWithOriginServer')
+  end
+
   # Set up http stubs to mock the external calls.
   def setup_logging_stubs
     [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,

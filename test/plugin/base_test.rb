@@ -316,8 +316,8 @@ module BaseTest
     'userAgent' => 'USER AGENT 1.0',
     'remoteIp' => '55.55.55.55',
     'referer' => 'http://referer/',
-    'cacheHit' => false,
-    'validatedWithOriginServer' => true
+    'cacheHit' => true,
+    'cacheValidatedWithOriginServer' => true
   }
 
   # Shared tests.
@@ -1035,29 +1035,6 @@ module BaseTest
       fields = get_fields(entry['structPayload'])
       request = get_fields(get_struct(fields['httpRequest']))
       assert_equal 'value', get_string(request['otherKey']), entry
-    end
-  end
-
-  def test_http_request_from_record_with_referer_nil_or_absent
-    setup_gce_metadata_stubs
-    {
-      http_request_message_with_referer_nil => \
-        http_request_message_expected_struct_payload,
-      http_request_message_with_referer_absent => 'null'
-    }.each do |message, expected|
-      @logs_sent = []
-      setup_logging_stubs do
-        d = create_driver
-        d.emit('httpRequest' => message)
-        d.run
-      end
-      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-        assert_equal http_request_message_expected_without_referer,
-                     entry['httpRequest'], entry
-        assert_equal expected,
-                     get_fields(entry['structPayload'])['httpRequest'].to_json,
-                     entry
-      end
     end
   end
 
