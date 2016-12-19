@@ -1016,9 +1016,9 @@ module Fluent
       when Google::Protobuf::Struct
         ret.struct_value = value
       when Hash
-        struct = struct_from_ruby(value)
+        struct = struct_from_ruby(value, true)
         if struct.nil?
-          ret = nil
+          return nil
         else
           ret.struct_value = struct
         end
@@ -1041,16 +1041,16 @@ module Fluent
       ret
     end
 
-    # If reduce is true, nil will be returned for hash like
+    # If 'collapse_empty' is true, nil will be returned for hash like
     # {"httpRequest"=>{"referer"=>nil}} instead of layers of empty structs.
-    def struct_from_ruby(hash, reduce = true)
+    def struct_from_ruby(hash, collapse_empty)
       ret = Google::Protobuf::Struct.new
       hash.each do |k, v|
         ret.fields[k] ||= value_from_ruby(v) \
           if !v.nil? && !value_from_ruby(v).nil?
       end
 
-      ret = nil if reduce && ret.fields.count { |_, v| !v.nil? } == 0
+      return nil if collapse_empty && ret.fields.count { |_, v| !v.nil? } == 0
       ret
     end
 
@@ -1067,16 +1067,8 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif is_json
-        # In the non-grpc path, "struct_payload={}" is returned when there is no
-        # struct_payload. To make sure the proto in the grpc path is
-        # deserialized to the same thing, struct_payload should be
-        # <Google::Protobuf::Struct: fields: {}> instead of null.
-        #
-        # So we need to pass in 'reduce=false' to the `struct_from_ruby` method
-        # to make an exception not to fold all empty structs into nil, which is
-        # the default implementation of `struct_from_ruby`. Instead we will
-        # leave the root struct as it is just to be consistent with the
-        # behavior in the non-grpc path.
+        # When the input is empty, we want to return an empty struct at the top
+        # level.
         entry.struct_payload = struct_from_ruby(record, false)
       elsif @service_name == CONTAINER_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])

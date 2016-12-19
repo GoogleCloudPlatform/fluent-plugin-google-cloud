@@ -70,7 +70,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
-  def test_http_request_from_record_with_referer_nil_or_absent
+  def test_http_request_from_record_with_referer_nil
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
@@ -193,8 +193,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     hash.merge(new_key => hash[old_key]).reject { |k, _| k == old_key }
   end
 
-  # The non-grpc path has a unique field 'validatedWithOriginServer', while
-  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
+  # The REST path uses old bindings that were generated prior to the field
+  # rename, and has to use the old name, which is 'validatedWithOriginServer'.
   def http_request_message
     rename_key(super, 'cacheValidatedWithOriginServer',
                'validatedWithOriginServer')

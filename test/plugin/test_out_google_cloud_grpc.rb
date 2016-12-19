@@ -72,23 +72,33 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  def test_http_request_from_record_with_referer_nil_or_absent
+  def test_http_request_from_record_with_referer_nil
     setup_gce_metadata_stubs
-    [
-      http_request_message_with_nil_referer,
-      http_request_message_with_absent_referer
-    ].each do |message|
-      @logs_sent = []
-      setup_logging_stubs do
-        d = create_driver
-        d.emit('httpRequest' => message)
-        d.run
-      end
-      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-        assert_equal http_request_message_with_absent_referer,
-                     entry['httpRequest'], entry
-        assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
-      end
+    @logs_sent = []
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('httpRequest' => http_request_message_with_nil_referer)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal http_request_message_with_absent_referer,
+                   entry['httpRequest'], entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+    end
+  end
+
+  def test_http_request_from_record_with_referer_absent
+    setup_gce_metadata_stubs
+    @logs_sent = []
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('httpRequest' => http_request_message_with_absent_referer)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal http_request_message_with_absent_referer,
+                   entry['httpRequest'], entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
     end
   end
 
