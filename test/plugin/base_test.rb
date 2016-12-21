@@ -540,7 +540,7 @@ module BaseTest
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
       assert_equal 'test', get_string(fields['tag2']), entry
       assert_equal 5000, get_number(fields['data']), entry
-      assert_equal null_value, get_null(fields['some_null_field']), entry
+      assert_equal null_value, fields['some_null_field'], entry
     end
   end
 
@@ -585,7 +585,7 @@ module BaseTest
         assert_equal 'test log entry 0', get_string(fields['msg']), entry
         assert_equal 'test', get_string(fields['tag2']), entry
         assert_equal 5000, get_number(fields['data']), entry
-        assert_equal null_value, get_null(fields['some_null_field']), entry
+        assert_equal null_value, fields['some_null_field'], entry
       end
     end
   end
@@ -1299,11 +1299,6 @@ module BaseTest
 
   # Get the value of a number field.
   def get_number(_field)
-    _undefined
-  end
-
-  # Get the value of a null field.
-  def get_null(_field)
     _undefined
   end
 

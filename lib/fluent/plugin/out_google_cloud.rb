@@ -827,29 +827,32 @@ module Fluent
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
       output = Google::Logging::Type::HttpRequest.new
-      # We need to delete a field from 'httpRequest' even if its value is:
-      # {"nullValue"=>"NULL_VALUE"}. However we do not want to assign this
-      # null value to proto fields defined as strings / integers.
-      deleted = input.delete('requestMethod')
-      output.request_method = deleted unless deleted.nil?
-      deleted = input.delete('requestUrl')
-      output.request_url = deleted unless deleted.nil?
-      deleted = input.delete('requestSize')
-      output.request_size = deleted.to_i unless deleted.nil?
-      deleted = input.delete('status')
-      output.status = deleted.to_i unless deleted.nil?
-      deleted = input.delete('responseSize')
-      output.response_size = deleted.to_i unless deleted.nil?
-      deleted = input.delete('userAgent')
-      output.user_agent = deleted unless deleted.nil?
-      deleted = input.delete('remoteIp')
-      output.remote_ip = deleted unless deleted.nil?
-      deleted = input.delete('referer')
-      output.referer = deleted unless deleted.nil?
-      deleted = input.delete('cacheHit')
-      output.cache_hit = deleted unless deleted.nil?
-      deleted = input.delete('cacheValidatedWithOriginServer')
-      output.cache_validated_with_origin_server = deleted unless deleted.nil?
+      # We need to delete each field from 'httpRequest' even if its value is
+      # nil. However we do not want to assign this nil value to proto fields
+      # defined as strings / integers.
+      request_method = input.delete('requestMethod')
+      output.request_method = request_method unless request_method.nil?
+      request_url = input.delete('requestUrl')
+      output.request_url = request_url unless request_url.nil?
+      request_size = input.delete('requestSize')
+      output.request_size = request_size.to_i unless request_size.nil?
+      status = input.delete('status')
+      output.status = status.to_i unless status.nil?
+      response_size = input.delete('responseSize')
+      output.response_size = response_size.to_i unless response_size.nil?
+      user_agent = input.delete('userAgent')
+      output.user_agent = user_agent unless user_agent.nil?
+      remote_ip = input.delete('remoteIp')
+      output.remote_ip = remote_ip unless remote_ip.nil?
+      referer = input.delete('referer')
+      output.referer = referer unless referer.nil?
+      cache_hit = input.delete('cacheHit')
+      output.cache_hit = cache_hit unless cache_hit.nil?
+      cache_validated_with_origin_server = \
+        input.delete('cacheValidatedWithOriginServer')
+      output.cache_validated_with_origin_server = \
+        cache_validated_with_origin_server \
+        unless cache_validated_with_origin_server.nil?
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end

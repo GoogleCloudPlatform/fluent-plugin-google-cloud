@@ -263,11 +263,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     field
   end
 
-  # Get the value of a null field.
-  def get_null(field)
-    field
-  end
-
   # The null value.
   def null_value
     nil

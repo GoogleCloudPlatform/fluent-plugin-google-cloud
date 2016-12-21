@@ -74,7 +74,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_http_request_from_record_with_referer_nil
     setup_gce_metadata_stubs
-    @logs_sent = []
     setup_logging_stubs do
       d = create_driver
       d.emit('httpRequest' => http_request_message_with_nil_referer)
@@ -89,7 +88,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_http_request_from_record_with_referer_absent
     setup_gce_metadata_stubs
-    @logs_sent = []
     setup_logging_stubs do
       d = create_driver
       d.emit('httpRequest' => http_request_message_with_absent_referer)
@@ -311,13 +309,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     field['numberValue']
   end
 
-  # Get the value of a null field.
-  def get_null(field)
-    field['nullValue']
-  end
-
   # The null value.
   def null_value
-    'NULL_VALUE'
+    { 'nullValue' => 'NULL_VALUE' }
   end
 end
