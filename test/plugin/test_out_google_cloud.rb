@@ -78,6 +78,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      # The request we send to Logging API has json like:
+      # "httpRequest": { "referer": null }, but eventually the stored LogEntry
+      # would be "httpRequest": {}, since 'referer' is defined as a string in
+      # the proto.
       assert_equal http_request_message_with_nil_referer,
                    entry['httpRequest'], entry
       assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
@@ -257,5 +261,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Get the value of a number field.
   def get_number(field)
     field
+  end
+
+  # Get the value of a null field.
+  def get_null(field)
+    field
+  end
+
+  # The null value.
+  def null_value
+    nil
   end
 end

@@ -530,15 +530,17 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000)
+      d.emit('msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000,
+             'some_null_field' => nil)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
       fields = get_fields(entry['structPayload'])
-      assert_equal 3, fields.size, entry
+      assert_equal 4, fields.size, entry
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
       assert_equal 'test', get_string(fields['tag2']), entry
       assert_equal 5000, get_number(fields['data']), entry
+      assert_equal null_value, get_null(fields['some_null_field']), entry
     end
   end
 
@@ -563,7 +565,8 @@ module BaseTest
     setup_container_metadata_stubs
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      json_string = '{"msg": "test log entry 0", "tag2": "test", "data": 5000}'
+      json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                    '"data": 5000, "some_null_field": null}'
       d.emit(container_log_entry_with_metadata('notJSON' + json_string))
       d.emit(container_log_entry_with_metadata(json_string))
       d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
@@ -578,10 +581,11 @@ module BaseTest
       else
         assert entry.key?('structPayload'), 'Entry did not have structPayload'
         fields = get_fields(entry['structPayload'])
-        assert_equal 3, fields.size, entry
+        assert_equal 4, fields.size, entry
         assert_equal 'test log entry 0', get_string(fields['msg']), entry
         assert_equal 'test', get_string(fields['tag2']), entry
         assert_equal 5000, get_number(fields['data']), entry
+        assert_equal null_value, get_null(fields['some_null_field']), entry
       end
     end
   end
@@ -1295,6 +1299,16 @@ module BaseTest
 
   # Get the value of a number field.
   def get_number(_field)
+    _undefined
+  end
+
+  # Get the value of a null field.
+  def get_null(_field)
+    _undefined
+  end
+
+  # The null value.
+  def null_value(_field)
     _undefined
   end
 

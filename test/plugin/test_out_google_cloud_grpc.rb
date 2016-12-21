@@ -310,4 +310,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   def get_number(field)
     field['numberValue']
   end
+
+  # Get the value of a null field.
+  def get_null(field)
+    field['nullValue']
+  end
+
+  # The null value.
+  def null_value
+    'NULL_VALUE'
+  end
 end

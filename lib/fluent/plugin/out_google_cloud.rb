@@ -827,27 +827,29 @@ module Fluent
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
       output = Google::Logging::Type::HttpRequest.new
-      output.request_method = input.delete('requestMethod') unless
-        input['requestMethod'].nil?
-      output.request_url = input.delete('requestUrl') unless
-        input['requestUrl'].nil?
-      output.request_size = input.delete('requestSize').to_i unless
-        input['requestSize'].nil?
-      output.status = input.delete('status').to_i unless
-        input['status'].nil?
-      output.response_size = input.delete('responseSize').to_i unless
-        input['responseSize'].nil?
-      output.user_agent = input.delete('userAgent') unless
-        input['userAgent'].nil?
-      output.remote_ip = input.delete('remoteIp') unless
-        input['remoteIp'].nil?
-      output.referer = input.delete('referer') unless
-        input['referer'].nil?
-      output.cache_hit = input.delete('cacheHit') unless
-        input['cacheHit'].nil?
-      output.cache_validated_with_origin_server = \
-        input.delete('cacheValidatedWithOriginServer') unless
-          input['cacheValidatedWithOriginServer'].nil?
+      # We need to delete a field from 'httpRequest' even if its value is:
+      # {"nullValue"=>"NULL_VALUE"}. However we do not want to assign this
+      # null value to proto fields defined as strings / integers.
+      deleted = input.delete('requestMethod')
+      output.request_method = deleted unless deleted.nil?
+      deleted = input.delete('requestUrl')
+      output.request_url = deleted unless deleted.nil?
+      deleted = input.delete('requestSize')
+      output.request_size = deleted.to_i unless deleted.nil?
+      deleted = input.delete('status')
+      output.status = deleted.to_i unless deleted.nil?
+      deleted = input.delete('responseSize')
+      output.response_size = deleted.to_i unless deleted.nil?
+      deleted = input.delete('userAgent')
+      output.user_agent = deleted unless deleted.nil?
+      deleted = input.delete('remoteIp')
+      output.remote_ip = deleted unless deleted.nil?
+      deleted = input.delete('referer')
+      output.referer = deleted unless deleted.nil?
+      deleted = input.delete('cacheHit')
+      output.cache_hit = deleted unless deleted.nil?
+      deleted = input.delete('cacheValidatedWithOriginServer')
+      output.cache_validated_with_origin_server = deleted unless deleted.nil?
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
@@ -1016,12 +1018,7 @@ module Fluent
       when Google::Protobuf::Struct
         ret.struct_value = value
       when Hash
-        struct = struct_from_ruby(value, true)
-        if struct.nil?
-          return nil
-        else
-          ret.struct_value = struct
-        end
+        ret.struct_value = struct_from_ruby(value)
       when Google::Protobuf::ListValue
         ret.list_value = value
       when Array
@@ -1041,16 +1038,11 @@ module Fluent
       ret
     end
 
-    # If 'collapse_empty' is true, nil will be returned for hash like
-    # {"httpRequest"=>{"referer"=>nil}} instead of layers of empty structs.
-    def struct_from_ruby(hash, collapse_empty)
+    def struct_from_ruby(hash)
       ret = Google::Protobuf::Struct.new
       hash.each do |k, v|
-        ret.fields[k] ||= value_from_ruby(v) \
-          if !v.nil? && !value_from_ruby(v).nil?
+        ret.fields[k] ||= value_from_ruby(v)
       end
-
-      return nil if collapse_empty && ret.fields.count { |_, v| !v.nil? } == 0
       ret
     end
 
@@ -1067,15 +1059,13 @@ module Fluent
       elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif is_json
-        # When the input is empty, we want to return an empty struct at the top
-        # level.
-        entry.struct_payload = struct_from_ruby(record, false)
+        entry.struct_payload = struct_from_ruby(record)
       elsif @service_name == CONTAINER_SERVICE && record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = convert_to_utf8(record['message'])
       else
-        entry.struct_payload = struct_from_ruby(record, false)
+        entry.struct_payload = struct_from_ruby(record)
       end
     end
 
