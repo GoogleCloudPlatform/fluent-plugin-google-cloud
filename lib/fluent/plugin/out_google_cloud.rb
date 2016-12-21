@@ -39,7 +39,7 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.3.grpc.alpha.4'
+    PLUGIN_VERSION = '0.5.3.grpc.alpha.5'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
