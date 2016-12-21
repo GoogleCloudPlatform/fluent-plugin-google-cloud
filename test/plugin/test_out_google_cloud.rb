@@ -70,6 +70,24 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
+  def test_http_request_from_record_with_referer_nil
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('httpRequest' => http_request_message_with_nil_referer)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      # The request we send to Logging API has json like:
+      # "httpRequest": { "referer": null }, but eventually the stored LogEntry
+      # would be "httpRequest": {}, since 'referer' is defined as a string in
+      # the proto.
+      assert_equal http_request_message_with_nil_referer,
+                   entry['httpRequest'], entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+    end
+  end
+
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
@@ -175,25 +193,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
-  # The non-grpc path has a unique field 'validatedWithOriginServer', while
-  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
-  HTTP_REQUEST_MESSAGE = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/',
-    'cacheHit' => false,
-    'validatedWithOriginServer' => true
-  }
+  def rename_key(hash, old_key, new_key)
+    hash.merge(new_key => hash[old_key]).reject { |k, _| k == old_key }
+  end
 
-  # In the non-grpc path 'referer' is nil, while in the grpc path 'referer' is
-  # absent.
-  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.merge(
-    'referer' => nil)
+  # The REST path uses old bindings that were generated prior to the field
+  # rename, and has to use the old name, which is 'validatedWithOriginServer'.
+  def http_request_message
+    rename_key(super, 'cacheValidatedWithOriginServer',
+               'validatedWithOriginServer')
+  end
 
   # Set up http stubs to mock the external calls.
   def setup_logging_stubs
@@ -234,18 +243,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
-  # skipped in the shared module and defined here.
-  def http_request_message
-    HTTP_REQUEST_MESSAGE
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
-  # definition can be skipped in the shared module and defined here.
-  def http_request_message_without_referer
-    HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
-  end
-
   # Get the fields of the struct payload.
   def get_fields(struct_payload)
     struct_payload
@@ -264,5 +261,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Get the value of a number field.
   def get_number(field)
     field
+  end
+
+  # The null value.
+  def null_value
+    nil
   end
 end

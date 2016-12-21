@@ -72,6 +72,34 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_http_request_from_record_with_referer_nil
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('httpRequest' => http_request_message_with_nil_referer)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal http_request_message_with_absent_referer,
+                   entry['httpRequest'], entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+    end
+  end
+
+  def test_http_request_from_record_with_referer_absent
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('httpRequest' => http_request_message_with_absent_referer)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+      assert_equal http_request_message_with_absent_referer,
+                   entry['httpRequest'], entry
+      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+    end
+  end
+
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
@@ -113,27 +141,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   USE_GRPC_CONFIG = %(
     use_grpc true
   )
-
-  # The non-grpc path has a unique field 'validatedWithOriginServer', while
-  # the grpc path has a unique field 'cacheValidatedWithOriginServer'.
-  HTTP_REQUEST_MESSAGE = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/',
-    'cacheHit' => true,
-    'cacheValidatedWithOriginServer' => true
-  }
-
-  # In the non-grpc path 'referer' is nil, while in the grpc path 'referer' is
-  # absent.
-  HTTP_REQUEST_MESSAGE_WITHOUT_REFERER = HTTP_REQUEST_MESSAGE.reject do |k, _|
-    k == 'referer'
-  end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
@@ -275,16 +282,11 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
-  # skipped in the shared module and defined here.
-  def http_request_message
-    HTTP_REQUEST_MESSAGE
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
-  # definition can be skipped in the shared module and defined here.
-  def http_request_message_without_referer
-    HTTP_REQUEST_MESSAGE_WITHOUT_REFERER
+  # Unset the 'referer' field.
+  def http_request_message_with_absent_referer
+    http_request_message.reject do |k, _|
+      k == 'referer'
+    end
   end
 
   # Get the fields of the struct payload.
@@ -305,5 +307,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # Get the value of a number field.
   def get_number(field)
     field['numberValue']
+  end
+
+  # The null value.
+  def null_value
+    { 'nullValue' => 'NULL_VALUE' }
   end
 end

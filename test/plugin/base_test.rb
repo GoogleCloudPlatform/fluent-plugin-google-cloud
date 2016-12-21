@@ -307,6 +307,19 @@ module BaseTest
     }
   }
 
+  HTTP_REQUEST_MESSAGE = {
+    'requestMethod' => 'POST',
+    'requestUrl' => 'http://example/',
+    'requestSize' => 210,
+    'status' => 200,
+    'responseSize' => 65,
+    'userAgent' => 'USER AGENT 1.0',
+    'remoteIp' => '55.55.55.55',
+    'referer' => 'http://referer/',
+    'cacheHit' => true,
+    'cacheValidatedWithOriginServer' => true
+  }
+
   # Shared tests.
 
   def test_configure_service_account_application_default
@@ -517,15 +530,17 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000)
+      d.emit('msg' => log_entry(0), 'tag2' => 'test', 'data' => 5000,
+             'some_null_field' => nil)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
       fields = get_fields(entry['structPayload'])
-      assert_equal 3, fields.size, entry
+      assert_equal 4, fields.size, entry
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
       assert_equal 'test', get_string(fields['tag2']), entry
       assert_equal 5000, get_number(fields['data']), entry
+      assert_equal null_value, fields['some_null_field'], entry
     end
   end
 
@@ -550,7 +565,8 @@ module BaseTest
     setup_container_metadata_stubs
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      json_string = '{"msg": "test log entry 0", "tag2": "test", "data": 5000}'
+      json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                    '"data": 5000, "some_null_field": null}'
       d.emit(container_log_entry_with_metadata('notJSON' + json_string))
       d.emit(container_log_entry_with_metadata(json_string))
       d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
@@ -565,10 +581,11 @@ module BaseTest
       else
         assert entry.key?('structPayload'), 'Entry did not have structPayload'
         fields = get_fields(entry['structPayload'])
-        assert_equal 3, fields.size, entry
+        assert_equal 4, fields.size, entry
         assert_equal 'test log entry 0', get_string(fields['msg']), entry
         assert_equal 'test', get_string(fields['tag2']), entry
         assert_equal 5000, get_number(fields['data']), entry
+        assert_equal null_value, fields['some_null_field'], entry
       end
     end
   end
@@ -1025,20 +1042,6 @@ module BaseTest
     end
   end
 
-  def test_http_request_without_referer_from_record
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => http_request_message_without_referer)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal http_request_message_without_referer, entry['httpRequest'],
-                   entry
-      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
-    end
-  end
-
   def test_http_request_when_not_hash
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -1241,6 +1244,16 @@ module BaseTest
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 
+  # The http request message to test against.
+  def http_request_message
+    HTTP_REQUEST_MESSAGE
+  end
+
+  # Replace the 'referer' field with nil.
+  def http_request_message_with_nil_referer
+    http_request_message.merge('referer' => nil)
+  end
+
   # This module expects the methods below to be overridden.
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
@@ -1269,19 +1282,6 @@ module BaseTest
     _undefined
   end
 
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE, so the definition can be
-  # skipped in the shared module here and defined in the test class later.
-  def http_request_message
-    _undefined
-  end
-
-  # A wrapper around the constant HTTP_REQUEST_MESSAGE_WITHOUT_REFERER, so the
-  # definition can be skipped in the shared module and defined in the test
-  # classes later.
-  def http_request_message_without_referer
-    _undefined
-  end
-
   # Get the fields of the struct payload.
   def get_fields(_struct_payload)
     _undefined
@@ -1299,6 +1299,11 @@ module BaseTest
 
   # Get the value of a number field.
   def get_number(_field)
+    _undefined
+  end
+
+  # The null value.
+  def null_value(_field)
     _undefined
   end
 
