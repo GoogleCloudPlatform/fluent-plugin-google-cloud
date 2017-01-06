@@ -1044,7 +1044,7 @@ module Fluent
     def struct_from_ruby(hash)
       ret = Google::Protobuf::Struct.new
       hash.each do |k, v|
-        ret.fields[k] ||= value_from_ruby(v)
+        ret.fields[convert_to_utf8(k.to_s)] ||= value_from_ruby(v)
       end
       ret
     end
