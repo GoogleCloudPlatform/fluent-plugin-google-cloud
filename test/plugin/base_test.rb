@@ -544,30 +544,33 @@ module BaseTest
     end
   end
 
-  def test_struct_payload_malformat_log
+  def test_struct_payload_malformatted_log
     setup_gce_metadata_stubs
     message = 'test message'
     setup_logging_stubs do
       d = create_driver
       d.emit(
-        'int_as_key' => { 1 => message },
-        'array_as_key' => { [1, 2, 3, 4] => message },
-        'hash_as_key' => { { 'some_key' => 'some_value' } => message },
-        'nil_as_key' => { nil => message }
+        'int_key' => { 1 => message },
+        'array_key' => { [1, 2, 3, 4] => message },
+        'hash_key' => { { 'some_key' => 'some_value' } => message },
+        'symbol_key' => { some_symbol: message },
+        'nil_key' => { nil => message }
       )
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
       fields = get_fields(entry['structPayload'])
-      assert_equal 4, fields.size, entry
+      assert_equal 5, fields.size, entry
       assert_equal message, get_string(get_fields(get_struct(fields \
-                   ['int_as_key']))['1']), entry
+                   ['int_key']))['1']), entry
       assert_equal message, get_string(get_fields(get_struct(fields \
-                   ['array_as_key']))['[1, 2, 3, 4]']), entry
+                   ['array_key']))['[1, 2, 3, 4]']), entry
       assert_equal message, get_string(get_fields(get_struct(fields \
-                   ['hash_as_key']))['{"some_key"=>"some_value"}']), entry
+                   ['hash_key']))['{"some_key"=>"some_value"}']), entry
       assert_equal message, get_string(get_fields(get_struct(fields \
-                   ['nil_as_key']))['']), entry
+                   ['symbol_key']))['some_symbol']), entry
+      assert_equal message, get_string(get_fields(get_struct(fields \
+                   ['nil_key']))['']), entry
     end
   end
 

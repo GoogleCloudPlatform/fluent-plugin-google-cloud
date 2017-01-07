@@ -136,18 +136,22 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_logging_stubs do
       d = create_driver
       d.emit('msg' => log_entry(0),
-             'normal_key' => 'test' + non_utf8_character + 'some non utf8',
-             'non_utf8' + non_utf8_character + 'key' => 5000,
-             'some_null_field' => nil)
+             'normal_key' => "test#{non_utf8_character}non utf8",
+             "non_utf8#{non_utf8_character}key" => 5000,
+             'nested_struct' => { "non_utf8#{non_utf8_character}key" => \
+                                  "test#{non_utf8_character}non utf8" },
+             'null_field' => nil)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
       fields = get_fields(entry['structPayload'])
-      assert_equal 4, fields.size, entry
+      assert_equal 5, fields.size, entry
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
-      assert_equal 'test some non utf8', get_string(fields['normal_key']), entry
+      assert_equal 'test non utf8', get_string(fields['normal_key']), entry
       assert_equal 5000, get_number(fields['non_utf8 key']), entry
-      assert_equal null_value, fields['some_null_field'], entry
+      assert_equal 'test non utf8', get_string(get_fields(get_struct(fields \
+                   ['nested_struct']))['non_utf8 key']), entry
+      assert_equal null_value, fields['null_field'], entry
     end
   end
 
