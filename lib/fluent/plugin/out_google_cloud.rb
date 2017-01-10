@@ -39,7 +39,7 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.3'
+    PLUGIN_VERSION = '0.5.4.grpc.alpha.1'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
@@ -1044,7 +1044,7 @@ module Fluent
     def struct_from_ruby(hash)
       ret = Google::Protobuf::Struct.new
       hash.each do |k, v|
-        ret.fields[k] ||= value_from_ruby(v)
+        ret.fields[convert_to_utf8(k.to_s)] ||= value_from_ruby(v)
       end
       ret
     end

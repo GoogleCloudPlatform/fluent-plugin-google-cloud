@@ -544,6 +544,36 @@ module BaseTest
     end
   end
 
+  def test_struct_payload_malformatted_log
+    setup_gce_metadata_stubs
+    message = 'test message'
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(
+        'int_key' => { 1 => message },
+        'array_key' => { [1, 2, 3, 4] => message },
+        'hash_key' => { { 'some_key' => 'some_value' } => message },
+        'symbol_key' => { some_symbol: message },
+        'nil_key' => { nil => message }
+      )
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      fields = get_fields(entry['structPayload'])
+      assert_equal 5, fields.size, entry
+      assert_equal message, get_string(get_fields(get_struct(fields \
+                   ['int_key']))['1']), entry
+      assert_equal message, get_string(get_fields(get_struct(fields \
+                   ['array_key']))['[1, 2, 3, 4]']), entry
+      assert_equal message, get_string(get_fields(get_struct(fields \
+                   ['hash_key']))['{"some_key"=>"some_value"}']), entry
+      assert_equal message, get_string(get_fields(get_struct(fields \
+                   ['symbol_key']))['some_symbol']), entry
+      assert_equal message, get_string(get_fields(get_struct(fields \
+                   ['nil_key']))['']), entry
+    end
+  end
+
   def test_struct_payload_json_log
     setup_gce_metadata_stubs
     setup_logging_stubs do

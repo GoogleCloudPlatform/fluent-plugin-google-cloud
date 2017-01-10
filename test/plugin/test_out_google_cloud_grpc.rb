@@ -131,6 +131,30 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_struct_payload_non_utf8_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('msg' => log_entry(0),
+             'normal_key' => "test#{non_utf8_character}non utf8",
+             "non_utf8#{non_utf8_character}key" => 5000,
+             'nested_struct' => { "non_utf8#{non_utf8_character}key" => \
+                                  "test#{non_utf8_character}non utf8" },
+             'null_field' => nil)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
+      fields = get_fields(entry['structPayload'])
+      assert_equal 5, fields.size, entry
+      assert_equal 'test log entry 0', get_string(fields['msg']), entry
+      assert_equal 'test non utf8', get_string(fields['normal_key']), entry
+      assert_equal 5000, get_number(fields['non_utf8 key']), entry
+      assert_equal 'test non utf8', get_string(get_fields(get_struct(fields \
+                   ['nested_struct']))['non_utf8 key']), entry
+      assert_equal null_value, fields['null_field'], entry
+    end
+  end
+
   private
 
   GRPC_MOCK_HOST = 'localhost:56789'
@@ -264,6 +288,11 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       @logs_sent << JSON.parse(batch.to_json)
     end
     verify_json_log_entries(n, params, payload_type, &block)
+  end
+
+  # Use the right single quotation mark as the sample non-utf8 character.
+  def non_utf8_character
+    [0x92].pack('C*')
   end
 
   # For an optional field with default values, Protobuf omits the field when it
