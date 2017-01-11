@@ -143,8 +143,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
              'null_field' => nil)
       d.run
     end
-    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      fields = get_fields(entry['structPayload'])
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
       assert_equal 5, fields.size, entry
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
       assert_equal 'test non utf8', get_string(fields['normal_key']), entry

@@ -649,7 +649,7 @@ module BaseTest
     end
   end
 
-  def test_struct_payload_malformatted_log
+  def test_json_payload_malformatted_log
     setup_gce_metadata_stubs
     message = 'test message'
     setup_logging_stubs do
@@ -663,8 +663,8 @@ module BaseTest
       )
       d.run
     end
-    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      fields = get_fields(entry['structPayload'])
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
       assert_equal 5, fields.size, entry
       assert_equal message, get_string(get_fields(get_struct(fields \
                    ['int_key']))['1']), entry
