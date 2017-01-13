@@ -343,9 +343,8 @@ module Fluent
         @resource_labels['zone'] = @zone
         common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
       end
-      extracted_labels = extract_resource_labels(@resource_type, common_labels)
-      @resource_labels.merge!(extracted_labels) unless
-        extracted_labels.nil? || extracted_labels.empty?
+      @resource_labels.merge!(
+        extract_resource_labels(@resource_type, common_labels))
 
       # The resource and labels are now set up; ensure they can't be modified
       # without first duping them.
@@ -1184,7 +1183,7 @@ module Fluent
     # are now MonitoredResource labels in v2.
     # For these services, remove resource labels from 'labels' and return a
     # Hash of labels to be merged into the MonitoredResource labels.
-    # Otherwise, return nil and leave 'labels' unmodified.
+    # Otherwise, return an empty hash and leave 'labels' unmodified.
     def extract_resource_labels(resource_type, labels)
       extracted_labels = {}
       if resource_type == DATAFLOW_RESOURCE_TYPE
