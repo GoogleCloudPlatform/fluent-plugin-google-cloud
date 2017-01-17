@@ -18,10 +18,10 @@ require 'socket'
 require 'time'
 require 'yaml'
 require 'google/apis'
+require 'google/apis/logging_v2beta1'
 require 'google/logging/v2/logging_pb'
 require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
-require 'google/apis/logging_v2beta1'
 require 'googleauth'
 
 module Google
@@ -39,7 +39,7 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.4.grpc.alpha.1'
+    PLUGIN_VERSION = '0.5.5.v2.alpha.1'
 
     # Constants for service names.
     APPENGINE_SERVICE = 'appengine.googleapis.com'
@@ -277,12 +277,10 @@ module Fluent
       # Set up the MonitoredResource, labels, etc. based on the config
       case @platform
       when Platform::GCE
-        logviewer_service_name = COMPUTE_SERVICE
         @resource_type = COMPUTE_RESOURCE_TYPE
         # TODO: introduce a new MonitoredResource-centric configuration and
         # deprecate subservice-name; for now, translate known uses.
         if @subservice_name
-          logviewer_service_name = @subservice_name
           # TODO: what should we do if we encounter an unknown value?
           if @subservice_name == DATAFLOW_SERVICE
             @resource_type = DATAFLOW_RESOURCE_TYPE
@@ -302,13 +300,11 @@ module Fluent
                 fetch_gce_metadata('instance/attributes/gae_backend_name')
             @gae_backend_version =
                 fetch_gce_metadata('instance/attributes/gae_backend_version')
-            logviewer_service_name = APPENGINE_SERVICE
             @resource_type = APPENGINE_RESOURCE_TYPE
             @resource_labels['module_id'] = @gae_backend_name
             @resource_labels['version_id'] = @gae_backend_version
           elsif attributes.include?('kube-env')
             # Kubernetes/Container Engine
-            logviewer_service_name = CONTAINER_SERVICE
             @resource_type = CONTAINER_RESOURCE_TYPE
             @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
             @kube_env = YAML.load(@raw_kube_env)
@@ -329,7 +325,6 @@ module Fluent
         end
         common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
       when Platform::EC2
-        logviewer_service_name = EC2_SERVICE
         @resource_type = EC2_RESOURCE_TYPE
         @resource_labels['instance_id'] = @vm_id
         @resource_labels['region'] = @zone
@@ -337,7 +332,6 @@ module Fluent
         common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
       when Platform::OTHER
         # Use GCE as the default environment.
-        logviewer_service_name = COMPUTE_SERVICE
         @resource_type = COMPUTE_RESOURCE_TYPE
         @resource_labels['instance_id'] = @vm_id
         @resource_labels['zone'] = @zone
@@ -353,12 +347,10 @@ module Fluent
       @common_labels.freeze
 
       # Log an informational message containing the Logs viewer URL
-      # TODO: once the log viewer supports v2 services, use resource_type and
-      # remove all references to logviewer_service_name above.
       @log.info 'Logs viewer address: ',
-                'https://console.developers.google.com/project/', @project_id,
-                '/logs?service=', logviewer_service_name,
-                '&key1=instance&key2=', @vm_id
+                'https://pantheon.corp.google.com/logs/viewer?project=',
+                @project_id, '&resource=', @resource_type, '/instance_id/',
+                @vm_id
     end
 
     def start
@@ -377,8 +369,9 @@ module Fluent
     end
 
     def compute_group_type_and_labels(tag)
-      # Note that we assume that labels added to common_labels below are not
-      # 'service' labels (i.e. we do not call extract_resource_labels again).
+      # Note that we assume that labels added to group_common_labels below are
+      # not 'service' labels (i.e. we do not call extract_resource_labels
+      # again).
       group_resource_type = @resource_type.dup
       group_resource_labels = @resource_labels.dup
       group_common_labels = @common_labels.dup
@@ -422,6 +415,12 @@ module Fluent
           end
         end
       end
+
+      # freeze the per-request state.  Any further changes must be made
+      # on a per-entry basis.
+      group_resource_type.freeze
+      group_resource_labels.freeze
+      group_common_labels.freeze
 
       [group_resource_type, group_resource_labels, group_common_labels]
     end
@@ -487,12 +486,6 @@ module Fluent
         entries = []
         group_resource_type, group_resource_labels, group_common_labels =
           compute_group_type_and_labels(tag)
-
-        # freeze the per-request state.  Any further changes must be made
-        # on a per-entry basis.
-        group_resource_type.freeze
-        group_resource_labels.freeze
-        group_common_labels.freeze
 
         arr.each do |time, record|
           next unless record.is_a?(Hash)
@@ -647,6 +640,7 @@ module Fluent
                 ),
                 labels: group_common_labels,
                 entries: entries)
+            write_request.labels = nil if write_request.labels.empty?
 
             # TODO: RequestOptions
             client.write_entry_log_entries(write_request)
@@ -1186,6 +1180,8 @@ module Fluent
     # Otherwise, return an empty hash and leave 'labels' unmodified.
     def extract_resource_labels(resource_type, labels)
       extracted_labels = {}
+      return extracted_labels if labels.nil? || !labels.is_a?(Hash)
+
       if resource_type == DATAFLOW_RESOURCE_TYPE
         label_prefix = DATAFLOW_SERVICE
         labels_to_extract = %w(region job_name job_id step_id)
@@ -1256,21 +1252,6 @@ module Fluent
                      'replace them with spaces, please set "coerce_to_utf8" ' \
                      'to true.'
           raise
-        end
-      end
-    end
-  end
-end
-
-module Google
-  module Apis
-    module LoggingV2beta1
-      # Override MonitoredResource::dup to make a deep copy.
-      class MonitoredResource
-        def dup
-          ret = super
-          ret.labels = labels.dup
-          ret
         end
       end
     end
