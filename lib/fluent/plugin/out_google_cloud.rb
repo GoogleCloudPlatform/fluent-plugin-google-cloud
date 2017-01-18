@@ -348,7 +348,7 @@ module Fluent
 
       # Log an informational message containing the Logs viewer URL
       @log.info 'Logs viewer address: ',
-                'https://pantheon.corp.google.com/logs/viewer?project=',
+                'https://console.cloud.google.com/logs/viewer?project=',
                 @project_id, '&resource=', @resource_type, '/instance_id/',
                 @vm_id
     end
@@ -552,6 +552,8 @@ module Fluent
                 nanos: ts_nanos
               }
             )
+            # Remove the labels if we didn't populate it with anything.
+            entry.resource.labels = nil if entry.resource.labels.empty?
             set_http_request(record, entry)
             set_payload(entry_resource_type, record, entry, is_json)
           end
@@ -640,7 +642,6 @@ module Fluent
                 ),
                 labels: group_common_labels,
                 entries: entries)
-            write_request.labels = nil if write_request.labels.empty?
 
             # TODO: RequestOptions
             client.write_entry_log_entries(write_request)
