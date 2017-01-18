@@ -347,10 +347,9 @@ module Fluent
       @common_labels.freeze
 
       # Log an informational message containing the Logs viewer URL
-      @log.info 'Logs viewer address: ',
-                'https://console.cloud.google.com/logs/viewer?project=',
-                @project_id, '&resource=', @resource_type, '/instance_id/',
-                @vm_id
+      @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
+                "viewer?project=#{@project_id}&resource=#{@resource_type}/",
+                "instance_id/#{@vm_id}"
     end
 
     def start
@@ -540,6 +539,8 @@ module Fluent
             set_http_request_grpc(record, entry)
             set_payload_grpc(entry_resource_type, record, entry, is_json)
           else
+            # Remove the labels if we didn't populate them with anything.
+            entry_resource_labels = nil if entry_resource_labels.empty?
             entry = Google::Apis::LoggingV2beta1::LogEntry.new(
               labels: entry_common_labels,
               resource: Google::Apis::LoggingV2beta1::MonitoredResource.new(
@@ -552,8 +553,6 @@ module Fluent
                 nanos: ts_nanos
               }
             )
-            # Remove the labels if we didn't populate it with anything.
-            entry.resource.labels = nil if entry.resource.labels.empty?
             set_http_request(record, entry)
             set_payload(entry_resource_type, record, entry, is_json)
           end
