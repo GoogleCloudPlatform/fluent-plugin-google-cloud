@@ -516,7 +516,7 @@ module BaseTest
     setup_container_metadata_stubs
     d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
     d.run
-    assert_equal COMPUTE_RESOURCE_TYPE, d.instance.resource_type
+    assert_equal COMPUTE_RESOURCE_TYPE, d.instance.resource.type
   end
 
   def test_metadata_overrides
