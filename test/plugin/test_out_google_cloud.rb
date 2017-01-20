@@ -231,9 +231,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the json payload.
-  def get_fields(json_payload)
-    json_payload
+  # Get the fields of the payload.
+  def get_fields(payload)
+    payload
   end
 
   # Get the value of a struct field.

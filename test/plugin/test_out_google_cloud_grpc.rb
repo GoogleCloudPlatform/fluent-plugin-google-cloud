@@ -317,14 +317,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Unset the 'referer' field.
   def http_request_message_with_absent_referer
-    http_request_message.reject do |k, _|
+    HTTP_REQUEST_MESSAGE.reject do |k, _|
       k == 'referer'
     end
   end
 
-  # Get the fields of the json payload.
-  def get_fields(json_payload)
-    json_payload['fields']
+  # Get the fields of the payload.
+  def get_fields(payload)
+    payload['fields']
   end
 
   # Get the value of a struct field.

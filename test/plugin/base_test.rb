@@ -631,7 +631,7 @@ module BaseTest
     verify_log_entries(1, EC2_PARAMS)
   end
 
-  def test_json_payload_log
+  def test_structured_payload_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
@@ -649,7 +649,7 @@ module BaseTest
     end
   end
 
-  def test_json_payload_malformatted_log
+  def test_structured_payload_malformatted_log
     setup_gce_metadata_stubs
     message = 'test message'
     setup_logging_stubs do
@@ -679,7 +679,7 @@ module BaseTest
     end
   end
 
-  def test_json_payload_json_log
+  def test_structured_payload_json_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
@@ -695,7 +695,7 @@ module BaseTest
     end
   end
 
-  def test_json_payload_json_container_log
+  def test_structured_payload_json_container_log
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     setup_logging_stubs do
@@ -1140,11 +1140,11 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('httpRequest' => http_request_message)
+      d.emit('httpRequest' => HTTP_REQUEST_MESSAGE)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal http_request_message, entry['httpRequest'], entry
+      assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
       assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
     end
   end
@@ -1153,12 +1153,12 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('httpRequest' => http_request_message.merge(
+      d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge(
         'otherKey' => 'value'))
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal http_request_message, entry['httpRequest'], entry
+      assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
       fields = get_fields(entry['jsonPayload'])
       request = get_fields(get_struct(fields['httpRequest']))
       assert_equal 'value', get_string(request['otherKey']), entry
@@ -1366,9 +1366,8 @@ module BaseTest
         # per-entry resource or log_name overrides the corresponding field
         # from the request.  Labels are merged, with the per-entry label
         # taking precedence in case of overlap.
-        resource = \
-          entry.key?('resource') ? entry['resource'] : request['resource']
-        log_name = entry.key?('logName') ? entry['logName'] : request['logName']
+        resource = entry['resource'] || request['resource']
+        log_name = entry['logName'] || request['logName']
 
         labels ||= request['labels']
         labels.merge!(entry['labels'] || {})
@@ -1386,14 +1385,9 @@ module BaseTest
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 
-  # The http request message to test against.
-  def http_request_message
-    HTTP_REQUEST_MESSAGE
-  end
-
   # Replace the 'referer' field with nil.
   def http_request_message_with_nil_referer
-    http_request_message.merge('referer' => nil)
+    HTTP_REQUEST_MESSAGE.merge('referer' => nil)
   end
 
   # This module expects the methods below to be overridden.
@@ -1424,8 +1418,8 @@ module BaseTest
     _undefined
   end
 
-  # Get the fields of the json payload.
-  def get_fields(_json_payload)
+  # Get the fields of the payload.
+  def get_fields(_payload)
     _undefined
   end
 

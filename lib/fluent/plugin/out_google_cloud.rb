@@ -200,12 +200,12 @@ module Fluent
       end
 
       # TODO: Send instance tags as labels as well?
-      # TODO(lingshi) Construct Google::Api::MonitoredResource when @use_grpc is
+      # TODO: Construct Google::Api::MonitoredResource when @use_grpc is
       # true after the protobuf map corruption issue is fixed.
-      @resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
-        labels: {})
       @common_labels = {}
       @common_labels.merge!(@labels) if @labels
+      @resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
+        labels: {})
 
       @compiled_kubernetes_tag_regexp = nil
       if @kubernetes_tag_regexp
@@ -370,6 +370,8 @@ module Fluent
       [tag, time, record].to_msgpack
     end
 
+    # Compute the monitored resource and common labels shared by a collection of
+    # entries.
     def compute_group_resource_and_labels(tag)
       # Note that we assume that labels added to group_common_labels below are
       # not 'service' labels (i.e. we do not call extract_resource_labels
@@ -417,8 +419,8 @@ module Fluent
         end
       end
 
-      # freeze the per-request state.  Any further changes must be made
-      # on a per-entry basis.
+      # Freeze the per-request state. Any further changes must be made on a
+      # per-entry basis.
       group_resource.freeze
       group_resource.labels.freeze
       group_common_labels.freeze
@@ -426,20 +428,21 @@ module Fluent
       [group_resource, group_common_labels]
     end
 
-    def compute_entry_resource_and_labels(group_resource, group_common_labels,
-                                          record)
-      entry_resource = group_resource.dup
-      entry_common_labels = group_common_labels.dup
+    # Extract entry resource and common labels that should be applied to
+    # individual entries from the group resource and group common labels.
+    def extract_entry_labels(group_resource, record)
+      resource_labels = {}
+      common_labels = {}
 
-      if entry_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+      if group_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
          record.key?('log')
         @cloudfunctions_log_match =
           @cloudfunctions_log_regexp.match(record['log'])
       end
 
-      if entry_resource.type == CONTAINER_RESOURCE_TYPE
+      if group_resource.type == CONTAINER_RESOURCE_TYPE
         # Move the stdout/stderr annotation from the record into a label
-        entry_common_labels.merge!(
+        common_labels.merge!(
           field_to_label(record, 'stream', "#{CONTAINER_SERVICE}/stream"))
 
         # If the record has been annotated by the kubernetes_metadata_filter
@@ -448,8 +451,8 @@ module Fluent
         if record.key?('kubernetes')
           extracted_resource_labels, extracted_common_labels = \
             extract_container_metadata(record)
-          entry_resource.labels.merge!(extracted_resource_labels)
-          entry_common_labels.merge!(extracted_common_labels)
+          resource_labels.merge!(extracted_resource_labels)
+          common_labels.merge!(extracted_common_labels)
         end
       end
 
@@ -458,20 +461,20 @@ module Fluent
       # and do not send that field as part of the payload.
       if @label_map
         @label_map.each do |field, label|
-          entry_common_labels.merge!(
+          common_labels.merge!(
             field_to_label(record, field, label))
         end
       end
-      if entry_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+      if group_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
          @cloudfunctions_log_match &&
          @cloudfunctions_log_match['execution_id']
-        entry_common_labels['execution_id'] =
+        common_labels['execution_id'] =
           @cloudfunctions_log_match['execution_id']
       end
-      entry_resource.labels.merge!(
-        extract_resource_labels(entry_resource.type, entry_common_labels))
+      resource_labels.merge!(
+        extract_resource_labels(group_resource.type, common_labels))
 
-      [entry_resource, entry_common_labels]
+      [resource_labels, common_labels]
     end
 
     def write(chunk)
@@ -490,9 +493,12 @@ module Fluent
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
-          entry_resource, entry_common_labels = \
-            compute_entry_resource_and_labels(group_resource,
-                                              group_common_labels, record)
+          entry_resource = group_resource.dup
+          entry_common_labels = group_common_labels.dup
+          extracted_resource_labels, extracted_common_labels = \
+            extract_entry_labels(group_resource, record)
+          entry_resource.labels.merge!(extracted_resource_labels)
+          entry_common_labels.merge!(extracted_common_labels)
 
           if entry_resource.type == CONTAINER_RESOURCE_TYPE
             # Save the timestamp if available, then clear it out to allow for
@@ -560,7 +566,7 @@ module Fluent
         next if entries.empty?
 
         log_name = "projects/#{@project_id}/logs/#{log_name(
-          tag, group_resource.type, group_resource.labels)}"
+          tag, group_resource)}"
 
         # Does the actual write to the cloud logging api.
         client = api_client
@@ -1054,9 +1060,7 @@ module Fluent
     end
 
     def field_to_label(record, field, label)
-      labels = {}
-      labels[label] = record.delete(field).to_s if record.key?(field)
-      labels
+      record.key?(field) ? { label => record.delete(field).to_s } : {}
     end
 
     def set_payload(resource_type, record, entry, is_json)
@@ -1150,17 +1154,17 @@ module Fluent
       end
     end
 
-    def log_name(tag, resource_type, resource_labels)
-      if resource_type == CLOUDFUNCTIONS_RESOURCE_TYPE
+    def log_name(tag, resource)
+      if resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE
         return 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
         return "#{APPENGINE_SERVICE}%2F#{tag}"
-      elsif resource_type == CONTAINER_RESOURCE_TYPE
+      elsif resource.type == CONTAINER_RESOURCE_TYPE
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
-        if resource_labels && resource_labels.key?('container_name')
-          return resource_labels['container_name']
+        if resource.labels && resource.labels.key?('container_name')
+          return resource.labels['container_name']
         end
       end
       tag
