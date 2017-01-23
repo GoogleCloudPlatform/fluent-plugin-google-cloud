@@ -444,7 +444,7 @@ module Fluent
       if group_resource.type == CONTAINER_RESOURCE_TYPE
         # Move the stdout/stderr annotation from the record into a label
         common_labels.merge!(
-          field_to_label(record, 'stream', "#{CONTAINER_SERVICE}/stream"))
+          fields_to_labels(record, 'stream' => "#{CONTAINER_SERVICE}/stream"))
 
         # If the record has been annotated by the kubernetes_metadata_filter
         # plugin, then use that metadata. Otherwise, rely on commonLabels
@@ -460,7 +460,7 @@ module Fluent
       # If a field is present in the label_map, send its value as a label
       # (mapping the field name to label name as specified in the config)
       # and do not send that field as part of the payload.
-      common_labels.merge!(fields_to_label(record, @label_map)) if @label_map
+      common_labels.merge!(fields_to_labels(record, @label_map))
 
       if group_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
          @cloudfunctions_log_match &&
@@ -1035,11 +1035,11 @@ module Fluent
       common_labels = {}
       %w(namespace_id pod_id container_name).each do |field|
         resource_labels.merge!(
-          field_to_label(record['kubernetes'], field, field))
+          fields_to_labels(record['kubernetes'], field => field))
       end
       %w(namespace_name pod_name).each do |field|
         common_labels.merge!(
-          field_to_label(record['kubernetes'], field,
+          fields_to_labels(record['kubernetes'], field =>
                          "#{CONTAINER_SERVICE}/#{field}"))
       end
       # Prepend label/ to all user-defined labels' keys.
@@ -1056,21 +1056,16 @@ module Fluent
       [resource_labels, common_labels]
     end
 
-    def field_to_label(record, field, label)
-      record.key?(field) ? { label => record.delete(field).to_s } : {}
-    end
-
     # For every original_label => new_label pair in the label_map, delete the
     # original_label from the record if it exists, and extract the value to form
-    # a new map with the new_label as the new key.
-    def fields_to_label(record, label_map)
-      extracted_labels = {}
-      return extracted_labels if label_map.nil? || !label_map.is_a?(Hash)
-      label_map.each do |original_label, new_label|
+    # a map with the new_label as the key.
+    def fields_to_labels(record, label_map)
+      return {} if label_map.nil? || !label_map.is_a?(Hash)
+      label_map.each_with_object({}) \
+        do |(original_label, new_label), extracted_labels|
         extracted_labels[new_label] = record.delete(original_label).to_s if \
           record.key?(original_label)
       end
-      extracted_labels
     end
 
     def set_payload(resource_type, record, entry, is_json)
