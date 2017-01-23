@@ -200,10 +200,11 @@ module Fluent
       end
 
       # TODO: Send instance tags as labels as well?
-      # TODO: Construct Google::Api::MonitoredResource when @use_grpc is
-      # true after the protobuf map corruption issue is fixed.
       @common_labels = {}
       @common_labels.merge!(@labels) if @labels
+
+      # TODO: Construct Google::Api::MonitoredResource when @use_grpc is
+      # true after the protobuf map corruption issue is fixed.
       @resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
         labels: {})
 
@@ -429,7 +430,7 @@ module Fluent
     end
 
     # Extract entry resource and common labels that should be applied to
-    # individual entries from the group resource and group common labels.
+    # individual entries from the group resource.
     def extract_entry_labels(group_resource, record)
       resource_labels = {}
       common_labels = {}
@@ -459,12 +460,8 @@ module Fluent
       # If a field is present in the label_map, send its value as a label
       # (mapping the field name to label name as specified in the config)
       # and do not send that field as part of the payload.
-      if @label_map
-        @label_map.each do |field, label|
-          common_labels.merge!(
-            field_to_label(record, field, label))
-        end
-      end
+      common_labels.merge!(fields_to_label(record, @label_map)) if @label_map
+
       if group_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
          @cloudfunctions_log_match &&
          @cloudfunctions_log_match['execution_id']
@@ -493,12 +490,12 @@ module Fluent
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
-          entry_resource = group_resource.dup
-          entry_common_labels = group_common_labels.dup
           extracted_resource_labels, extracted_common_labels = \
             extract_entry_labels(group_resource, record)
+          entry_resource = group_resource.dup
           entry_resource.labels.merge!(extracted_resource_labels)
-          entry_common_labels.merge!(extracted_common_labels)
+          entry_common_labels = \
+            group_common_labels.merge(extracted_common_labels)
 
           if entry_resource.type == CONTAINER_RESOURCE_TYPE
             # Save the timestamp if available, then clear it out to allow for
@@ -1061,6 +1058,19 @@ module Fluent
 
     def field_to_label(record, field, label)
       record.key?(field) ? { label => record.delete(field).to_s } : {}
+    end
+
+    # For every original_label => new_label pair in the label_map, delete the
+    # original_label from the record if it exists, and extract the value to form
+    # a new map with the new_label as the new key.
+    def fields_to_label(record, label_map)
+      extracted_labels = {}
+      return extracted_labels if label_map.nil? || !label_map.is_a?(Hash)
+      label_map.each do |original_label, new_label|
+        extracted_labels[new_label] = record.delete(original_label).to_s if \
+          record.key?(original_label)
+      end
+      extracted_labels
     end
 
     def set_payload(resource_type, record, entry, is_json)
