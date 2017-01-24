@@ -1039,8 +1039,8 @@ module Fluent
       end
       %w(namespace_name pod_name).each do |field|
         common_labels.merge!(
-          fields_to_labels(record['kubernetes'], field =>
-                         "#{CONTAINER_SERVICE}/#{field}"))
+          fields_to_labels(record['kubernetes'],
+                           field => "#{CONTAINER_SERVICE}/#{field}"))
       end
       # Prepend label/ to all user-defined labels' keys.
       if record['kubernetes'].key?('labels')
