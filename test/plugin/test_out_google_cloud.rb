@@ -191,6 +191,20 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('DEFAULT', test_obj.parse_severity('er'))
   end
 
+  def test_nil_timestamp
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit('message' => log_entry(0),
+             'timestamp' => { 'seconds' => nil, 'nanos' => nil })
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS) do |entry|
+      assert_nil entry['metadata']['timestamp']['seconds'], entry
+      assert_nil entry['metadata']['timestamp']['nanos'], entry
+    end
+  end
+
   private
 
   def rename_key(hash, old_key, new_key)
