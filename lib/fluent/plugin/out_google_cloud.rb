@@ -437,7 +437,7 @@ module Fluent
 
           ts_secs, ts_nanos = compute_timestamp(record, time)
           if @use_grpc
-            # If "seconds" or "nanos" are not integers (e.g. null), we will emit
+            # If "seconds" or "nanos" are not integers (e.g. null), we will omit
             # the timestamp field and defer the decision of whether to set it to
             # the current timestamp to the downstream Logging API.
             if ts_secs.is_a?(Integer) && ts_nanos.is_a?(Integer)
