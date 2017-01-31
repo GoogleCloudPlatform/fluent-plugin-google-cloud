@@ -155,6 +155,21 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_tags
+    setup_gce_metadata_stubs
+    [123, 'test', 'germanß', 'chinese中'].each do |tag|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
+      assert_equal "projects/#{PROJECT_ID}/logs/#{tag}",
+                   @logs_sent[0]['logName']
+    end
+  end
+
   def test_non_integer_timestamp
     setup_gce_metadata_stubs
     time = Time.now

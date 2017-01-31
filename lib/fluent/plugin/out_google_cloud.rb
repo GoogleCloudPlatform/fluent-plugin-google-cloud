@@ -338,6 +338,19 @@ module Fluent
       # Group the entries since we have to make one call per tag.
       grouped_entries = {}
       chunk.msgpack_each do |tag, *arr|
+        tag = tag.to_s if tag.is_a?(Integer)
+        # Logging API requires log names to be strings with only alphanumeric
+        # characters. Generate warnings and drop the log if the tag is not a
+        # string or if it contains non-utf8 characters since these will be
+        # rejected by Logging API anyway. For other cases when the tag is a
+        # string with illegal characters, defer the rejection to the downstream
+        # Logging API since it checks against certain special characters as
+        # well, and that list is subject to changes in the future.
+        if !tag.is_a?(String) || convert_to_utf8(tag) != tag
+          @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
+                    'A tag should be a string with alphanumeric characters.'
+          next
+        end
         grouped_entries[tag] = [] unless grouped_entries.key?(tag)
         grouped_entries[tag].push(arr)
       end
@@ -504,10 +517,9 @@ module Fluent
             labels_utf8_pairs = labels.map do |k, v|
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
-            utf8_log_name = convert_to_utf8(log_name)
 
             write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
-              log_name: "projects/#{@project_id}/logs/#{utf8_log_name}",
+              log_name: "projects/#{@project_id}/logs/#{log_name}",
               common_labels: Hash[labels_utf8_pairs],
               entries: entries
             )

@@ -191,6 +191,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('DEFAULT', test_obj.parse_severity('er'))
   end
 
+  def test_tags
+    setup_gce_metadata_stubs
+    [123, 'test', 'germanß', 'chinese中', 'specialCharacter_-.'].each do |tag|
+      setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: tag.to_s)]) do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
+    end
+  end
+
   def test_non_integer_timestamp
     setup_gce_metadata_stubs
     time = Time.now
@@ -229,10 +242,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
-     CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
-     EC2_PARAMS].each do |params|
+  def setup_logging_stubs(params_list = [])
+    ([COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
+      CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
+      EC2_PARAMS] + params_list).each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
         { body: '' }

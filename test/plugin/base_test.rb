@@ -626,6 +626,23 @@ module BaseTest
     end
   end
 
+  def test_invalid_tags
+    setup_gce_metadata_stubs
+    [
+      "nonutf8#{[0x92].pack('C*')}",
+      [1, 2, 3],
+      { key: 'value' }
+    ].each do |tag|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(0, COMPUTE_PARAMS, 'structPayload')
+    end
+  end
+
   def test_timestamps
     setup_gce_metadata_stubs
     expected_ts = []
