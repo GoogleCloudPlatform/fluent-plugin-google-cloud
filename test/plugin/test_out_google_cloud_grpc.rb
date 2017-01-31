@@ -175,7 +175,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       end
       verify_log_entries(1, COMPUTE_PARAMS) do |entry|
         assert_equal expected, entry['metadata']['timestamp'],
-                     "Test with timestamp '#{input}' failed with " \
+                     "Test with timestamp '#{input}' failed for " \
                      "entry: '#{entry}'."
       end
     end

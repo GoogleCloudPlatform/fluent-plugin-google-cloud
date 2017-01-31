@@ -209,7 +209,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       end
       verify_log_entries(1, COMPUTE_PARAMS) do |entry|
         assert_equal timestamp, entry['metadata']['timestamp'],
-                     "Test with timestamp '#{timestamp}' failed with " \
+                     "Test with timestamp '#{timestamp}' failed for " \
                      "entry: '#{entry}'."
       end
     end
