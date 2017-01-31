@@ -197,20 +197,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     [
       { 'seconds' => nil, 'nanos' => nil },
       { 'seconds' => nil, 'nanos' => time.tv_nsec },
-      { 'seconds' => nil, 'nanos' => time.tv_nsec },
       { 'seconds' => 'seconds', 'nanos' => time.tv_nsec },
       { 'seconds' => time.tv_sec, 'nanos' => 'nanos' },
       { 'seconds' => time.tv_sec, 'nanos' => nil }
-    ].each_with_index do |input, index|
+    ].each do |timestamp|
       setup_logging_stubs do
         d = create_driver
         @logs_sent = []
-        d.emit('message' => log_entry(0), 'timestamp' => input)
+        d.emit('message' => log_entry(0), 'timestamp' => timestamp)
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS) do |entry|
-        assert_equal input, entry['metadata']['timestamp'],
-                     "Index #{index} failed with entry: #{entry.inspect}"
+        assert_equal timestamp, entry['metadata']['timestamp'], entry
       end
     end
   end
