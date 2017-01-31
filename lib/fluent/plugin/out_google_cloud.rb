@@ -437,10 +437,14 @@ module Fluent
 
           ts_secs, ts_nanos = compute_timestamp(record, time)
           if @use_grpc
-            # If "seconds" or "nanos" are not integers (e.g. null), we will omit
-            # the timestamp field and defer the decision of whether to set it to
-            # the current timestamp to the downstream Logging API.
-            if ts_secs.is_a?(Integer) && ts_nanos.is_a?(Integer)
+            # If "seconds" is null or not an integer, we will omit the timestamp
+            # field and defer the decision on how to handle it to the downstream
+            # Logging API.
+            # If "seconds" is valid, but "nanos" is null or not an integer, we
+            # will set "nanos" to 0, which mocks how the downstream Logging API
+            # handles it.
+            if ts_secs.is_a?(Integer)
+              ts_nanos = 0 unless ts_nanos.is_a?(Integer)
               entry.metadata.timestamp = Google::Protobuf::Timestamp.new(
                 seconds: ts_secs,
                 nanos: ts_nanos

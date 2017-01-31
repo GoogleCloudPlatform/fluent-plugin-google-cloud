@@ -155,16 +155,28 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  def test_nil_timestamp
+  def test_non_integer_timestamp
     setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('message' => log_entry(0),
-             'timestamp' => { 'seconds' => nil, 'nanos' => nil })
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS) do |entry|
-      assert_nil entry['metadata']['timestamp'], entry
+    time = Time.now
+    {
+      { 'seconds' => nil, 'nanos' => nil } => nil,
+      { 'seconds' => nil, 'nanos' => time.tv_nsec } => nil,
+      { 'seconds' => 'seconds', 'nanos' => time.tv_nsec } => nil,
+      { 'seconds' => time.tv_sec, 'nanos' => 'nanos' } => \
+        { 'seconds' => time.tv_sec },
+      { 'seconds' => time.tv_sec, 'nanos' => nil } => \
+        { 'seconds' => time.tv_sec }
+    }.each_with_index do |(input, expected), index|
+      setup_logging_stubs do
+        d = create_driver
+        @logs_sent = []
+        d.emit('message' => log_entry(0), 'timestamp' => input)
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS) do |entry|
+        assert_equal expected, entry['metadata']['timestamp'],
+                     "Index #{index} failed with entry: #{entry.inspect}"
+      end
     end
   end
 
