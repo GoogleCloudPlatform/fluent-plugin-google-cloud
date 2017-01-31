@@ -166,7 +166,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         { 'seconds' => time.tv_sec },
       { 'seconds' => time.tv_sec, 'nanos' => nil } => \
         { 'seconds' => time.tv_sec }
-    }.each_with_index do |(input, expected), index|
+    }.each do |input, expected|
       setup_logging_stubs do
         d = create_driver
         @logs_sent = []
@@ -175,7 +175,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       end
       verify_log_entries(1, COMPUTE_PARAMS) do |entry|
         assert_equal expected, entry['metadata']['timestamp'],
-                     "Index #{index} failed with entry: #{entry.inspect}"
+                     "Test with timestamp input '#{input}' failed with " \
+                     "entry: '#{entry}'."
       end
     end
   end
