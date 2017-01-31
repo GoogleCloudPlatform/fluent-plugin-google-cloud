@@ -191,6 +191,30 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('DEFAULT', test_obj.parse_severity('er'))
   end
 
+  def test_non_integer_timestamp
+    setup_gce_metadata_stubs
+    time = Time.now
+    [
+      { 'seconds' => nil, 'nanos' => nil },
+      { 'seconds' => nil, 'nanos' => time.tv_nsec },
+      { 'seconds' => 'seconds', 'nanos' => time.tv_nsec },
+      { 'seconds' => time.tv_sec, 'nanos' => 'nanos' },
+      { 'seconds' => time.tv_sec, 'nanos' => nil }
+    ].each do |timestamp|
+      setup_logging_stubs do
+        d = create_driver
+        @logs_sent = []
+        d.emit('message' => log_entry(0), 'timestamp' => timestamp)
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS) do |entry|
+        assert_equal timestamp, entry['metadata']['timestamp'],
+                     "Test with timestamp '#{timestamp}' failed for " \
+                     "entry: '#{entry}'."
+      end
+    end
+  end
+
   private
 
   def rename_key(hash, old_key, new_key)

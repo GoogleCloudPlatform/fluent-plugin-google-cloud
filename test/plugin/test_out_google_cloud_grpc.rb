@@ -155,6 +155,32 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_non_integer_timestamp
+    setup_gce_metadata_stubs
+    time = Time.now
+    {
+      { 'seconds' => nil, 'nanos' => nil } => nil,
+      { 'seconds' => nil, 'nanos' => time.tv_nsec } => nil,
+      { 'seconds' => 'seconds', 'nanos' => time.tv_nsec } => nil,
+      { 'seconds' => time.tv_sec, 'nanos' => 'nanos' } => \
+        { 'seconds' => time.tv_sec },
+      { 'seconds' => time.tv_sec, 'nanos' => nil } => \
+        { 'seconds' => time.tv_sec }
+    }.each do |input, expected|
+      setup_logging_stubs do
+        d = create_driver
+        @logs_sent = []
+        d.emit('message' => log_entry(0), 'timestamp' => input)
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS) do |entry|
+        assert_equal expected, entry['metadata']['timestamp'],
+                     "Test with timestamp '#{input}' failed for " \
+                     "entry: '#{entry}'."
+      end
+    end
+  end
+
   private
 
   GRPC_MOCK_HOST = 'localhost:56789'

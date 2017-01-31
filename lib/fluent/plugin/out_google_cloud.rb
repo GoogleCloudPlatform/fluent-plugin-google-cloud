@@ -437,10 +437,17 @@ module Fluent
 
           ts_secs, ts_nanos = compute_timestamp(record, time)
           if @use_grpc
-            entry.metadata.timestamp = Google::Protobuf::Timestamp.new(
-              seconds: ts_secs,
-              nanos: ts_nanos
-            )
+            # If "seconds" is null or not an integer, we will omit the timestamp
+            # field and defer the decision on how to handle it to the downstream
+            # Logging API. If "nanos" is null or not an integer, it will be set
+            # to 0.
+            if ts_secs.is_a?(Integer)
+              ts_nanos = 0 unless ts_nanos.is_a?(Integer)
+              entry.metadata.timestamp = Google::Protobuf::Timestamp.new(
+                seconds: ts_secs,
+                nanos: ts_nanos
+              )
+            end
 
             entry.metadata.severity =
               grpc_severity(compute_severity(record, entry))
