@@ -19,6 +19,8 @@ require 'webmock/test_unit'
 
 # Unit tests for Google Cloud Logging plugin
 module BaseTest
+  include Fluent::GoogleCloudOutput::Constants
+
   def setup
     Fluent::Test.setup
     # delete environment variables that googleauth uses to find credentials.
@@ -41,14 +43,6 @@ module BaseTest
   HOSTNAME = Socket.gethostname
 
   WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
-
-  APPENGINE_CONSTANTS = Fluent::GoogleCloudOutput::APPENGINE_CONSTANTS
-  CLOUDFUNCTIONS_CONSTANTS = Fluent::GoogleCloudOutput::CLOUDFUNCTIONS_CONSTANTS
-  COMPUTE_CONSTANTS = Fluent::GoogleCloudOutput::COMPUTE_CONSTANTS
-  CONTAINER_CONSTANTS = Fluent::GoogleCloudOutput::CONTAINER_CONSTANTS
-  DATAFLOW_CONSTANTS = Fluent::GoogleCloudOutput::DATAFLOW_CONSTANTS
-  EC2_CONSTANTS = Fluent::GoogleCloudOutput::EC2_CONSTANTS
-  ML_CONSTANTS = Fluent::GoogleCloudOutput::ML_CONSTANTS
 
   # attributes used for the GCE metadata service
   PROJECT_ID = 'test-project-id'

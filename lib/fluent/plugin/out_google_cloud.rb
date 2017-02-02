@@ -36,40 +36,44 @@ end
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
+    # Constants for service names and resource types.
+    module Constants
+      APPENGINE_CONSTANTS = {
+        service: 'appengine.googleapis.com',
+        resource_type: 'gae_app'
+      }
+      CLOUDFUNCTIONS_CONSTANTS = {
+        service: 'cloudfunctions.googleapis.com',
+        resource_type: 'cloud_function'
+      }
+      COMPUTE_CONSTANTS = {
+        service: 'compute.googleapis.com',
+        resource_type: 'gce_instance'
+      }
+      CONTAINER_CONSTANTS = {
+        service: 'container.googleapis.com',
+        resource_type: 'container'
+      }
+      DATAFLOW_CONSTANTS = {
+        service: 'dataflow.googleapis.com',
+        resource_type: 'dataflow_step'
+      }
+      EC2_CONSTANTS = {
+        service: 'ec2.amazonaws.com',
+        resource_type: 'aws_ec2_instance'
+      }
+      ML_CONSTANTS = {
+        service: 'ml.googleapis.com',
+        resource_type: 'ml_job'
+      }
+    end
+
+    include self::Constants
+
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
     PLUGIN_VERSION = '0.5.6.v2.alpha.1'
-
-    # Constants for service names and resource types.
-    APPENGINE_CONSTANTS = {
-      service: 'appengine.googleapis.com',
-      resource_type: 'gae_app'
-    }
-    CLOUDFUNCTIONS_CONSTANTS = {
-      service: 'cloudfunctions.googleapis.com',
-      resource_type: 'cloud_function'
-    }
-    COMPUTE_CONSTANTS = {
-      service: 'compute.googleapis.com',
-      resource_type: 'gce_instance'
-    }
-    CONTAINER_CONSTANTS = {
-      service: 'container.googleapis.com',
-      resource_type: 'container'
-    }
-    DATAFLOW_CONSTANTS = {
-      service: 'dataflow.googleapis.com',
-      resource_type: 'dataflow_step'
-    }
-    EC2_CONSTANTS = {
-      service: 'ec2.amazonaws.com',
-      resource_type: 'aws_ec2_instance'
-    }
-    ML_CONSTANTS = {
-      service: 'ml.googleapis.com',
-      resource_type: 'ml_job'
-    }
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
