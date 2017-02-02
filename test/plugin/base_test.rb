@@ -42,21 +42,13 @@ module BaseTest
 
   WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
 
-  APPENGINE_SERVICE_NAME = 'appengine.googleapis.com'
-  COMPUTE_SERVICE_NAME = 'compute.googleapis.com'
-  CONTAINER_SERVICE_NAME = 'container.googleapis.com'
-  CLOUDFUNCTIONS_SERVICE_NAME = 'cloudfunctions.googleapis.com'
-  DATAFLOW_SERVICE_NAME = 'dataflow.googleapis.com'
-  EC2_SERVICE_NAME = 'ec2.amazonaws.com'
-  ML_SERVICE_NAME = 'ml.googleapis.com'
-
-  APPENGINE_RESOURCE_TYPE = 'gae_app'
-  CLOUDFUNCTIONS_RESOURCE_TYPE = 'cloud_function'
-  COMPUTE_RESOURCE_TYPE = 'gce_instance'
-  CONTAINER_RESOURCE_TYPE = 'container'
-  DATAFLOW_RESOURCE_TYPE = 'dataflow_step'
-  EC2_RESOURCE_TYPE = 'aws_ec2_instance'
-  ML_RESOURCE_TYPE = 'ml_job'
+  APPENGINE_CONSTANTS = Fluent::GoogleCloudOutput::APPENGINE_CONSTANTS
+  CLOUDFUNCTIONS_CONSTANTS = Fluent::GoogleCloudOutput::CLOUDFUNCTIONS_CONSTANTS
+  COMPUTE_CONSTANTS = Fluent::GoogleCloudOutput::COMPUTE_CONSTANTS
+  CONTAINER_CONSTANTS = Fluent::GoogleCloudOutput::CONTAINER_CONSTANTS
+  DATAFLOW_CONSTANTS = Fluent::GoogleCloudOutput::DATAFLOW_CONSTANTS
+  EC2_CONSTANTS = Fluent::GoogleCloudOutput::EC2_CONSTANTS
+  ML_CONSTANTS = Fluent::GoogleCloudOutput::ML_CONSTANTS
 
   # attributes used for the GCE metadata service
   PROJECT_ID = 'test-project-id'
@@ -201,29 +193,29 @@ module BaseTest
   )
 
   CONFIG_DATAFLOW = %(
-    subservice_name "#{DATAFLOW_SERVICE_NAME}"
+    subservice_name "#{DATAFLOW_CONSTANTS[:service]}"
     labels {
-      "#{DATAFLOW_SERVICE_NAME}/region" : "#{DATAFLOW_REGION}",
-      "#{DATAFLOW_SERVICE_NAME}/job_name" : "#{DATAFLOW_JOB_NAME}",
-      "#{DATAFLOW_SERVICE_NAME}/job_id" : "#{DATAFLOW_JOB_ID}"
+      "#{DATAFLOW_CONSTANTS[:service]}/region" : "#{DATAFLOW_REGION}",
+      "#{DATAFLOW_CONSTANTS[:service]}/job_name" : "#{DATAFLOW_JOB_NAME}",
+      "#{DATAFLOW_CONSTANTS[:service]}/job_id" : "#{DATAFLOW_JOB_ID}"
     }
-    label_map { "step": "#{DATAFLOW_SERVICE_NAME}/step_id" }
+    label_map { "step": "#{DATAFLOW_CONSTANTS[:service]}/step_id" }
   )
 
   CONFIG_ML = %(
-    subservice_name "#{ML_SERVICE_NAME}"
+    subservice_name "#{ML_CONSTANTS[:service]}"
     labels {
-      "#{ML_SERVICE_NAME}/job_id" : "#{ML_JOB_ID}",
-      "#{ML_SERVICE_NAME}/task_name" : "#{ML_TASK_NAME}",
-      "#{ML_SERVICE_NAME}/trial_id" : "#{ML_TRIAL_ID}"
+      "#{ML_CONSTANTS[:service]}/job_id" : "#{ML_JOB_ID}",
+      "#{ML_CONSTANTS[:service]}/task_name" : "#{ML_TASK_NAME}",
+      "#{ML_CONSTANTS[:service]}/trial_id" : "#{ML_TRIAL_ID}"
     }
-    label_map { "name": "#{ML_SERVICE_NAME}/job_id/log_area" }
+    label_map { "name": "#{ML_CONSTANTS[:service]}/job_id/log_area" }
   )
 
   # Service configurations for various services
   COMPUTE_PARAMS = {
     resource: {
-      type: COMPUTE_RESOURCE_TYPE,
+      type: COMPUTE_CONSTANTS[:resource_type],
       labels: {
         'instance_id' => VM_ID,
         'zone' => ZONE
@@ -232,24 +224,24 @@ module BaseTest
     log_name: 'test',
     project_id: PROJECT_ID,
     labels: {
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }
 
   VMENGINE_PARAMS = {
     resource: {
-      type: APPENGINE_RESOURCE_TYPE,
+      type: APPENGINE_CONSTANTS[:resource_type],
       labels: {
         'module_id' => MANAGED_VM_BACKEND_NAME,
         'version_id' => MANAGED_VM_BACKEND_VERSION
       }
     },
-    log_name: "#{APPENGINE_SERVICE_NAME}%2Ftest",
+    log_name: "#{APPENGINE_CONSTANTS[:service]}%2Ftest",
     project_id: PROJECT_ID,
     labels: {
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
-      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
+      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
   }
 
@@ -258,7 +250,7 @@ module BaseTest
 
   CONTAINER_FROM_METADATA_PARAMS = {
     resource: {
-      type: CONTAINER_RESOURCE_TYPE,
+      type: CONTAINER_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_ID,
@@ -271,18 +263,19 @@ module BaseTest
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
-      "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/stream" => CONTAINER_STREAM,
+      "#{CONTAINER_CONSTANTS[:service]}/namespace_name" =>
+        CONTAINER_NAMESPACE_NAME,
+      "#{CONTAINER_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
+      "#{CONTAINER_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
       "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }
 
   # Almost the same as from metadata, but missing namespace_id and pod_id.
   CONTAINER_FROM_TAG_PARAMS = {
     resource: {
-      type: CONTAINER_RESOURCE_TYPE,
+      type: CONTAINER_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'instance_id' => VM_ID,
@@ -293,10 +286,11 @@ module BaseTest
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_SERVICE_NAME}/namespace_name" => CONTAINER_NAMESPACE_NAME,
-      "#{CONTAINER_SERVICE_NAME}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_SERVICE_NAME}/stream" => CONTAINER_STREAM,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME
+      "#{CONTAINER_CONSTANTS[:service]}/namespace_name" =>
+        CONTAINER_NAMESPACE_NAME,
+      "#{CONTAINER_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
+      "#{CONTAINER_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }
 
@@ -306,7 +300,7 @@ module BaseTest
 
   CLOUDFUNCTIONS_PARAMS = {
     resource: {
-      type: CLOUDFUNCTIONS_RESOURCE_TYPE,
+      type: CLOUDFUNCTIONS_CONSTANTS[:resource_type],
       labels: {
         'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
         'region' => CLOUDFUNCTIONS_REGION
@@ -316,17 +310,18 @@ module BaseTest
     project_id: PROJECT_ID,
     labels: {
       'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
-      "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
-      "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
-      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+      "#{CONTAINER_CONSTANTS[:service]}/instance_id" => VM_ID,
+      "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+        CLOUDFUNCTIONS_CLUSTER_NAME,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
+      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
   }
 
   CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
     resource: {
-      type: CLOUDFUNCTIONS_RESOURCE_TYPE,
+      type: CLOUDFUNCTIONS_CONSTANTS[:resource_type],
       labels: {
         'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
         'region' => CLOUDFUNCTIONS_REGION
@@ -335,17 +330,18 @@ module BaseTest
     log_name: 'cloud-functions',
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_SERVICE_NAME}/instance_id" => VM_ID,
-      "#{CONTAINER_SERVICE_NAME}/cluster_name" => CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
-      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+      "#{CONTAINER_CONSTANTS[:service]}/instance_id" => VM_ID,
+      "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+        CLOUDFUNCTIONS_CLUSTER_NAME,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
+      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
   }
 
   DATAFLOW_PARAMS = {
     resource: {
-      type: DATAFLOW_RESOURCE_TYPE,
+      type: DATAFLOW_CONSTANTS[:resource_type],
       labels: {
         'job_name' => DATAFLOW_JOB_NAME,
         'job_id' => DATAFLOW_JOB_ID,
@@ -356,15 +352,15 @@ module BaseTest
     log_name: DATAFLOW_TAG,
     project_id: PROJECT_ID,
     labels: {
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
-      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
+      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
   }
 
   ML_PARAMS = {
     resource: {
-      type: ML_RESOURCE_TYPE,
+      type: ML_CONSTANTS[:resource_type],
       labels: {
         'job_id' => ML_JOB_ID,
         'task_name' => ML_TASK_NAME
@@ -373,17 +369,17 @@ module BaseTest
     log_name: ML_TAG,
     project_id: PROJECT_ID,
     labels: {
-      "#{ML_SERVICE_NAME}/trial_id" => ML_TRIAL_ID,
-      "#{ML_SERVICE_NAME}/job_id/log_area" => ML_LOG_AREA,
-      "#{COMPUTE_SERVICE_NAME}/resource_id" => VM_ID,
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => HOSTNAME,
-      "#{COMPUTE_SERVICE_NAME}/zone" => ZONE
+      "#{ML_CONSTANTS[:service]}/trial_id" => ML_TRIAL_ID,
+      "#{ML_CONSTANTS[:service]}/job_id/log_area" => ML_LOG_AREA,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
+      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
   }
 
   CUSTOM_PARAMS = {
     resource: {
-      type: COMPUTE_RESOURCE_TYPE,
+      type: COMPUTE_CONSTANTS[:resource_type],
       labels: {
         'instance_id' => CUSTOM_VM_ID,
         'zone' => CUSTOM_ZONE
@@ -392,13 +388,13 @@ module BaseTest
     log_name: 'test',
     project_id: CUSTOM_PROJECT_ID,
     labels: {
-      "#{COMPUTE_SERVICE_NAME}/resource_name" => CUSTOM_HOSTNAME
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => CUSTOM_HOSTNAME
     }
   }
 
   EC2_PARAMS = {
     resource: {
-      type: EC2_RESOURCE_TYPE,
+      type: EC2_CONSTANTS[:resource_type],
       labels: {
         'instance_id' => EC2_VM_ID,
         'region' => EC2_PREFIXED_ZONE,
@@ -408,7 +404,7 @@ module BaseTest
     log_name: 'test',
     project_id: EC2_PROJECT_ID,
     labels: {
-      "#{EC2_SERVICE_NAME}/resource_name" => HOSTNAME
+      "#{EC2_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }
 
@@ -516,7 +512,7 @@ module BaseTest
     setup_container_metadata_stubs
     d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
     d.run
-    assert_equal COMPUTE_RESOURCE_TYPE, d.instance.resource.type
+    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_metadata_overrides
@@ -1017,7 +1013,7 @@ module BaseTest
       d.run
     end
     expected_params = CONTAINER_FROM_TAG_PARAMS.merge(
-      labels: { "#{CONTAINER_SERVICE_NAME}/stream" => 'stderr' }
+      labels: { "#{CONTAINER_CONSTANTS[:service]}/stream" => 'stderr' }
     ) { |_, oldval, newval| oldval.merge(newval) }
     verify_log_entries(1, expected_params) do |entry|
       assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry

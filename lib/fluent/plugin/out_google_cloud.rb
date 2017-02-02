@@ -39,24 +39,37 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.5.v2.alpha.1'
+    PLUGIN_VERSION = '0.5.6.v2.alpha.1'
 
-    # Constants for service names.
-    APPENGINE_SERVICE = 'appengine.googleapis.com'
-    CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'
-    COMPUTE_SERVICE = 'compute.googleapis.com'
-    CONTAINER_SERVICE = 'container.googleapis.com'
-    DATAFLOW_SERVICE = 'dataflow.googleapis.com'
-    EC2_SERVICE = 'ec2.amazonaws.com'
-    ML_SERVICE = 'ml.googleapis.com'
-
-    APPENGINE_RESOURCE_TYPE = 'gae_app'
-    CLOUDFUNCTIONS_RESOURCE_TYPE = 'cloud_function'
-    COMPUTE_RESOURCE_TYPE = 'gce_instance'
-    CONTAINER_RESOURCE_TYPE = 'container'
-    DATAFLOW_RESOURCE_TYPE = 'dataflow_step'
-    EC2_RESOURCE_TYPE = 'aws_ec2_instance'
-    ML_RESOURCE_TYPE = 'ml_job'
+    # Constants for service names and resource types.
+    APPENGINE_CONSTANTS = {
+      service: 'appengine.googleapis.com',
+      resource_type: 'gae_app'
+    }
+    CLOUDFUNCTIONS_CONSTANTS = {
+      service: 'cloudfunctions.googleapis.com',
+      resource_type: 'cloud_function'
+    }
+    COMPUTE_CONSTANTS = {
+      service: 'compute.googleapis.com',
+      resource_type: 'gce_instance'
+    }
+    CONTAINER_CONSTANTS = {
+      service: 'container.googleapis.com',
+      resource_type: 'container'
+    }
+    DATAFLOW_CONSTANTS = {
+      service: 'dataflow.googleapis.com',
+      resource_type: 'dataflow_step'
+    }
+    EC2_CONSTANTS = {
+      service: 'ec2.amazonaws.com',
+      resource_type: 'aws_ec2_instance'
+    }
+    ML_CONSTANTS = {
+      service: 'ml.googleapis.com',
+      resource_type: 'ml_job'
+    }
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
@@ -281,15 +294,15 @@ module Fluent
       # Set up the MonitoredResource, labels, etc. based on the config
       case @platform
       when Platform::GCE
-        @resource.type = COMPUTE_RESOURCE_TYPE
+        @resource.type = COMPUTE_CONSTANTS[:resource_type]
         # TODO: introduce a new MonitoredResource-centric configuration and
         # deprecate subservice-name; for now, translate known uses.
         if @subservice_name
           # TODO: what should we do if we encounter an unknown value?
-          if @subservice_name == DATAFLOW_SERVICE
-            @resource.type = DATAFLOW_RESOURCE_TYPE
-          elsif @subservice_name == ML_SERVICE
-            @resource.type = ML_RESOURCE_TYPE
+          if @subservice_name == DATAFLOW_CONSTANTS[:service]
+            @resource.type = DATAFLOW_CONSTANTS[:resource_type]
+          elsif @subservice_name == ML_CONSTANTS[:service]
+            @resource.type = ML_CONSTANTS[:resource_type]
           end
         elsif @detect_subservice
           # Check for specialized GCE environments.
@@ -304,12 +317,12 @@ module Fluent
                 fetch_gce_metadata('instance/attributes/gae_backend_name')
             @gae_backend_version =
                 fetch_gce_metadata('instance/attributes/gae_backend_version')
-            @resource.type = APPENGINE_RESOURCE_TYPE
+            @resource.type = APPENGINE_CONSTANTS[:resource_type]
             @resource.labels['module_id'] = @gae_backend_name
             @resource.labels['version_id'] = @gae_backend_version
           elsif attributes.include?('kube-env')
             # Kubernetes/Container Engine
-            @resource.type = CONTAINER_RESOURCE_TYPE
+            @resource.type = CONTAINER_CONSTANTS[:resource_type]
             @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
             @kube_env = YAML.load(@raw_kube_env)
             @resource.labels['cluster_name'] =
@@ -319,27 +332,27 @@ module Fluent
         end
         # Some services have the GCE instance_id and zone as MonitoredResource
         # labels; for other services we send them as entry labels.
-        if @resource.type == COMPUTE_RESOURCE_TYPE ||
-           @resource.type == CONTAINER_RESOURCE_TYPE
+        if @resource.type == COMPUTE_CONSTANTS[:resource_type] ||
+           @resource.type == CONTAINER_CONSTANTS[:resource_type]
           @resource.labels['instance_id'] = @vm_id
           @resource.labels['zone'] = @zone
         else
-          common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
-          common_labels["#{COMPUTE_SERVICE}/zone"] = @zone
+          common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] = @vm_id
+          common_labels["#{COMPUTE_CONSTANTS[:service]}/zone"] = @zone
         end
-        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
+        common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
       when Platform::EC2
-        @resource.type = EC2_RESOURCE_TYPE
+        @resource.type = EC2_CONSTANTS[:resource_type]
         @resource.labels['instance_id'] = @vm_id
         @resource.labels['region'] = @zone
         # the aws_account label is populated above.
-        common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
+        common_labels["#{EC2_CONSTANTS[:service]}/resource_name"] = @vm_name
       when Platform::OTHER
         # Use GCE as the default environment.
-        @resource.type = COMPUTE_RESOURCE_TYPE
+        @resource.type = COMPUTE_CONSTANTS[:resource_type]
         @resource.labels['instance_id'] = @vm_id
         @resource.labels['zone'] = @zone
-        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
+        common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
       end
       @resource.labels.merge!(
         extract_resource_labels(@resource.type, common_labels))
@@ -387,7 +400,7 @@ module Fluent
         if match_data
           # Resource type is set to Cloud Functions only for logs actually
           # coming from a function, otherwise we leave it as Container.
-          group_resource.type = CLOUDFUNCTIONS_RESOURCE_TYPE
+          group_resource.type = CLOUDFUNCTIONS_CONSTANTS[:resource_type]
           group_resource.labels['region'] = @gcf_region
           group_resource.labels['function_name'] =
             decode_cloudfunctions_function_name(
@@ -395,16 +408,17 @@ module Fluent
           # Move GKE container labels from the MonitoredResource to the
           # LogEntry.
           instance_id = group_resource.labels.delete('instance_id')
-          group_common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
+          group_common_labels["#{CONTAINER_CONSTANTS[:service]}/cluster_name"] =
             group_resource.labels.delete('cluster_name')
-          group_common_labels["#{CONTAINER_SERVICE}/instance_id"] =
+          group_common_labels["#{CONTAINER_CONSTANTS[:service]}/instance_id"] =
             instance_id
-          group_common_labels["#{COMPUTE_SERVICE}/resource_id"] = instance_id
-          group_common_labels["#{COMPUTE_SERVICE}/zone"] =
+          group_common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] =
+            instance_id
+          group_common_labels["#{COMPUTE_CONSTANTS[:service]}/zone"] =
             group_resource.labels.delete('zone')
         end
       end
-      if group_resource.type == CONTAINER_RESOURCE_TYPE &&
+      if group_resource.type == CONTAINER_CONSTANTS[:resource_type] &&
          @compiled_kubernetes_tag_regexp
         # Container logs in Kubernetes are tagged based on where they came
         # from, so we can extract useful metadata from the tag.
@@ -414,7 +428,7 @@ module Fluent
           group_resource.labels['container_name'] =
             match_data['container_name']
           %w(namespace_name pod_name).each do |field|
-            group_common_labels["#{CONTAINER_SERVICE}/#{field}"] =
+            group_common_labels["#{CONTAINER_CONSTANTS[:service]}/#{field}"] =
               match_data[field]
           end
         end
@@ -435,16 +449,17 @@ module Fluent
       resource_labels = {}
       common_labels = {}
 
-      if group_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+      if group_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
          record.key?('log')
         @cloudfunctions_log_match =
           @cloudfunctions_log_regexp.match(record['log'])
       end
 
-      if group_resource.type == CONTAINER_RESOURCE_TYPE
+      if group_resource.type == CONTAINER_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label
         common_labels.merge!(
-          fields_to_labels(record, 'stream' => "#{CONTAINER_SERVICE}/stream"))
+          fields_to_labels(
+            record, 'stream' => "#{CONTAINER_CONSTANTS[:service]}/stream"))
 
         # If the record has been annotated by the kubernetes_metadata_filter
         # plugin, then use that metadata. Otherwise, rely on commonLabels
@@ -462,7 +477,7 @@ module Fluent
       # and do not send that field as part of the payload.
       common_labels.merge!(fields_to_labels(record, @label_map))
 
-      if group_resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+      if group_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
          @cloudfunctions_log_match &&
          @cloudfunctions_log_match['execution_id']
         common_labels['execution_id'] =
@@ -497,7 +512,7 @@ module Fluent
           entry_common_labels = \
             group_common_labels.merge(extracted_common_labels)
 
-          if entry_resource.type == CONTAINER_RESOURCE_TYPE
+          if entry_resource.type == CONTAINER_CONSTANTS[:resource_type]
             # Save the timestamp if available, then clear it out to allow for
             # determining whether we should parse the log or message field.
             timestamp = record.key?('time') ? record['time'] : nil
@@ -824,7 +839,7 @@ module Fluent
           @log.warn 'timeNanos is deprecated - please use ' \
             'timestampSeconds and timestampNanos instead.'
         end
-      elsif resource_type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
             @cloudfunctions_log_match
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
         ts_secs = timestamp.strftime('%s').to_i
@@ -847,7 +862,7 @@ module Fluent
     end
 
     def compute_severity(resource_type, record, entry_common_labels)
-      if resource_type == CLOUDFUNCTIONS_RESOURCE_TYPE
+      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
           return parse_severity(@cloudfunctions_log_match['severity'])
         elsif record.key?('stream') && record['stream'] == 'stdout'
@@ -861,9 +876,9 @@ module Fluent
         end
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
-      elsif resource_type == CONTAINER_RESOURCE_TYPE &&
-            entry_common_labels.key?("#{CONTAINER_SERVICE}/stream")
-        stream = entry_common_labels["#{CONTAINER_SERVICE}/stream"]
+      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
+            entry_common_labels.key?("#{CONTAINER_CONSTANTS[:service]}/stream")
+        stream = entry_common_labels["#{CONTAINER_CONSTANTS[:service]}/stream"]
         if stream == 'stdout'
           return 'INFO'
         elsif stream == 'stderr'
@@ -1039,8 +1054,9 @@ module Fluent
       end
       %w(namespace_name pod_name).each do |field|
         common_labels.merge!(
-          fields_to_labels(record['kubernetes'],
-                           field => "#{CONTAINER_SERVICE}/#{field}"))
+          fields_to_labels(
+            record['kubernetes'],
+            field => "#{CONTAINER_CONSTANTS[:service]}/#{field}"))
       end
       # Prepend label/ to all user-defined labels' keys.
       if record['kubernetes'].key?('labels')
@@ -1075,14 +1091,16 @@ module Fluent
       # 1. This is a Cloud Functions log and the 'log' key is available
       # 2. This is an unstructured Container log and the 'log' key is available
       # 3. The only remaining key is 'message'
-      if resource_type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
          @cloudfunctions_log_match
         entry.text_payload = @cloudfunctions_log_match['text']
-      elsif resource_type == CLOUDFUNCTIONS_RESOURCE_TYPE && record.key?('log')
+      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = record['log']
       elsif is_json
         entry.json_payload = record
-      elsif resource_type == CONTAINER_RESOURCE_TYPE && record.key?('log')
+      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = record['message']
@@ -1142,15 +1160,17 @@ module Fluent
       # 1. This is a Cloud Functions log and the 'log' key is available
       # 2. This is an unstructured Container log and the 'log' key is available
       # 3. The only remaining key is 'message'
-      if resource_type == CLOUDFUNCTIONS_RESOURCE_TYPE &&
+      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
          @cloudfunctions_log_match
         entry.text_payload = convert_to_utf8(
           @cloudfunctions_log_match['text'])
-      elsif resource_type == CLOUDFUNCTIONS_RESOURCE_TYPE && record.key?('log')
+      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif is_json
         entry.json_payload = struct_from_ruby(record)
-      elsif resource_type == CONTAINER_RESOURCE_TYPE && record.key?('log')
+      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = convert_to_utf8(record['message'])
@@ -1160,12 +1180,12 @@ module Fluent
     end
 
     def log_name(tag, resource)
-      if resource.type == CLOUDFUNCTIONS_RESOURCE_TYPE
+      if resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
         return 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
-        return "#{APPENGINE_SERVICE}%2F#{tag}"
-      elsif resource.type == CONTAINER_RESOURCE_TYPE
+        return "#{APPENGINE_CONSTANTS[:service]}%2F#{tag}"
+      elsif resource.type == CONTAINER_CONSTANTS[:resource_type]
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         if resource.labels && resource.labels.key?('container_name')
@@ -1184,11 +1204,11 @@ module Fluent
       extracted_labels = {}
       return extracted_labels if labels.nil? || !labels.is_a?(Hash)
 
-      if resource_type == DATAFLOW_RESOURCE_TYPE
-        label_prefix = DATAFLOW_SERVICE
+      if resource_type == DATAFLOW_CONSTANTS[:resource_type]
+        label_prefix = DATAFLOW_CONSTANTS[:service]
         labels_to_extract = %w(region job_name job_id step_id)
-      elsif resource_type == ML_RESOURCE_TYPE
-        label_prefix = ML_SERVICE
+      elsif resource_type == ML_CONSTANTS[:resource_type]
+        label_prefix = ML_CONSTANTS[:service]
         labels_to_extract = %w(job_id task_name)
       else
         return extracted_labels
