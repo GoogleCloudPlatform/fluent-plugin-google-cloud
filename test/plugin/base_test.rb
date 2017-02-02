@@ -128,6 +128,10 @@ module BaseTest
   )
   # rubocop:enable Metrics/LineLength
 
+  NO_REQUIRE_VALID_TAGS_CONFIG = %(
+    require_valid_tags false
+  )
+
   NO_METADATA_SERVICE_CONFIG = %(
     use_metadata_service false
   )
@@ -626,16 +630,29 @@ module BaseTest
     end
   end
 
-  def test_invalid_tags
+  def test_tag_rejection
     setup_gce_metadata_stubs
     [
-      "nonutf8#{[0x92].pack('C*')}",
-      [1, 2, 3],
-      { key: 'value' }
-    ].each do |tag|
+      # When require_valid_tags is true, for any invalid characters detected,
+      # verify we drop the log instead of trying to convert the tag to something
+      # valid.
+      ["nonutf8#{[0x92].pack('C*')}", true],
+      [[1, 2, 3], true],
+      [{ key: 'value' }, true],
+
+      # When require_valid_tags is false, we try to convert tags by strippin
+      # off any invalid character. But if all characters in the tag are invalid,
+      # the conversion will result in an empty string, which we have to reject.
+      ["#{[0x92].pack('C*')}", false],
+      ['@&^$*', false]
+    ].each do |(tag, require_valid_tags)|
       setup_logging_stubs do
         @logs_sent = []
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        if require_valid_tags
+          d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        else
+          d = create_driver(NO_REQUIRE_VALID_TAGS_CONFIG, tag)
+        end
         d.emit('msg' => log_entry(0))
         d.run
       end

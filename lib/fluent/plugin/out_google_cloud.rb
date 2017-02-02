@@ -87,6 +87,13 @@ module Fluent
     # The subservice_name overrides the subservice detection, if provided.
     config_param :subservice_name, :string, :default => nil
 
+    # Valid tags require strings with only alphanumeric characters. If this
+    # config is set to true, log entries with invalid tags would be dropped and
+    # a warning would be generated in the log. If this config is set to false,
+    # we will force the tag to be valid by converting any non-string tag to
+    # string, and remove any non-utf8 or other invalid characters from it.
+    config_param :require_valid_tags, :bool, :default => true
+
     # The regular expression to use on Kubernetes logs to extract some basic
     # information about the log source. The regex must contain capture groups
     # for pod_name, namespace_name, and container_name.
@@ -192,6 +199,8 @@ module Fluent
       # TODO: Send instance tags as labels as well?
       @common_labels = {}
       @common_labels.merge!(@labels) if @labels
+
+      @invalid_tag_regexp = %r{[^[:alpha:]\d/._-]}
 
       @compiled_kubernetes_tag_regexp = nil
       if @kubernetes_tag_regexp
@@ -338,18 +347,26 @@ module Fluent
       # Group the entries since we have to make one call per tag.
       grouped_entries = {}
       chunk.msgpack_each do |tag, *arr|
-        tag = tag.to_s if tag.is_a?(Integer)
-        # Logging API requires log names to be strings with only alphanumeric
-        # characters. Generate warnings and drop the log if the tag is not a
-        # string or if it contains non-utf8 characters since these will be
-        # rejected by Logging API anyway. For other cases when the tag is a
-        # string with illegal characters, defer the rejection to the downstream
-        # Logging API since it checks against certain special characters as
-        # well, and that list is subject to changes in the future.
-        if !tag.is_a?(String) || convert_to_utf8(tag) != tag
-          @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
-                    'A tag should be a string with alphanumeric characters.'
-          next
+        tag = tag.to_s
+        if @require_valid_tags
+          # When require_valid_tags is true, invalid cases will cause the log to
+          # be dropped and warnings generated in the log.
+          if convert_to_utf8(tag) != tag || tag.match(@invalid_tag_regexp)
+            @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
+                      'A tag should be a string with alphanumeric characters.'
+            next
+          end
+        else
+          # When require_valid_tags is false, try to convert any invalid tag by
+          # stripping off invalid characters.
+          converted_tag = convert_to_utf8(tag, '').gsub(@invalid_tag_regexp, '')
+          if converted_tag == ''
+            @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
+                      'A tag should be a string with alphanumeric characters.'
+            next
+          else
+            tag = converted_tag
+          end
         end
         grouped_entries[tag] = [] unless grouped_entries.key?(tag)
         grouped_entries[tag].push(arr)
@@ -1145,13 +1162,14 @@ module Fluent
     # non-UTF-8 character would be replaced by the string specified by
     # 'non_utf8_replacement_string'. If 'coerce_to_utf8' is set to false, any
     # non-UTF-8 character would trigger the plugin to error out.
-    def convert_to_utf8(input)
+    def convert_to_utf8(input, replacement = nil)
+      replacement = @non_utf8_replacement_string if replacement.nil?
       if @coerce_to_utf8
         input.encode(
           'utf-8',
           invalid: :replace,
           undef: :replace,
-          replace: @non_utf8_replacement_string)
+          replace: replacement)
       else
         begin
           input.encode('utf-8')

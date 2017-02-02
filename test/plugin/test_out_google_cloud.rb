@@ -191,12 +191,39 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('DEFAULT', test_obj.parse_severity('er'))
   end
 
-  def test_tags
+  # For non-grpc path, log name is reflected in the url, so we are stubbing the
+  # corresponding url containing the converted tag. To verify the tag is
+  # converted properly, we simply check the log entry is recorded successfully,
+  # and no exception (e.g. stubbing missing for certain url) is thrown.
+  def test_tag_acceptance
     setup_gce_metadata_stubs
-    [123, 'test', 'germanß', 'chinese中', 'specialCharacter_-.'].each do |tag|
-      setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: tag.to_s)]) do
+    [
+      # When require_valid_tags is on, we only convert integer tags to strings.
+      # Other invalid cases will cause the log to be dropped.
+      [123, '123', true],
+      ['test', 'test', true],
+      ['germanß', 'germanß', true],
+      ['chinese中', 'chinese中', true],
+      ['specialCharacter/_-.', 'specialCharacter%2F_-.', true],
+
+      # When require_valid_tags is off, we try to convert invalid tags by
+      # stripping off invalid characters.
+      [123, '123', false],
+      ['test', 'test', false],
+      ['germanß', 'germanß', false],
+      ['chinese中', 'chinese中', false],
+      ['specialCharacter/_-.#@*&^', 'specialCharacter%2F_-.', false],
+      ["nonutf8#{[0x92].pack('C*')}", 'nonutf8', false],
+      [[1, 2, 3], '123', false],
+      [{ key: 'value' }, 'keyvalue', false]
+    ].each do |(tag, converted_tag, require_valid_tags)|
+      setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: converted_tag)]) do
         @logs_sent = []
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        if require_valid_tags
+          d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        else
+          d = create_driver(NO_REQUIRE_VALID_TAGS_CONFIG, tag)
+        end
         d.emit('msg' => log_entry(0))
         d.run
       end
@@ -242,10 +269,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs(params_list = [])
+  def setup_logging_stubs(extra_stub_params = [])
     ([COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
       CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
-      EC2_PARAMS] + params_list).each do |params|
+      EC2_PARAMS] + extra_stub_params).each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
         @logs_sent << JSON.parse(request.body)
         { body: '' }

@@ -155,17 +155,42 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  def test_tags
+  # For grpc path, the log name is sent as a part of the log entry, thus can be
+  # verified directly.
+  def test_tag_acceptance
     setup_gce_metadata_stubs
-    [123, 'test', 'germanß', 'chinese中'].each do |tag|
+    [
+      # When require_valid_tags is on, we only convert integer tags to strings.
+      # Other invalid cases will cause the log to be dropped.
+      [123, '123', true],
+      ['test', 'test', true],
+      ['germanß', 'germanß', true],
+      ['chinese中', 'chinese中', true],
+      ['specialCharacter/_-.', 'specialCharacter/_-.', true],
+
+      # When require_valid_tags is off, we try to convert invalid tags by
+      # stripping off invalid characters.
+      [123, '123', false],
+      ['test', 'test', false],
+      ['germanß', 'germanß', false],
+      ['chinese中', 'chinese中', false],
+      ['specialCharacter/_-.', 'specialCharacter/_-.', false],
+      ["nonutf8#{[0x92].pack('C*')}", 'nonutf8', false],
+      [[1, 2, 3], '123', false],
+      [{ key: 'value' }, 'keyvalue', false]
+    ].each do |(tag, converted_tag, require_valid_tags)|
       setup_logging_stubs do
         @logs_sent = []
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        if require_valid_tags
+          d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        else
+          d = create_driver(NO_REQUIRE_VALID_TAGS_CONFIG, tag)
+        end
         d.emit('msg' => log_entry(0))
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
-      assert_equal "projects/#{PROJECT_ID}/logs/#{tag}",
+      assert_equal "projects/#{PROJECT_ID}/logs/#{converted_tag}",
                    @logs_sent[0]['logName']
     end
   end
