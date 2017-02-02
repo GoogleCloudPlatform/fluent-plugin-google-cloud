@@ -164,17 +164,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       # Other invalid cases will cause the log to be dropped.
       [123, '123', true],
       ['test', 'test', true],
-      ['germanß', 'germanß', true],
-      ['chinese中', 'chinese中', true],
-      ['specialCharacter/_-.', 'specialCharacter/_-.', true],
+      ['germanß', 'german%C3%9F', true],
+      ['chinese中', 'chinese%E4%B8%AD', true],
+      ['specialCharacter/_-.', 'specialCharacter%2F_-.', true],
 
       # When require_valid_tags is off, we try to convert invalid tags by
       # stripping off invalid characters.
       [123, '123', false],
       ['test', 'test', false],
-      ['germanß', 'germanß', false],
-      ['chinese中', 'chinese中', false],
-      ['specialCharacter/_-.', 'specialCharacter/_-.', false],
+      ['germanß', 'german%C3%9F', false],
+      ['chinese中', 'chinese%E4%B8%AD', false],
+      ['specialCharacter/_-.', 'specialCharacter%2F_-.', false],
       ["nonutf8#{[0x92].pack('C*')}", 'nonutf8', false],
       [[1, 2, 3], '123', false],
       [{ key: 'value' }, 'keyvalue', false]

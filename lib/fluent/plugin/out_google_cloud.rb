@@ -343,30 +343,31 @@ module Fluent
       [tag, time, record].to_msgpack
     end
 
+    # Convert tags. If 'require_valid_tags' is false, strip off any invalid
+    # character from the tag. If 'require_valid_tags' is true, reject any
+    # invalid characters by returning nil.
+    def convert_tag(tag)
+      tag = tag.to_s
+      return convert_to_utf8(tag, '').gsub(@invalid_tag_regexp, '') \
+        unless @require_valid_tags
+      if convert_to_utf8(tag) == tag && !tag.match(@invalid_tag_regexp)
+        return tag
+      else
+        return nil
+      end
+    end
+
     def write(chunk)
       # Group the entries since we have to make one call per tag.
       grouped_entries = {}
       chunk.msgpack_each do |tag, *arr|
-        tag = tag.to_s
-        if @require_valid_tags
-          # When require_valid_tags is true, invalid cases will cause the log to
-          # be dropped and warnings generated in the log.
-          if convert_to_utf8(tag) != tag || tag.match(@invalid_tag_regexp)
-            @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
-                      'A tag should be a string with alphanumeric characters.'
-            next
-          end
+        converted_tag = convert_tag(tag)
+        if converted_tag.nil? || converted_tag == ''
+          @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
+                    'A tag should be a string with alphanumeric characters.'
+          next
         else
-          # When require_valid_tags is false, try to convert any invalid tag by
-          # stripping off invalid characters.
-          converted_tag = convert_to_utf8(tag, '').gsub(@invalid_tag_regexp, '')
-          if converted_tag == ''
-            @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
-                      'A tag should be a string with alphanumeric characters.'
-            next
-          else
-            tag = converted_tag
-          end
+          tag = converted_tag
         end
         grouped_entries[tag] = [] unless grouped_entries.key?(tag)
         grouped_entries[tag].push(arr)
@@ -535,6 +536,8 @@ module Fluent
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
 
+            # Encode the log name since Logging API relies on '/' as delimiter.
+            log_name = URI.encode(log_name).gsub('/', '%2F')
             write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
               log_name: "projects/#{@project_id}/logs/#{log_name}",
               common_labels: Hash[labels_utf8_pairs],
