@@ -31,7 +31,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     { 8 => 'ResourceExhausted',
       12 => 'Unimplemented',
       16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
-      setup_logging_stubs(nil, true, code, message) do
+      setup_logging_stubs(true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
                           GRPCLoggingMockFailingService.rpc_stub_class)
         # The API Client should not retry this and the plugin should consume the
@@ -51,7 +51,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       13 => 'Internal',
       14 => 'Unavailable' }.each_with_index do |(code, message), index|
       exception_count = 0
-      setup_logging_stubs(nil, true, code, message) do
+      setup_logging_stubs(true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
                           GRPCLoggingMockFailingService.rpc_stub_class)
         # The API client should retry this once, then throw an exception which
@@ -82,7 +82,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
       assert_equal http_request_message_with_absent_referer,
                    entry['httpRequest'], entry
-      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+      assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
     end
   end
 
@@ -96,7 +96,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
       assert_equal http_request_message_with_absent_referer,
                    entry['httpRequest'], entry
-      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+      assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
     end
   end
 
@@ -124,7 +124,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
-      assert_equal_with_default(entry['metadata']['severity'],
+      assert_equal_with_default(entry['severity'],
                                 expected_severity[verify_index],
                                 'DEFAULT', entry)
       verify_index += 1
@@ -143,8 +143,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
              'null_field' => nil)
       d.run
     end
-    verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do |entry|
-      fields = get_fields(entry['structPayload'])
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
       assert_equal 5, fields.size, entry
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
       assert_equal 'test non utf8', get_string(fields['normal_key']), entry
@@ -174,9 +174,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS) do |entry|
-        assert_equal expected, entry['metadata']['timestamp'],
-                     "Test with timestamp '#{input}' failed for " \
-                     "entry: '#{entry}'."
+        assert_equal expected, entry['timestamp'], 'Test with timestamp ' \
+                     "'#{input}' failed for entry: '#{entry}'."
       end
     end
   end
@@ -185,8 +184,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   GRPC_MOCK_HOST = 'localhost:56789'
 
-  WriteLogEntriesRequest = Google::Logging::V1::WriteLogEntriesRequest
-  WriteLogEntriesResponse = Google::Logging::V1::WriteLogEntriesResponse
+  WriteLogEntriesRequest = Google::Logging::V2::WriteLogEntriesRequest
+  WriteLogEntriesResponse = Google::Logging::V2::WriteLogEntriesResponse
 
   USE_GRPC_CONFIG = %(
     use_grpc true
@@ -223,18 +222,13 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # GRPC logging mock that successfully logs the records.
-  class GRPCLoggingMockService < Google::Logging::V1::LoggingService::Service
-    def initialize(stub_params, requests_received)
+  class GRPCLoggingMockService < Google::Logging::V2::LoggingServiceV2::Service
+    def initialize(requests_received)
       super()
       @requests_received = requests_received
-      @expected_log_names = stub_params.map do |param|
-        "projects/#{param[:project_id]}/logs/#{param[:log_name]}"
-      end
     end
 
     def write_log_entries(request, _call)
-      fail GRPC::BadStatus.new(99, "Unexpected request: #{request.inspect}") \
-        unless @expected_log_names.include?(request.log_name)
       @requests_received << request
       WriteLogEntriesResponse.new
     end
@@ -248,15 +242,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     alias_method :list_logs, :_undefined
+    alias_method :list_log_entries, :_undefined
     alias_method :list_log_services, :_undefined
     alias_method :list_log_service_indexes, :_undefined
+    alias_method :list_monitored_resource_descriptors, :_undefined
     alias_method :delete_log, :_undefined
     undef_method :_undefined
   end
 
   # GRPC logging mock that fails and returns server side or client side errors.
   class GRPCLoggingMockFailingService <
-      Google::Logging::V1::LoggingService::Service
+      Google::Logging::V2::LoggingServiceV2::Service
     # 'code_sent' and 'message_sent' are references of external variables. We
     #  will assert the values of them later. 'code_value' and 'message_value'
     #  are actual error code and message we expect this mock to return.
@@ -281,26 +277,23 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     alias_method :list_logs, :_undefined
+    alias_method :list_log_entries, :_undefined
     alias_method :list_log_services, :_undefined
     alias_method :list_log_service_indexes, :_undefined
+    alias_method :list_monitored_resource_descriptors, :_undefined
     alias_method :delete_log, :_undefined
     undef_method :_undefined
   end
 
   # Set up grpc stubs to mock the external calls.
-  def setup_logging_stubs(override_stub_params = nil, should_fail = false,
-                          code = 0, message = 'Ok')
-    stub_params = override_stub_params || \
-                  [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
-                   CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
-                   CUSTOM_PARAMS, EC2_PARAMS]
+  def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
     srv = GRPC::RpcServer.new
     @failed_attempts = []
     @requests_sent = []
     if should_fail
       grpc = GRPCLoggingMockFailingService.new(code, message, @failed_attempts)
     else
-      grpc = GRPCLoggingMockService.new(stub_params, @requests_sent)
+      grpc = GRPCLoggingMockService.new(@requests_sent)
     end
     srv.handle(grpc)
     srv.add_http2_port(GRPC_MOCK_HOST, :this_port_is_insecure)
@@ -320,8 +313,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload', &block)
-    @requests_sent.each do |batch|
-      @logs_sent << JSON.parse(batch.to_json)
+    @requests_sent.each do |request|
+      @logs_sent << JSON.parse(request.to_json)
     end
     verify_json_log_entries(n, params, payload_type, &block)
   end
@@ -349,14 +342,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Unset the 'referer' field.
   def http_request_message_with_absent_referer
-    http_request_message.reject do |k, _|
+    HTTP_REQUEST_MESSAGE.reject do |k, _|
       k == 'referer'
     end
   end
 
-  # Get the fields of the struct payload.
-  def get_fields(struct_payload)
-    struct_payload['fields']
+  # Get the fields of the payload.
+  def get_fields(payload)
+    payload['fields']
   end
 
   # Get the value of a struct field.

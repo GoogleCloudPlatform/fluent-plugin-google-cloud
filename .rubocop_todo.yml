@@ -19,7 +19,7 @@ Metrics/AbcSize:
 Metrics/ClassLength:
   Max: 1300
 Metrics/ModuleLength:
-  Max: 1300
+  Max: 1400
 
 # Offense count: 3
 Metrics/CyclomaticComplexity:

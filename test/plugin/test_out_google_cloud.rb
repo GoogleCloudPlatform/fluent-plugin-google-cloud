@@ -28,18 +28,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 400, body: 'Bad Request')
     d = create_driver
     d.emit('message' => log_entry(0))
     d.run
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
   # All credentials errors resolve to a 401.
   def test_client_401
     setup_gce_metadata_stubs
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 401, body: 'Unauthorized')
     d = create_driver
     d.emit('message' => log_entry(0))
@@ -48,14 +48,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     rescue Google::Apis::AuthorizationError => error
       assert_equal 'Unauthorized', error.message
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 2)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
   end
 
   def test_server_error
     setup_gce_metadata_stubs
     # The API client should retry this once, then throw an exception which
     # gets propagated through the plugin.
-    stub_request(:post, uri_for_log(COMPUTE_PARAMS))
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 500, body: 'Server Error')
     d = create_driver
     d.emit('message' => log_entry(0))
@@ -66,7 +66,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_equal 'Server error', error.message
       exception_count += 1
     end
-    assert_requested(:post, uri_for_log(COMPUTE_PARAMS), times: 1)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
     assert_equal 1, exception_count
   end
 
@@ -84,7 +84,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       # the proto.
       assert_equal http_request_message_with_nil_referer,
                    entry['httpRequest'], entry
-      assert_nil get_fields(entry['structPayload'])['httpRequest'], entry
+      assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
     end
   end
 
@@ -113,7 +113,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     verify_index = 0
     verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
       assert_equal expected_severity[verify_index],
-                   entry['metadata']['severity'], entry
+                   entry['severity'], entry
       verify_index += 1
     end
   end
@@ -181,7 +181,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('ERROR', test_obj.parse_severity('ERROR  '))
     assert_equal('ERROR', test_obj.parse_severity('   ERROR  '))
     assert_equal('ERROR', test_obj.parse_severity("\t  ERROR  "))
-
     # space in the middle should not be stripped.
     assert_equal('DEFAULT', test_obj.parse_severity('ER ROR'))
 
@@ -208,9 +207,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS) do |entry|
-        assert_equal timestamp, entry['metadata']['timestamp'],
-                     "Test with timestamp '#{timestamp}' failed for " \
-                     "entry: '#{entry}'."
+        assert_equal timestamp, entry['timestamp'], 'Test with timestamp ' \
+                     "'#{timestamp}' failed for entry: '#{entry}'."
       end
     end
   end
@@ -221,25 +219,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     hash.merge(new_key => hash[old_key]).reject { |k, _| k == old_key }
   end
 
-  # The REST path uses old bindings that were generated prior to the field
-  # rename, and has to use the old name, which is 'validatedWithOriginServer'.
-  def http_request_message
-    rename_key(super, 'cacheValidatedWithOriginServer',
-               'validatedWithOriginServer')
-  end
-
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs(override_stub_params = nil)
-    stub_params = override_stub_params || \
-                  [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
-                   CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
-                   CUSTOM_PARAMS, EC2_PARAMS]
-    stub_params.each do |params|
-      stub_request(:post, uri_for_log(params)).to_return do |request|
-        log_name = "projects/#{params[:project_id]}/logs/#{params[:log_name]}"
-        @logs_sent << JSON.parse(request.body).merge('logName' => log_name)
-        { body: '' }
-      end
+  def setup_logging_stubs
+    stub_request(:post, WRITE_LOG_ENTRIES_URI).to_return do |request|
+      @logs_sent << JSON.parse(request.body)
+      { body: '' }
     end
     yield
   end
@@ -270,9 +254,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the struct payload.
-  def get_fields(struct_payload)
-    struct_payload
+  # Get the fields of the payload.
+  def get_fields(payload)
+    payload
   end
 
   # Get the value of a struct field.
