@@ -18,10 +18,10 @@ require 'socket'
 require 'time'
 require 'yaml'
 require 'google/apis'
-require 'google/apis/logging_v1beta3'
-require 'google/logging/v1/logging_pb'
-require 'google/logging/v1/logging_services_pb'
-require 'google/logging/v1/log_entry_pb'
+require 'google/apis/logging_v2beta1'
+require 'google/logging/v2/logging_pb'
+require 'google/logging/v2/logging_services_pb'
+require 'google/logging/v2/log_entry_pb'
 require 'googleauth'
 
 module Google
@@ -36,17 +36,44 @@ end
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
+    # Constants for service names and resource types.
+    module Constants
+      APPENGINE_CONSTANTS = {
+        service: 'appengine.googleapis.com',
+        resource_type: 'gae_app'
+      }
+      CLOUDFUNCTIONS_CONSTANTS = {
+        service: 'cloudfunctions.googleapis.com',
+        resource_type: 'cloud_function'
+      }
+      COMPUTE_CONSTANTS = {
+        service: 'compute.googleapis.com',
+        resource_type: 'gce_instance'
+      }
+      CONTAINER_CONSTANTS = {
+        service: 'container.googleapis.com',
+        resource_type: 'container'
+      }
+      DATAFLOW_CONSTANTS = {
+        service: 'dataflow.googleapis.com',
+        resource_type: 'dataflow_step'
+      }
+      EC2_CONSTANTS = {
+        service: 'ec2.amazonaws.com',
+        resource_type: 'aws_ec2_instance'
+      }
+      ML_CONSTANTS = {
+        service: 'ml.googleapis.com',
+        resource_type: 'ml_job'
+      }
+    end
+
+    include self::Constants
+
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.5.4'
-
-    # Constants for service names.
-    APPENGINE_SERVICE = 'appengine.googleapis.com'
-    CLOUDFUNCTIONS_SERVICE = 'cloudfunctions.googleapis.com'
-    COMPUTE_SERVICE = 'compute.googleapis.com'
-    CONTAINER_SERVICE = 'container.googleapis.com'
-    EC2_SERVICE = 'ec2.amazonaws.com'
+    PLUGIN_VERSION = '0.5.6.v2.alpha.1'
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
@@ -162,7 +189,7 @@ module Fluent
     attr_reader :running_on_managed_vm
     attr_reader :gae_backend_name
     attr_reader :gae_backend_version
-    attr_reader :service_name
+    attr_reader :resource
     attr_reader :common_labels
 
     def initialize
@@ -192,6 +219,11 @@ module Fluent
       # TODO: Send instance tags as labels as well?
       @common_labels = {}
       @common_labels.merge!(@labels) if @labels
+
+      # TODO: Construct Google::Api::MonitoredResource when @use_grpc is
+      # true after the protobuf map corruption issue is fixed.
+      @resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
+        labels: {})
 
       @compiled_kubernetes_tag_regexp = nil
       if @kubernetes_tag_regexp
@@ -230,7 +262,7 @@ module Fluent
           @vm_id = metadata['instanceId']
         end
         if metadata.key?('accountId')
-          common_labels["#{EC2_SERVICE}/account_id"] = metadata['accountId']
+          @resource.labels['aws_account'] = metadata['accountId']
         end
       when Platform::OTHER
         # do nothing
@@ -263,12 +295,19 @@ module Fluent
       # Functions.
       @running_cloudfunctions = false
 
-      # Set labels, etc. based on the config
+      # Set up the MonitoredResource, labels, etc. based on the config
       case @platform
       when Platform::GCE
-        @service_name = COMPUTE_SERVICE
+        @resource.type = COMPUTE_CONSTANTS[:resource_type]
+        # TODO: introduce a new MonitoredResource-centric configuration and
+        # deprecate subservice-name; for now, translate known uses.
         if @subservice_name
-          @service_name = @subservice_name
+          # TODO: what should we do if we encounter an unknown value?
+          if @subservice_name == DATAFLOW_CONSTANTS[:service]
+            @resource.type = DATAFLOW_CONSTANTS[:resource_type]
+          elsif @subservice_name == ML_CONSTANTS[:service]
+            @resource.type = ML_CONSTANTS[:resource_type]
+          end
         elsif @detect_subservice
           # Check for specialized GCE environments.
           # TODO: Add config options for these to allow for running outside GCE?
@@ -282,41 +321,56 @@ module Fluent
                 fetch_gce_metadata('instance/attributes/gae_backend_name')
             @gae_backend_version =
                 fetch_gce_metadata('instance/attributes/gae_backend_version')
-            @service_name = APPENGINE_SERVICE
-            common_labels["#{APPENGINE_SERVICE}/module_id"] = @gae_backend_name
-            common_labels["#{APPENGINE_SERVICE}/version_id"] =
-              @gae_backend_version
+            @resource.type = APPENGINE_CONSTANTS[:resource_type]
+            @resource.labels['module_id'] = @gae_backend_name
+            @resource.labels['version_id'] = @gae_backend_version
           elsif attributes.include?('kube-env')
             # Kubernetes/Container Engine
-            @service_name = CONTAINER_SERVICE
-            common_labels["#{CONTAINER_SERVICE}/instance_id"] = @vm_id
+            @resource.type = CONTAINER_CONSTANTS[:resource_type]
             @raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
             @kube_env = YAML.load(@raw_kube_env)
-            common_labels["#{CONTAINER_SERVICE}/cluster_name"] =
+            @resource.labels['cluster_name'] =
               cluster_name_from_kube_env(@kube_env)
             detect_cloudfunctions(attributes)
           end
         end
-        common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
-        common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
-        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
+        # Some services have the GCE instance_id and zone as MonitoredResource
+        # labels; for other services we send them as entry labels.
+        if @resource.type == COMPUTE_CONSTANTS[:resource_type] ||
+           @resource.type == CONTAINER_CONSTANTS[:resource_type]
+          @resource.labels['instance_id'] = @vm_id
+          @resource.labels['zone'] = @zone
+        else
+          common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] = @vm_id
+          common_labels["#{COMPUTE_CONSTANTS[:service]}/zone"] = @zone
+        end
+        common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
       when Platform::EC2
-        @service_name = EC2_SERVICE
-        common_labels["#{EC2_SERVICE}/resource_type"] = 'instance'
-        common_labels["#{EC2_SERVICE}/resource_id"] = @vm_id
-        common_labels["#{EC2_SERVICE}/resource_name"] = @vm_name
+        @resource.type = EC2_CONSTANTS[:resource_type]
+        @resource.labels['instance_id'] = @vm_id
+        @resource.labels['region'] = @zone
+        # the aws_account label is populated above.
+        common_labels["#{EC2_CONSTANTS[:service]}/resource_name"] = @vm_name
       when Platform::OTHER
-        # Use COMPUTE_SERVICE as the default environment.
-        @service_name = COMPUTE_SERVICE
-        common_labels["#{COMPUTE_SERVICE}/resource_type"] = 'instance'
-        common_labels["#{COMPUTE_SERVICE}/resource_id"] = @vm_id
-        common_labels["#{COMPUTE_SERVICE}/resource_name"] = @vm_name
+        # Use GCE as the default environment.
+        @resource.type = COMPUTE_CONSTANTS[:resource_type]
+        @resource.labels['instance_id'] = @vm_id
+        @resource.labels['zone'] = @zone
+        common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
       end
+      @resource.labels.merge!(
+        extract_resource_labels(@resource.type, common_labels))
+
+      # The resource and labels are now set up; ensure they can't be modified
+      # without first duping them.
+      @resource.freeze
+      @resource.labels.freeze
+      @common_labels.freeze
 
       # Log an informational message containing the Logs viewer URL
-      @log.info 'Logs viewer address: ',
-                'https://console.developers.google.com/project/', @project_id,
-                '/logs?service=', @service_name, '&key1=instance&key2=', @vm_id
+      @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
+                "viewer?project=#{@project_id}&resource=#{@resource_type}/",
+                "instance_id/#{@vm_id}"
     end
 
     def start
@@ -334,6 +388,111 @@ module Fluent
       [tag, time, record].to_msgpack
     end
 
+    # Compute the monitored resource and common labels shared by a collection of
+    # entries.
+    def compute_group_resource_and_labels(tag)
+      # Note that we assume that labels added to group_common_labels below are
+      # not 'service' labels (i.e. we do not call extract_resource_labels
+      # again).
+      group_resource = @resource.dup
+      group_common_labels = @common_labels.dup
+
+      if @running_cloudfunctions
+        # If the current group of entries is coming from a Cloud Functions
+        # function, the function name can be extracted from the tag.
+        match_data = @cloudfunctions_tag_regexp.match(tag)
+        if match_data
+          # Resource type is set to Cloud Functions only for logs actually
+          # coming from a function, otherwise we leave it as Container.
+          group_resource.type = CLOUDFUNCTIONS_CONSTANTS[:resource_type]
+          group_resource.labels['region'] = @gcf_region
+          group_resource.labels['function_name'] =
+            decode_cloudfunctions_function_name(
+              match_data['encoded_function_name'])
+          # Move GKE container labels from the MonitoredResource to the
+          # LogEntry.
+          instance_id = group_resource.labels.delete('instance_id')
+          group_common_labels["#{CONTAINER_CONSTANTS[:service]}/cluster_name"] =
+            group_resource.labels.delete('cluster_name')
+          group_common_labels["#{CONTAINER_CONSTANTS[:service]}/instance_id"] =
+            instance_id
+          group_common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] =
+            instance_id
+          group_common_labels["#{COMPUTE_CONSTANTS[:service]}/zone"] =
+            group_resource.labels.delete('zone')
+        end
+      end
+      if group_resource.type == CONTAINER_CONSTANTS[:resource_type] &&
+         @compiled_kubernetes_tag_regexp
+        # Container logs in Kubernetes are tagged based on where they came
+        # from, so we can extract useful metadata from the tag.
+        # Do this here to avoid having to repeat it for each record.
+        match_data = @compiled_kubernetes_tag_regexp.match(tag)
+        if match_data
+          group_resource.labels['container_name'] =
+            match_data['container_name']
+          %w(namespace_name pod_name).each do |field|
+            group_common_labels["#{CONTAINER_CONSTANTS[:service]}/#{field}"] =
+              match_data[field]
+          end
+        end
+      end
+
+      # Freeze the per-request state. Any further changes must be made on a
+      # per-entry basis.
+      group_resource.freeze
+      group_resource.labels.freeze
+      group_common_labels.freeze
+
+      [group_resource, group_common_labels]
+    end
+
+    # Extract entry resource and common labels that should be applied to
+    # individual entries from the group resource.
+    def extract_entry_labels(group_resource, record)
+      resource_labels = {}
+      common_labels = {}
+
+      if group_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+         record.key?('log')
+        @cloudfunctions_log_match =
+          @cloudfunctions_log_regexp.match(record['log'])
+      end
+
+      if group_resource.type == CONTAINER_CONSTANTS[:resource_type]
+        # Move the stdout/stderr annotation from the record into a label
+        common_labels.merge!(
+          fields_to_labels(
+            record, 'stream' => "#{CONTAINER_CONSTANTS[:service]}/stream"))
+
+        # If the record has been annotated by the kubernetes_metadata_filter
+        # plugin, then use that metadata. Otherwise, rely on commonLabels
+        # populated at the grouped_entries level from the group's tag.
+        if record.key?('kubernetes')
+          extracted_resource_labels, extracted_common_labels = \
+            extract_container_metadata(record)
+          resource_labels.merge!(extracted_resource_labels)
+          common_labels.merge!(extracted_common_labels)
+        end
+      end
+
+      # If a field is present in the label_map, send its value as a label
+      # (mapping the field name to label name as specified in the config)
+      # and do not send that field as part of the payload.
+      common_labels.merge!(fields_to_labels(record, @label_map))
+
+      if group_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+         @cloudfunctions_log_match &&
+         @cloudfunctions_log_match['execution_id']
+        common_labels['execution_id'] =
+          @cloudfunctions_log_match['execution_id']
+      end
+      resource_labels.merge!(
+        extract_resource_labels(group_resource.type, common_labels))
+
+      [resource_labels, common_labels]
+    end
+
     def write(chunk)
       # Group the entries since we have to make one call per tag.
       grouped_entries = {}
@@ -344,74 +503,20 @@ module Fluent
 
       grouped_entries.each do |tag, arr|
         entries = []
-        labels = @common_labels.clone
-
-        if @running_cloudfunctions
-          # If the current group of entries is coming from a Cloud Functions
-          # function, the function name can be extracted from the tag.
-          match_data = @cloudfunctions_tag_regexp.match(tag)
-          if match_data
-            # Service name is set to Cloud Functions only for logs actually
-            # coming from a function.
-            @service_name = CLOUDFUNCTIONS_SERVICE
-            labels["#{CLOUDFUNCTIONS_SERVICE}/region"] = @gcf_region
-            labels["#{CLOUDFUNCTIONS_SERVICE}/function_name"] =
-              decode_cloudfunctions_function_name(
-                match_data['encoded_function_name'])
-          else
-            # Other logs are considered as coming from the Container Engine
-            # service.
-            @service_name = CONTAINER_SERVICE
-          end
-        end
-        if @service_name == CONTAINER_SERVICE && @compiled_kubernetes_tag_regexp
-          # Container logs in Kubernetes are tagged based on where they came
-          # from, so we can extract useful metadata from the tag.
-          # Do this here to avoid having to repeat it for each record.
-          match_data = @compiled_kubernetes_tag_regexp.match(tag)
-          if match_data
-            %w(namespace_name pod_name container_name).each do |field|
-              labels["#{CONTAINER_SERVICE}/#{field}"] = match_data[field]
-            end
-          end
-        end
+        group_resource, group_common_labels = compute_group_resource_and_labels(
+          tag)
 
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
-          if @use_grpc
-            entry = Google::Logging::V1::LogEntry.new(
-              metadata: Google::Logging::V1::LogEntryMetadata.new(
-                service_name: convert_to_utf8(@service_name),
-                project_id: convert_to_utf8(@project_id),
-                zone: convert_to_utf8(@zone),
-                labels: {}
-              ))
-          else
-            entry = Google::Apis::LoggingV1beta3::LogEntry.new(
-              metadata: Google::Apis::LoggingV1beta3::LogEntryMetadata.new(
-                service_name: @service_name,
-                project_id: @project_id,
-                zone: @zone,
-                labels: {}
-              ))
-          end
+          extracted_resource_labels, extracted_common_labels = \
+            extract_entry_labels(group_resource, record)
+          entry_resource = group_resource.dup
+          entry_resource.labels.merge!(extracted_resource_labels)
+          entry_common_labels = \
+            group_common_labels.merge(extracted_common_labels)
 
-          if @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
-            @cloudfunctions_log_match =
-              @cloudfunctions_log_regexp.match(record['log'])
-          end
-          if @service_name == CONTAINER_SERVICE
-            # Move the stdout/stderr annotation from the record into a label.
-            field_to_label(record, 'stream', entry.metadata.labels,
-                           "#{CONTAINER_SERVICE}/stream")
-            # If the record has been annotated by the kubernetes_metadata_filter
-            # plugin, then use that metadata. Otherwise, rely on commonLabels
-            # populated at the grouped_entries level from the group's tag.
-            if record.key?('kubernetes')
-              handle_container_metadata(record, entry)
-            end
-
+          if entry_resource.type == CONTAINER_CONSTANTS[:resource_type]
             # Save the timestamp if available, then clear it out to allow for
             # determining whether we should parse the log or message field.
             timestamp = record.key?('time') ? record['time'] : nil
@@ -435,57 +540,47 @@ module Fluent
             end
           end
 
-          ts_secs, ts_nanos = compute_timestamp(record, time)
+          ts_secs, ts_nanos = compute_timestamp(
+            entry_resource.type, record, time)
+          severity = compute_severity(
+            entry_resource.type, record, entry_common_labels)
+
           if @use_grpc
+            entry = Google::Logging::V2::LogEntry.new(
+              labels: entry_common_labels,
+              resource: Google::Api::MonitoredResource.new(
+                type: entry_resource.type,
+                labels: entry_resource.labels.to_h
+              ),
+              severity: grpc_severity(severity)
+            )
             # If "seconds" is null or not an integer, we will omit the timestamp
             # field and defer the decision on how to handle it to the downstream
             # Logging API. If "nanos" is null or not an integer, it will be set
             # to 0.
             if ts_secs.is_a?(Integer)
               ts_nanos = 0 unless ts_nanos.is_a?(Integer)
-              entry.metadata.timestamp = Google::Protobuf::Timestamp.new(
+              entry.timestamp = Google::Protobuf::Timestamp.new(
                 seconds: ts_secs,
                 nanos: ts_nanos
               )
             end
-
-            entry.metadata.severity =
-              grpc_severity(compute_severity(record, entry))
-
-            set_http_request_grpc(record, entry) # FIXME
+            set_http_request_grpc(record, entry)
+            set_payload_grpc(entry_resource.type, record, entry, is_json)
           else
-            entry.metadata.timestamp = {
-              seconds: ts_secs,
-              nanos: ts_nanos
-            }
-
-            entry.metadata.severity =
-              compute_severity(record, entry)
-
+            # Remove the labels if we didn't populate them with anything.
+            entry_resource.labels = nil if entry_resource.labels.empty?
+            entry = Google::Apis::LoggingV2beta1::LogEntry.new(
+              labels: entry_common_labels,
+              resource: entry_resource,
+              severity: severity,
+              timestamp: {
+                seconds: ts_secs,
+                nanos: ts_nanos
+              }
+            )
             set_http_request(record, entry)
-          end
-
-          # If a field is present in the label_map, send its value as a label
-          # (mapping the field name to label name as specified in the config)
-          # and do not send that field as part of the payload.
-          if @label_map
-            @label_map.each do |field, label|
-              field_to_label(record, field, entry.metadata.labels, label)
-            end
-          end
-
-          if @service_name == CLOUDFUNCTIONS_SERVICE &&
-             @cloudfunctions_log_match &&
-             @cloudfunctions_log_match['execution_id']
-            entry.metadata.labels['execution_id'] =
-              @cloudfunctions_log_match['execution_id']
-          end
-
-          if @use_grpc
-            set_payload_grpc(record, entry, is_json)
-          else
-            set_payload(record, entry, is_json)
-            entry.metadata.labels = nil if entry.metadata.labels.empty?
+            set_payload(entry_resource.type, record, entry, is_json)
           end
 
           entries.push(entry)
@@ -493,22 +588,24 @@ module Fluent
         # Don't send an empty request if we rejected all the entries.
         next if entries.empty?
 
-        log_name = log_name(tag, labels)
+        log_name = "projects/#{@project_id}/logs/#{log_name(
+          tag, group_resource)}"
 
+        # Does the actual write to the cloud logging api.
+        client = api_client
         if @use_grpc
           begin
-            # Does the actual write to the cloud logging api.
-
-            client = api_client
-
-            labels_utf8_pairs = labels.map do |k, v|
+            labels_utf8_pairs = group_common_labels.map do |k, v|
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
-            utf8_log_name = convert_to_utf8(log_name)
 
-            write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
-              log_name: "projects/#{@project_id}/logs/#{utf8_log_name}",
-              common_labels: Hash[labels_utf8_pairs],
+            write_request = Google::Logging::V2::WriteLogEntriesRequest.new(
+              log_name: convert_to_utf8(log_name),
+              resource: Google::Api::MonitoredResource.new(
+                type: group_resource.type,
+                labels: group_resource.labels.to_h
+              ),
+              labels: labels_utf8_pairs.to_h,
               entries: entries
             )
 
@@ -560,21 +657,15 @@ module Fluent
           end
         else
           begin
-            # Does the actual write to the cloud logging api.
-
-            client = api_client
-
-            # The URI of the write is constructed by the Google::Api request;
-            # it is equivalent to this URL:
-            # 'https://logging.googleapis.com/v1beta3/projects/' \
-            #   "#{@project_id}/logs/#{log_name}/entries:write"
             write_request = \
-              Google::Apis::LoggingV1beta3::WriteLogEntriesRequest.new(
-                common_labels: labels,
+              Google::Apis::LoggingV2beta1::WriteLogEntriesRequest.new(
+                log_name: log_name,
+                resource: group_resource,
+                labels: group_common_labels,
                 entries: entries)
 
             # TODO: RequestOptions
-            client.write_log_entries(@project_id, log_name, write_request)
+            client.write_entry_log_entries(write_request)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -735,7 +826,7 @@ module Fluent
       instance_prefix
     end
 
-    def compute_timestamp(record, time)
+    def compute_timestamp(resource_type, record, time)
       if record.key?('timestamp') &&
          record['timestamp'].is_a?(Hash) &&
          record['timestamp'].key?('seconds') &&
@@ -759,7 +850,7 @@ module Fluent
           @log.warn 'timeNanos is deprecated - please use ' \
             'timestampSeconds and timestampNanos instead.'
         end
-      elsif @service_name == CLOUDFUNCTIONS_SERVICE &&
+      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
             @cloudfunctions_log_match
         timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
         ts_secs = timestamp.strftime('%s').to_i
@@ -781,8 +872,8 @@ module Fluent
       [ts_secs, ts_nanos]
     end
 
-    def compute_severity(record, entry)
-      if @service_name == CLOUDFUNCTIONS_SERVICE
+    def compute_severity(resource_type, record, entry_common_labels)
+      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
           return parse_severity(@cloudfunctions_log_match['severity'])
         elsif record.key?('stream') && record['stream'] == 'stdout'
@@ -796,9 +887,9 @@ module Fluent
         end
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
-      elsif @service_name == CONTAINER_SERVICE && \
-            entry.metadata.labels.key?("#{CONTAINER_SERVICE}/stream")
-        stream = entry.metadata.labels["#{CONTAINER_SERVICE}/stream"]
+      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
+            entry_common_labels.key?("#{CONTAINER_CONSTANTS[:service]}/stream")
+        stream = entry_common_labels["#{CONTAINER_CONSTANTS[:service]}/stream"]
         if stream == 'stdout'
           return 'INFO'
         elsif stream == 'stderr'
@@ -814,7 +905,7 @@ module Fluent
     def set_http_request(record, entry)
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
-      output = Google::Apis::LoggingV1beta3::HttpRequest.new
+      output = Google::Apis::LoggingV2beta1::HttpRequest.new
       output.request_method = input.delete('requestMethod')
       output.request_url = input.delete('requestUrl')
       output.request_size = input.delete('requestSize')
@@ -824,8 +915,8 @@ module Fluent
       output.remote_ip = input.delete('remoteIp')
       output.referer = input.delete('referer')
       output.cache_hit = input.delete('cacheHit')
-      output.validated_with_origin_server = \
-        input.delete('validatedWithOriginServer')
+      output.cache_validated_with_origin_server = \
+        input.delete('cacheValidatedWithOriginServer')
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
@@ -965,16 +1056,23 @@ module Fluent
     end
 
     # Requires that record has a 'kubernetes' field.
-    def handle_container_metadata(record, entry)
-      fields = %w(namespace_id namespace_name pod_id pod_name container_name)
-      fields.each do |field|
-        field_to_label(record['kubernetes'], field, entry.metadata.labels,
-                       "#{CONTAINER_SERVICE}/#{field}")
+    def extract_container_metadata(record)
+      resource_labels = {}
+      common_labels = {}
+      %w(namespace_id pod_id container_name).each do |field|
+        resource_labels.merge!(
+          fields_to_labels(record['kubernetes'], field => field))
+      end
+      %w(namespace_name pod_name).each do |field|
+        common_labels.merge!(
+          fields_to_labels(
+            record['kubernetes'],
+            field => "#{CONTAINER_CONSTANTS[:service]}/#{field}"))
       end
       # Prepend label/ to all user-defined labels' keys.
       if record['kubernetes'].key?('labels')
         record['kubernetes']['labels'].each do |key, value|
-          entry.metadata.labels["label/#{key}"] = value
+          common_labels["label/#{key}"] = value
         end
       end
       # We've explicitly consumed all the fields we care about -- don't litter
@@ -982,33 +1080,43 @@ module Fluent
       # filter plugin includes (or an empty 'kubernetes' field).
       record.delete('kubernetes')
       record.delete('docker')
+      [resource_labels, common_labels]
     end
 
-    def field_to_label(record, field, labels, label)
-      return unless record.key?(field)
-      labels[label] = record[field].to_s
-      record.delete(field)
+    # For every original_label => new_label pair in the label_map, delete the
+    # original_label from the record if it exists, and extract the value to form
+    # a map with the new_label as the key.
+    def fields_to_labels(record, label_map)
+      return {} if label_map.nil? || !label_map.is_a?(Hash)
+      label_map.each_with_object({}) \
+        do |(original_label, new_label), extracted_labels|
+        extracted_labels[new_label] = record.delete(original_label).to_s if \
+          record.key?(original_label)
+      end
     end
 
-    def set_payload(record, entry, is_json)
+    def set_payload(resource_type, record, entry, is_json)
       # If this is a Cloud Functions log that matched the expected regexp,
       # use text payload. Otherwise, use JSON if we found valid JSON, or text
       # payload in the following cases:
       # 1. This is a Cloud Functions log and the 'log' key is available
       # 2. This is an unstructured Container log and the 'log' key is available
       # 3. The only remaining key is 'message'
-      if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
+      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+         @cloudfunctions_log_match
         entry.text_payload = @cloudfunctions_log_match['text']
-      elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
+      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = record['log']
       elsif is_json
-        entry.struct_payload = record
-      elsif @service_name == CONTAINER_SERVICE && record.key?('log')
+        entry.json_payload = record
+      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = record['message']
       else
-        entry.struct_payload = record
+        entry.json_payload = record
       end
     end
 
@@ -1056,44 +1164,72 @@ module Fluent
       ret
     end
 
-    def set_payload_grpc(record, entry, is_json)
+    def set_payload_grpc(resource_type, record, entry, is_json)
       # If this is a Cloud Functions log that matched the expected regexp,
       # use text payload. Otherwise, use JSON if we found valid JSON, or text
       # payload in the following cases:
       # 1. This is a Cloud Functions log and the 'log' key is available
       # 2. This is an unstructured Container log and the 'log' key is available
       # 3. The only remaining key is 'message'
-      if @service_name == CLOUDFUNCTIONS_SERVICE && @cloudfunctions_log_match
+      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+         @cloudfunctions_log_match
         entry.text_payload = convert_to_utf8(
           @cloudfunctions_log_match['text'])
-      elsif @service_name == CLOUDFUNCTIONS_SERVICE && record.key?('log')
+      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif is_json
-        entry.struct_payload = struct_from_ruby(record)
-      elsif @service_name == CONTAINER_SERVICE && record.key?('log')
+        entry.json_payload = struct_from_ruby(record)
+      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
+            record.key?('log')
         entry.text_payload = convert_to_utf8(record['log'])
       elsif record.size == 1 && record.key?('message')
         entry.text_payload = convert_to_utf8(record['message'])
       else
-        entry.struct_payload = struct_from_ruby(record)
+        entry.json_payload = struct_from_ruby(record)
       end
     end
 
-    def log_name(tag, common_labels)
-      if @service_name == CLOUDFUNCTIONS_SERVICE
+    def log_name(tag, resource)
+      if resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
         return 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
-        return "#{APPENGINE_SERVICE}/#{tag}"
-      elsif @service_name == CONTAINER_SERVICE
+        return "#{APPENGINE_CONSTANTS[:service]}%2F#{tag}"
+      elsif resource.type == CONTAINER_CONSTANTS[:resource_type]
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
-        container_name_key = "#{CONTAINER_SERVICE}/container_name"
-        if common_labels && common_labels.key?(container_name_key)
-          return common_labels[container_name_key]
+        if resource.labels && resource.labels.key?('container_name')
+          return resource.labels['container_name']
         end
       end
       tag
+    end
+
+    # Some services set labels (via configuring 'labels' or 'label_map') which
+    # are now MonitoredResource labels in v2.
+    # For these services, remove resource labels from 'labels' and return a
+    # Hash of labels to be merged into the MonitoredResource labels.
+    # Otherwise, return an empty hash and leave 'labels' unmodified.
+    def extract_resource_labels(resource_type, labels)
+      extracted_labels = {}
+      return extracted_labels if labels.nil? || !labels.is_a?(Hash)
+
+      if resource_type == DATAFLOW_CONSTANTS[:resource_type]
+        label_prefix = DATAFLOW_CONSTANTS[:service]
+        labels_to_extract = %w(region job_name job_id step_id)
+      elsif resource_type == ML_CONSTANTS[:resource_type]
+        label_prefix = ML_CONSTANTS[:service]
+        labels_to_extract = %w(job_id task_name)
+      else
+        return extracted_labels
+      end
+
+      labels_to_extract.each do |label|
+        extracted_labels[label] = labels.delete("#{label_prefix}/#{label}") if
+          labels.key?("#{label_prefix}/#{label}")
+      end
+      extracted_labels
     end
 
     def init_api_client
@@ -1101,7 +1237,7 @@ module Fluent
       # TODO: Use a non-default ClientOptions object.
       Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
       Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
-      @client = Google::Apis::LoggingV1beta3::LoggingService.new
+      @client = Google::Apis::LoggingV2beta1::LoggingService.new
       @client.authorization = Google::Auth.get_application_default(
         LOGGING_SCOPE)
     end
@@ -1112,7 +1248,7 @@ module Fluent
         authentication = Google::Auth.get_application_default
         creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
         creds = ssl_creds.compose(creds)
-        @client = Google::Logging::V1::LoggingService::Stub.new(
+        @client = Google::Logging::V2::LoggingServiceV2::Stub.new(
           'logging.googleapis.com', creds)
       else
         unless @client.authorization.expired?
@@ -1149,6 +1285,21 @@ module Fluent
                      'replace them with spaces, please set "coerce_to_utf8" ' \
                      'to true.'
           raise
+        end
+      end
+    end
+  end
+end
+
+module Google
+  module Apis
+    module LoggingV2beta1
+      # Override MonitoredResource::dup to make a deep copy.
+      class MonitoredResource
+        def dup
+          ret = super
+          ret.labels = labels.dup
+          ret
         end
       end
     end
