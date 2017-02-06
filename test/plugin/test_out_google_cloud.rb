@@ -196,39 +196,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # converted properly, we simply check the log entry is recorded successfully,
   # and no exception (e.g. stubbing missing for certain url) is thrown.
   def test_tag_acceptance
-    setup_gce_metadata_stubs
-    [
-      # When require_valid_tags is on, we only convert integer tags to strings.
-      # Other invalid cases will cause the log to be dropped.
-      [123, '123', true],
-      ['test', 'test', true],
-      ['germanß', 'germanß', true],
-      ['chinese中', 'chinese中', true],
-      ['specialCharacter/_-.', 'specialCharacter%2F_-.', true],
-
-      # When require_valid_tags is off, we try to convert invalid tags by
-      # stripping off invalid characters.
-      [123, '123', false],
-      ['test', 'test', false],
-      ['germanß', 'germanß', false],
-      ['chinese中', 'chinese中', false],
-      ['specialCharacter/_-.#@*&^', 'specialCharacter%2F_-.', false],
-      ["nonutf8#{[0x92].pack('C*')}", 'nonutf8', false],
-      [[1, 2, 3], '123', false],
-      [{ key: 'value' }, 'keyvalue', false]
-    ].each do |(tag, converted_tag, require_valid_tags)|
+    setup_logging_stubs_block = lambda do |converted_tag, setup_driver_block|
       setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: converted_tag)]) do
-        @logs_sent = []
-        if require_valid_tags
-          d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
-        else
-          d = create_driver(NO_REQUIRE_VALID_TAGS_CONFIG, tag)
-        end
-        d.emit('msg' => log_entry(0))
-        d.run
+        setup_driver_block.call
       end
-      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
     end
+    verify_log_name_block = ->(converted_tag) {}
+    verify_tag_acceptance(setup_logging_stubs_block, verify_log_name_block)
   end
 
   def test_non_integer_timestamp

@@ -128,8 +128,8 @@ module BaseTest
   )
   # rubocop:enable Metrics/LineLength
 
-  NO_REQUIRE_VALID_TAGS_CONFIG = %(
-    require_valid_tags false
+  REQUIRE_VALID_TAGS_CONFIG = %(
+    require_valid_tags true
   )
 
   NO_METADATA_SERVICE_CONFIG = %(
@@ -630,29 +630,20 @@ module BaseTest
     end
   end
 
+  # When require_valid_tags is true, for any invalid characters detected, verify
+  # that we drop the log entries instead of trying to convert the tag to
+  # something valid.
   def test_tag_rejection
     setup_gce_metadata_stubs
     [
-      # When require_valid_tags is true, for any invalid characters detected,
-      # verify we drop the log instead of trying to convert the tag to something
-      # valid.
-      ["nonutf8#{[0x92].pack('C*')}", true],
-      [[1, 2, 3], true],
-      [{ key: 'value' }, true],
-
-      # When require_valid_tags is false, we try to convert tags by strippin
-      # off any invalid character. But if all characters in the tag are invalid,
-      # the conversion will result in an empty string, which we have to reject.
-      ["#{[0x92].pack('C*')}", false],
-      ['@&^$*', false]
-    ].each do |(tag, require_valid_tags)|
+      123,
+      "nonutf8#{[0x92].pack('C*')}",
+      [1, 2, 3],
+      { key: 'value' }
+    ].each do |tag|
       setup_logging_stubs do
         @logs_sent = []
-        if require_valid_tags
-          d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
-        else
-          d = create_driver(NO_REQUIRE_VALID_TAGS_CONFIG, tag)
-        end
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
         d.emit('msg' => log_entry(0))
         d.run
       end
@@ -1312,6 +1303,50 @@ module BaseTest
       end
     end
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
+  end
+
+  # Verify tags. Detailed implementation defers between the grpc and non-gprc
+  # paths, which is reflected in setup_logging_stubs_block and
+  # verify_log_name_block.
+  def verify_tag_acceptance(setup_logging_stubs_block, verify_log_name_block)
+    setup_gce_metadata_stubs
+    [
+      # When require_valid_tags is on, we only accept string tags with valid
+      # characters.
+      ['test', 'test', true],
+      ['germanß', 'german%C3%9F', true],
+      ['chinese中', 'chinese%E4%B8%AD', true],
+      ['specialCharacter/_-.', 'specialCharacter%2F_-.', true],
+
+      # When require_valid_tags is off, we try to convert invalid tags by
+      # stripping off invalid characters.
+      [123, '123', false],
+      ['test', 'test', false],
+      ['germanß', 'german%C3%9F', false],
+      ['chinese中', 'chinese%E4%B8%AD', false],
+      ['specialCharacter/_-.#@*&^', 'specialCharacter%2F_-.', false],
+      ["nonutf8#{[0x92].pack('C*')}", 'nonutf8', false],
+      [[1, 2, 3], '123', false],
+      [{ key: 'value' }, 'keyvalue', false],
+      ["abc#{[0x92].pack('C*')}", 'abc', false],
+      ["#{[0x92].pack('C*')}", '_', false],
+      ['abc@&^$*', 'abc', false],
+      ['@&^$*', '_', false]
+    ].each do |(tag, converted_tag, require_valid_tags)|
+      setup_driver_block = lambda do
+        @logs_sent = []
+        if require_valid_tags
+          d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
+        else
+          d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        end
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      setup_logging_stubs_block.call(converted_tag, setup_driver_block)
+      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
+      verify_log_name_block.call(converted_tag)
+    end
   end
 
   # The http request message to test against.

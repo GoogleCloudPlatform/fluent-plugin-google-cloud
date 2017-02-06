@@ -87,12 +87,12 @@ module Fluent
     # The subservice_name overrides the subservice detection, if provided.
     config_param :subservice_name, :string, :default => nil
 
+    # Whether to reject log entries with invalid tags.
     # Valid tags require strings with only alphanumeric characters. If this
-    # config is set to true, log entries with invalid tags would be dropped and
-    # a warning would be generated in the log. If this config is set to false,
-    # we will force the tag to be valid by converting any non-string tag to
-    # string, and remove any non-utf8 or other invalid characters from it.
-    config_param :require_valid_tags, :bool, :default => true
+    # option is set to false, tags will be made valid by converting any
+    # non-string tag to a string, and removing any non-utf8 or other invalid
+    # characters from it.
+    config_param :require_valid_tags, :bool, :default => false
 
     # The regular expression to use on Kubernetes logs to extract some basic
     # information about the log source. The regex must contain capture groups
@@ -343,17 +343,23 @@ module Fluent
       [tag, time, record].to_msgpack
     end
 
-    # Convert tags. If 'require_valid_tags' is false, strip off any invalid
-    # character from the tag. If 'require_valid_tags' is true, reject any
+    # Convert tags.
+    # If 'require_valid_tags' is true, reject any non-string tags or tags with
     # invalid characters by returning nil.
+    # If 'require_valid_tags' is false, convert any non-string tags to strings
+    # and strip off any invalid characters.
     def convert_tag(tag)
-      tag = tag.to_s
-      return convert_to_utf8(tag, '').gsub(@invalid_tag_regexp, '') \
-        unless @require_valid_tags
-      if convert_to_utf8(tag) == tag && !tag.match(@invalid_tag_regexp)
-        return tag
+      if @require_valid_tags
+        if tag.is_a?(String) && convert_to_utf8(tag) == tag &&
+           !tag.match(@invalid_tag_regexp)
+          return tag
+        else
+          return nil
+        end
       else
-        return nil
+        converted = convert_to_utf8(tag.to_s, '').gsub(@invalid_tag_regexp, '')
+        converted = '_' if converted == ''
+        return converted
       end
     end
 
@@ -363,7 +369,7 @@ module Fluent
       chunk.msgpack_each do |tag, *arr|
         converted_tag = convert_tag(tag)
         if converted_tag.nil? || converted_tag == ''
-          @log.warn "Dropping log message(s) with invalid tag: '#{tag}'. " \
+          @log.warn "Dropping log entries with invalid tag: '#{tag}'. " \
                     'A tag should be a string with alphanumeric characters.'
           next
         else
@@ -537,7 +543,7 @@ module Fluent
             end
 
             # Encode the log name since Logging API relies on '/' as delimiter.
-            log_name = URI.encode(log_name).gsub('/', '%2F')
+            log_name = ERB::Util.url_encode(log_name)
             write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
               log_name: "projects/#{@project_id}/logs/#{log_name}",
               common_labels: Hash[labels_utf8_pairs],
