@@ -191,20 +191,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('DEFAULT', test_obj.parse_severity('er'))
   end
 
-  # For non-grpc path, log name is reflected in the url, so we are stubbing the
-  # corresponding url containing the converted tag. To verify the tag is
-  # converted properly, we simply check the log entry is recorded successfully,
-  # and no exception (e.g. stubbing missing for certain url) is thrown.
-  def test_tag_acceptance
-    setup_logging_stubs_block = lambda do |converted_tag, setup_driver_block|
-      setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: converted_tag)]) do
-        setup_driver_block.call
-      end
-    end
-    verify_log_name_block = ->(converted_tag) {}
-    verify_tag_acceptance(setup_logging_stubs_block, verify_log_name_block)
-  end
-
   def test_non_integer_timestamp
     setup_gce_metadata_stubs
     time = Time.now
@@ -243,12 +229,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs(extra_stub_params = [])
-    ([COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
-      CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
-      EC2_PARAMS] + extra_stub_params).each do |params|
+  def setup_logging_stubs(override_stub_params = nil)
+    stub_params = [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
+                   CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
+                   CUSTOM_PARAMS, EC2_PARAMS]
+    stub_params = [override_stub_params] unless override_stub_params.nil?
+    stub_params.each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
-        @logs_sent << JSON.parse(request.body)
+        log_name = "projects/#{PROJECT_ID}/logs/#{params[:log_name]}"
+        @logs_sent << JSON.parse(request.body).merge('logName' => log_name)
         { body: '' }
       end
     end

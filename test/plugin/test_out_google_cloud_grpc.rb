@@ -31,7 +31,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     { 8 => 'ResourceExhausted',
       12 => 'Unimplemented',
       16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
-      setup_logging_stubs(true, code, message) do
+      setup_logging_stubs(nil, true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
                           GRPCLoggingMockFailingService.rpc_stub_class)
         # The API Client should not retry this and the plugin should consume the
@@ -51,7 +51,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       13 => 'Internal',
       14 => 'Unavailable' }.each_with_index do |(code, message), index|
       exception_count = 0
-      setup_logging_stubs(true, code, message) do
+      setup_logging_stubs(nil, true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
                           GRPCLoggingMockFailingService.rpc_stub_class)
         # The API client should retry this once, then throw an exception which
@@ -155,21 +155,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  # For grpc path, the log name is sent as a part of the log entry, thus can be
-  # verified directly.
-  def test_tag_acceptance
-    setup_logging_stubs_block = lambda do |_converted_tag, setup_driver_block|
-      setup_logging_stubs do
-        setup_driver_block.call
-      end
-    end
-    verify_log_name_block = lambda do |converted_tag|
-      assert_equal "projects/#{PROJECT_ID}/logs/#{converted_tag}",
-                   @logs_sent[0]['logName']
-    end
-    verify_tag_acceptance(setup_logging_stubs_block, verify_log_name_block)
-  end
-
   def test_non_integer_timestamp
     setup_gce_metadata_stubs
     time = Time.now
@@ -239,12 +224,22 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # GRPC logging mock that successfully logs the records.
   class GRPCLoggingMockService < Google::Logging::V1::LoggingService::Service
-    def initialize(requests_received)
+    def initialize(stub_params, requests_received)
       super()
       @requests_received = requests_received
+      @expected_requests = stub_params.clone
     end
 
     def write_log_entries(request, _call)
+      matched = @expected_requests.take_while do |expected|
+        "projects/#{expected[:project_id]}/logs/#{expected[:log_name]}" \
+          == request.log_name
+      end
+      unless matched
+        message = 'This request is not expected by the gRPC mock service: \n' \
+                  "#{request.inspect}"
+        fail GRPC::BadStatus.new(99, message)
+      end
       @requests_received << request
       WriteLogEntriesResponse.new
     end
@@ -298,14 +293,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # Set up grpc stubs to mock the external calls.
-  def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
+  def setup_logging_stubs(override_stub_params = nil, should_fail = false,
+                          code = 0, message = 'Ok')
+    stub_params = [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
+                   CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
+                   CUSTOM_PARAMS, EC2_PARAMS]
+    stub_params = [override_stub_params] unless override_stub_params.nil?
     srv = GRPC::RpcServer.new
     @failed_attempts = []
     @requests_sent = []
     if should_fail
       grpc = GRPCLoggingMockFailingService.new(code, message, @failed_attempts)
     else
-      grpc = GRPCLoggingMockService.new(@requests_sent)
+      grpc = GRPCLoggingMockService.new(stub_params, @requests_sent)
     end
     srv.handle(grpc)
     srv.add_http2_port(GRPC_MOCK_HOST, :this_port_is_insecure)
