@@ -87,11 +87,9 @@ module Fluent
     # The subservice_name overrides the subservice detection, if provided.
     config_param :subservice_name, :string, :default => nil
 
-    # Whether to reject log entries with invalid tags.
-    # Valid tags require strings with only alphanumeric characters. If this
-    # option is set to false, tags will be made valid by converting any
-    # non-string tag to a string, and sanitizing any non-utf8 or other invalid
-    # characters.
+    # Whether to reject log entries with invalid tags. If this option is set to
+    # false, tags will be made valid by converting any non-string tag to a
+    # string, and sanitizing any non-utf8 or other invalid characters.
     config_param :require_valid_tags, :bool, :default => false
 
     # The regular expression to use on Kubernetes logs to extract some basic
@@ -350,8 +348,9 @@ module Fluent
          (!tag.is_a?(String) || tag == '' || convert_to_utf8(tag) != tag)
         return nil
       end
+      tag = convert_to_utf8(tag.to_s)
       tag = '_' if tag == ''
-      convert_to_utf8(tag.to_s)
+      tag
     end
 
     def write(chunk)
@@ -361,7 +360,7 @@ module Fluent
         sanitized_tag = sanitize_tag(tag)
         if sanitized_tag.nil?
           @log.warn "Dropping log entries with invalid tag: '#{tag}'. " \
-                    'A tag should be a string with alphanumeric characters.'
+                    'A tag should be a string with utf8 characters.'
           next
         end
         grouped_entries[sanitized_tag] = [] \
@@ -1013,7 +1012,7 @@ module Fluent
 
     def field_to_label(record, field, labels, label)
       return unless record.key?(field)
-      labels[label] = record[field].to_s
+      labels[label] = convert_to_utf8(record[field].to_s)
       record.delete(field)
     end
 
@@ -1117,7 +1116,8 @@ module Fluent
         # if we have it.
         container_name_key = "#{CONTAINER_SERVICE}/container_name"
         if common_labels && common_labels.key?(container_name_key)
-          return common_labels[container_name_key]
+          sanitized_log_name = sanitize_tag(common_labels[container_name_key])
+          return sanitized_log_name unless sanitized_log_name.nil?
         end
       end
       tag
@@ -1160,14 +1160,13 @@ module Fluent
     # non-UTF-8 character would be replaced by the string specified by
     # 'non_utf8_replacement_string'. If 'coerce_to_utf8' is set to false, any
     # non-UTF-8 character would trigger the plugin to error out.
-    def convert_to_utf8(input, replacement = nil)
-      replacement = @non_utf8_replacement_string if replacement.nil?
+    def convert_to_utf8(input)
       if @coerce_to_utf8
         input.encode(
           'utf-8',
           invalid: :replace,
           undef: :replace,
-          replace: replacement)
+          replace: @non_utf8_replacement_string)
       else
         begin
           input.encode('utf-8')

@@ -630,73 +630,13 @@ module BaseTest
     end
   end
 
-  # Verify that invalid tags are sanitized. Detailed implementation differs
-  # between the grpc and non-gprc paths, which is reflected in
-  # 'setup_logging_stubs_block' and 'verify_log_name_block'.
-  # When 'require_valid_tags' is true, we only accept string tags with valid
-  # characters.
-  def test_sanitize_invalid_tags_with_requires_valid_tags_true
-    setup_gce_metadata_stubs
-    {
-      'test' => 'test',
-      'germanß' => 'german%C3%9F',
-      'chinese中' => 'chinese%E4%B8%AD',
-      'specialCharacter/_-.' => 'specialCharacter%2F_-.'
-    }.each do |tag, converted_tag|
-      setup_logging_stubs(COMPUTE_PARAMS.merge(log_name: converted_tag)) do
-        @logs_sent = []
-        d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
-        d.emit('msg' => log_entry(0))
-        d.run
-      end
-      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do
-        assert_equal "projects/#{PROJECT_ID}/logs/#{converted_tag}",
-                     @logs_sent[0]['logName']
-      end
-    end
-  end
-
-  # Verify that invalid tags are sanitized. Detailed implementation differs
-  # between the grpc and non-gprc paths, which is reflected in
-  # setup_logging_stubs_block and verify_log_name_block.
-  # When 'require_valid_tags' is false, we try to convert invalid tags by
-  # sanitizing invalid characters.
-  def test_sanitize_invalid_tags_with_requires_valid_tags_false
-    setup_gce_metadata_stubs
-    {
-      123 => '123',
-      'test' => 'test',
-      'germanß' => 'german%C3%9F',
-      'chinese中' => 'chinese%E4%B8%AD',
-      'specialCharacter/_-.#@*&^' => 'specialCharacter%2F_-.%23%40%2A%26%5E',
-      "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
-      [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
-      { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D',
-      "abc#{[0x92].pack('C*')}" => 'abc%20',
-      "#{[0x92].pack('C*')}" => '%20',
-      'abc@&^$*' => 'abc%40%26%5E%24%2A',
-      '@&^$*' => '%40%26%5E%24%2A'
-    }.each do |tag, converted_tag|
-      setup_logging_stubs(COMPUTE_PARAMS.merge(log_name: converted_tag)) do
-        @logs_sent = []
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
-        d.emit('msg' => log_entry(0))
-        d.run
-      end
-      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload') do
-        assert_equal "projects/#{PROJECT_ID}/logs/#{converted_tag}",
-                     @logs_sent[0]['logName']
-      end
-    end
-  end
-
-  # When 'require_valid_tags' is true, for any invalid characters detected,
-  # verify that we drop the log entries instead of trying to convert the tag to
-  # something valid.
-  def test_reject_invalid_tags
+  # Verify that we drop the log entries when 'require_valid_tags' is true and
+  # any non-string tags or tags with non-utf8 characters are detected.
+  def test_reject_invalid_tags_with_require_valid_tags_true
     setup_gce_metadata_stubs
     [
       123,
+      '',
       "nonutf8#{[0x92].pack('C*')}",
       [1, 2, 3],
       { key: 'value' }
@@ -708,6 +648,123 @@ module BaseTest
         d.run
       end
       verify_log_entries(0, COMPUTE_PARAMS, 'structPayload')
+    end
+  end
+
+  # A map between tags and their encoded version.
+  def encoded_tags
+    {
+      'test' => 'test',
+      'germanß' => 'german%C3%9F',
+      'chinese中' => 'chinese%E4%B8%AD',
+      'specialCharacter/_-.' => 'specialCharacter%2F_-.'
+    }
+  end
+
+  # Verify that tags are properly encoded. When 'require_valid_tags' is true, we
+  # only accept string tags with utf8 characters.
+  def test_encode_tags_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    encoded_tags.each do |tag, encoded_tag|
+      setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: encoded_tag)]) do
+        @logs_sent = []
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload',
+                         "projects/#{PROJECT_ID}/logs/#{encoded_tag}")
+    end
+  end
+
+  # Verify that tags extracted from container names are properly encoded.
+  def test_encode_tags_from_container_name_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    encoded_tags.each do |tag, encoded_tag|
+      params = CONTAINER_FROM_METADATA_PARAMS.clone
+      params[:labels] = CONTAINER_FROM_METADATA_PARAMS[:labels].clone
+      params[:labels]["#{CONTAINER_SERVICE_NAME}/container_name"] = tag
+      setup_logging_stubs([params.merge(log_name: encoded_tag)]) do
+        @logs_sent = []
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG,
+                          container_tag_with_container_name(tag))
+        d.emit(container_log_entry_with_metadata(log_entry(0), tag))
+        d.run
+      end
+      verify_log_entries(1, params, 'textPayload',
+                         "projects/#{PROJECT_ID}/logs/#{encoded_tag}")
+    end
+  end
+
+  # Verify that tags are properly encoded and sanitized. When
+  # 'require_valid_tags' is false, we try to convert any non-string tags to
+  # strings, and replace non-utf8 characters with a replacement string.
+  def test_sanitize_tags_with_require_valid_tags_false
+    setup_gce_metadata_stubs
+    {
+      123 => '123',
+      '' => '_',
+      'test' => 'test',
+      'germanß' => 'german%C3%9F',
+      'chinese中' => 'chinese%E4%B8%AD',
+      'specialCharacter/_-.#@*&^' => 'specialCharacter%2F_-.%23%40%2A%26%5E',
+      "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
+      [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
+      { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D',
+      "abc#{[0x92].pack('C*')}" => 'abc%20',
+      "#{[0x92].pack('C*')}" => '%20',
+      'abc@&^$*' => 'abc%40%26%5E%24%2A',
+      '@&^$*' => '%40%26%5E%24%2A'
+    }.each do |tag, sanitized_tag|
+      setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: sanitized_tag)]) do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload',
+                         "projects/#{PROJECT_ID}/logs/#{sanitized_tag}")
+    end
+  end
+
+  # Verify that tags extracted from container names are properly encoded and
+  # sanitized.
+  def test_sanitize_tags_from_container_name_with_require_valid_tags_false
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    [
+      # Log names are derived from container names for containers. And container
+      # names are extracted from the tag based on a regex match pattern. As a
+      # prerequisite, the tag should already be a string, thus we only test
+      # string cases here.
+      [123, '123', '123'],
+      ['germanß', 'germanß', 'german%C3%9F'],
+      ['chinese中', 'chinese中', 'chinese%E4%B8%AD'],
+      ['specialCharacter/_-.#@*&^', 'specialCharacter/_-.#@*&^',
+       'specialCharacter%2F_-.%23%40%2A%26%5E'],
+      ["nonutf8#{[0x92].pack('C*')}", 'nonutf8 ', 'nonutf8%20'],
+      ["abc#{[0x92].pack('C*')}", 'abc ', 'abc%20'],
+      ["#{[0x92].pack('C*')}", ' ', '%20'],
+      ['abc@&^$*', 'abc@&^$*', 'abc%40%26%5E%24%2A'],
+      ['@&^$*', '@&^$*', '%40%26%5E%24%2A']
+    ].each do |container_name, sanitized_container_name, encoded_container_name|
+      params = CONTAINER_FROM_METADATA_PARAMS.clone
+      params[:labels] = CONTAINER_FROM_METADATA_PARAMS[:labels].clone
+      # Container name in the label is not encoded, while the log name is.
+      params[:labels]["#{CONTAINER_SERVICE_NAME}/container_name"] = \
+        sanitized_container_name
+      params[:log_name] = encoded_container_name
+      setup_logging_stubs([params]) do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG,
+                          container_tag_with_container_name(container_name))
+        d.emit(container_log_entry_with_metadata(log_entry(0), container_name))
+        d.run
+      end
+      verify_log_entries(
+        1, params, 'textPayload',
+        "projects/#{PROJECT_ID}/logs/#{encoded_container_name}")
     end
   end
 
@@ -1281,7 +1338,13 @@ module BaseTest
                           CLOUDFUNCTIONS_REGION)
   end
 
-  def container_log_entry_with_metadata(log)
+  def container_tag_with_container_name(container_name)
+    "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
+      "#{container_name}"
+  end
+
+  def container_log_entry_with_metadata(
+      log, container_name = CONTAINER_CONTAINER_NAME)
     {
       log: log,
       stream: CONTAINER_STREAM,
@@ -1291,7 +1354,7 @@ module BaseTest
         namespace_name: CONTAINER_NAMESPACE_NAME,
         pod_id: CONTAINER_POD_ID,
         pod_name: CONTAINER_POD_NAME,
-        container_name: CONTAINER_CONTAINER_NAME,
+        container_name: container_name,
         labels: {
           CONTAINER_LABEL_KEY => CONTAINER_LABEL_VALUE
         }
@@ -1341,9 +1404,11 @@ module BaseTest
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_json_log_entries(n, params, payload_type = 'textPayload')
+  def verify_json_log_entries(n, params, payload_type = 'textPayload',
+                              log_name = nil)
     i = 0
     @logs_sent.each do |batch|
+      assert_equal log_name, batch['logName'] unless log_name.nil?
       batch['entries'].each do |entry|
         unless payload_type.empty?
           assert entry.key?(payload_type), 'Entry did not contain expected ' \
