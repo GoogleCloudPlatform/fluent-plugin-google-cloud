@@ -363,8 +363,7 @@ module Fluent
                     'A tag should be a string with utf8 characters.'
           next
         end
-        grouped_entries[sanitized_tag] = [] \
-          unless grouped_entries.key?(sanitized_tag)
+        grouped_entries[sanitized_tag] ||= []
         grouped_entries[sanitized_tag].push(arr)
       end
 
@@ -531,7 +530,6 @@ module Fluent
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
 
-            log_name = ERB::Util.url_encode(log_name)
             write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
               log_name: "projects/#{@project_id}/logs/#{log_name}",
               common_labels: Hash[labels_utf8_pairs],
@@ -1107,19 +1105,22 @@ module Fluent
 
     def log_name(tag, common_labels)
       if @service_name == CLOUDFUNCTIONS_SERVICE
-        return 'cloud-functions'
+        tag = 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
-        return "#{APPENGINE_SERVICE}/#{tag}"
+        tag = "#{APPENGINE_SERVICE}/#{tag}"
       elsif @service_name == CONTAINER_SERVICE
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         container_name_key = "#{CONTAINER_SERVICE}/container_name"
         if common_labels && common_labels.key?(container_name_key)
           sanitized_log_name = sanitize_tag(common_labels[container_name_key])
-          return sanitized_log_name unless sanitized_log_name.nil?
+          tag = sanitized_log_name unless sanitized_log_name.nil?
         end
       end
+      # Only encode the log name for the grpc path, since the non-grpc client
+      # lib already handles encoding.
+      tag = ERB::Util.url_encode(tag) if @use_grpc
       tag
     end
 

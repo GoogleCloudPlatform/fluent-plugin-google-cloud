@@ -229,11 +229,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs(override_stub_params = [])
-    stub_params = [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
+  def setup_logging_stubs(override_stub_params = nil)
+    stub_params = override_stub_params || \
+                  [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
                    CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
                    CUSTOM_PARAMS, EC2_PARAMS]
-    stub_params = override_stub_params unless override_stub_params.empty?
     stub_params.each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
         log_name = "projects/#{PROJECT_ID}/logs/#{params[:log_name]}"
@@ -252,9 +252,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload',
-                         log_name = nil, &block)
-    verify_json_log_entries(n, params, payload_type, log_name, &block)
+  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
+    verify_json_log_entries(n, params, payload_type, &block)
   end
 
   # For an optional field with default values, Protobuf omits the field when it

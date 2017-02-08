@@ -630,17 +630,36 @@ module BaseTest
     end
   end
 
+  # Tags and their sanitized and encoded version.
+  VALID_TAGS = {
+    'test' => 'test',
+    'germanß' => 'german%C3%9F',
+    'chinese中' => 'chinese%E4%B8%AD',
+    'specialCharacter/_-.' => 'specialCharacter%2F_-.',
+    'abc@&^$*' => 'abc%40%26%5E%24%2A',
+    '@&^$*' => '%40%26%5E%24%2A'
+  }
+  NON_STRING_TAGS = {
+    123 => '123',
+    1.23 => '1.23',
+    [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
+    { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D'
+  }
+  EMPTY_TAG = {
+    '' => '_'
+  }
+  NON_UTF8_TAGS = {
+    "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
+    "abc#{[0x92].pack('C*')}" => 'abc%20',
+    "#{[0x92].pack('C*')}" => '%20'
+  }
+
   # Verify that we drop the log entries when 'require_valid_tags' is true and
   # any non-string tags or tags with non-utf8 characters are detected.
   def test_reject_invalid_tags_with_require_valid_tags_true
     setup_gce_metadata_stubs
-    [
-      123,
-      '',
-      "nonutf8#{[0x92].pack('C*')}",
-      [1, 2, 3],
-      { key: 'value' }
-    ].each do |tag|
+    invalid_tags = NON_STRING_TAGS.merge(EMPTY_TAG).merge(NON_UTF8_TAGS)
+    invalid_tags.each do |tag, _|
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
@@ -651,29 +670,22 @@ module BaseTest
     end
   end
 
-  # A map between tags and their encoded version.
-  def encoded_tags
-    {
-      'test' => 'test',
-      'germanß' => 'german%C3%9F',
-      'chinese中' => 'chinese%E4%B8%AD',
-      'specialCharacter/_-.' => 'specialCharacter%2F_-.'
-    }
-  end
-
   # Verify that tags are properly encoded. When 'require_valid_tags' is true, we
   # only accept string tags with utf8 characters.
   def test_encode_tags_with_require_valid_tags_true
     setup_gce_metadata_stubs
-    encoded_tags.each do |tag, encoded_tag|
+    VALID_TAGS.each do |tag, encoded_tag|
       setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: encoded_tag)]) do
         @logs_sent = []
         d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
         d.emit('msg' => log_entry(0))
         d.run
       end
-      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload',
-                         "projects/#{PROJECT_ID}/logs/#{encoded_tag}")
+      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
+      # Each batch in the logs sent share the same log name, so we only verify
+      # the first one.
+      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
+                   @logs_sent[0]['logName']
     end
   end
 
@@ -681,7 +693,7 @@ module BaseTest
   def test_encode_tags_from_container_name_with_require_valid_tags_true
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
-    encoded_tags.each do |tag, encoded_tag|
+    VALID_TAGS.each do |tag, encoded_tag|
       params = CONTAINER_FROM_METADATA_PARAMS.clone
       params[:labels] = CONTAINER_FROM_METADATA_PARAMS[:labels].clone
       params[:labels]["#{CONTAINER_SERVICE_NAME}/container_name"] = tag
@@ -692,8 +704,11 @@ module BaseTest
         d.emit(container_log_entry_with_metadata(log_entry(0), tag))
         d.run
       end
-      verify_log_entries(1, params, 'textPayload',
-                         "projects/#{PROJECT_ID}/logs/#{encoded_tag}")
+      verify_log_entries(1, params, 'textPayload')
+      # Each batch in the logs sent share the same log name, so we only verify
+      # the first one.
+      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
+                   @logs_sent[0]['logName']
     end
   end
 
@@ -702,29 +717,20 @@ module BaseTest
   # strings, and replace non-utf8 characters with a replacement string.
   def test_sanitize_tags_with_require_valid_tags_false
     setup_gce_metadata_stubs
-    {
-      123 => '123',
-      '' => '_',
-      'test' => 'test',
-      'germanß' => 'german%C3%9F',
-      'chinese中' => 'chinese%E4%B8%AD',
-      'specialCharacter/_-.#@*&^' => 'specialCharacter%2F_-.%23%40%2A%26%5E',
-      "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
-      [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
-      { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D',
-      "abc#{[0x92].pack('C*')}" => 'abc%20',
-      "#{[0x92].pack('C*')}" => '%20',
-      'abc@&^$*' => 'abc%40%26%5E%24%2A',
-      '@&^$*' => '%40%26%5E%24%2A'
-    }.each do |tag, sanitized_tag|
+    all_tags = VALID_TAGS.merge(NON_STRING_TAGS).merge(EMPTY_TAG).merge(
+      NON_UTF8_TAGS)
+    all_tags.each do |tag, sanitized_tag|
       setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: sanitized_tag)]) do
         @logs_sent = []
         d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
         d.emit('msg' => log_entry(0))
         d.run
       end
-      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload',
-                         "projects/#{PROJECT_ID}/logs/#{sanitized_tag}")
+      verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
+      # Each batch in the logs sent share the same log name, so we only verify
+      # the first one.
+      assert_equal "projects/#{PROJECT_ID}/logs/#{sanitized_tag}",
+                   @logs_sent[0]['logName']
     end
   end
 
@@ -733,27 +739,17 @@ module BaseTest
   def test_sanitize_tags_from_container_name_with_require_valid_tags_false
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
-    [
-      # Log names are derived from container names for containers. And container
-      # names are extracted from the tag based on a regex match pattern. As a
-      # prerequisite, the tag should already be a string, thus we only test
-      # string cases here.
-      [123, '123', '123'],
-      ['germanß', 'germanß', 'german%C3%9F'],
-      ['chinese中', 'chinese中', 'chinese%E4%B8%AD'],
-      ['specialCharacter/_-.#@*&^', 'specialCharacter/_-.#@*&^',
-       'specialCharacter%2F_-.%23%40%2A%26%5E'],
-      ["nonutf8#{[0x92].pack('C*')}", 'nonutf8 ', 'nonutf8%20'],
-      ["abc#{[0x92].pack('C*')}", 'abc ', 'abc%20'],
-      ["#{[0x92].pack('C*')}", ' ', '%20'],
-      ['abc@&^$*', 'abc@&^$*', 'abc%40%26%5E%24%2A'],
-      ['@&^$*', '@&^$*', '%40%26%5E%24%2A']
-    ].each do |container_name, sanitized_container_name, encoded_container_name|
+    # Log names are derived from container names for containers. And container
+    # names are extracted from the tag based on a regex match pattern. As a
+    # prerequisite, the tag should already be a string, thus we only test
+    # non-empty string cases here.
+    non_empty_string_tags = VALID_TAGS.merge(NON_UTF8_TAGS)
+    non_empty_string_tags.each do |container_name, encoded_container_name|
       params = CONTAINER_FROM_METADATA_PARAMS.clone
       params[:labels] = CONTAINER_FROM_METADATA_PARAMS[:labels].clone
       # Container name in the label is not encoded, while the log name is.
       params[:labels]["#{CONTAINER_SERVICE_NAME}/container_name"] = \
-        sanitized_container_name
+        URI.decode(encoded_container_name)
       params[:log_name] = encoded_container_name
       setup_logging_stubs([params]) do
         @logs_sent = []
@@ -762,9 +758,11 @@ module BaseTest
         d.emit(container_log_entry_with_metadata(log_entry(0), container_name))
         d.run
       end
-      verify_log_entries(
-        1, params, 'textPayload',
-        "projects/#{PROJECT_ID}/logs/#{encoded_container_name}")
+      verify_log_entries(1, params, 'textPayload')
+      # Each batch in the logs sent share the same log name, so we only verify
+      # the first one.
+      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_container_name}",
+                   @logs_sent[0]['logName']
     end
   end
 
@@ -1404,11 +1402,9 @@ module BaseTest
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_json_log_entries(n, params, payload_type = 'textPayload',
-                              log_name = nil)
+  def verify_json_log_entries(n, params, payload_type = 'textPayload')
     i = 0
     @logs_sent.each do |batch|
-      assert_equal log_name, batch['logName'] unless log_name.nil?
       batch['entries'].each do |entry|
         unless payload_type.empty?
           assert entry.key?(payload_type), 'Entry did not contain expected ' \
