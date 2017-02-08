@@ -236,7 +236,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                    CUSTOM_PARAMS, EC2_PARAMS]
     stub_params.each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
-        log_name = "projects/#{PROJECT_ID}/logs/#{params[:log_name]}"
+        log_name = "projects/#{params[:project_id]}/logs/#{params[:log_name]}"
         @logs_sent << JSON.parse(request.body).merge('logName' => log_name)
         { body: '' }
       end

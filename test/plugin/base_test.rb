@@ -324,6 +324,30 @@ module BaseTest
     'cacheValidatedWithOriginServer' => true
   }
 
+  # Tags and their sanitized and encoded version.
+  VALID_TAGS = {
+    'test' => 'test',
+    'germanß' => 'german%C3%9F',
+    'chinese中' => 'chinese%E4%B8%AD',
+    'specialCharacter/_-.' => 'specialCharacter%2F_-.',
+    'abc@&^$*' => 'abc%40%26%5E%24%2A',
+    '@&^$*' => '%40%26%5E%24%2A'
+  }
+  NON_STRING_TAGS = {
+    123 => '123',
+    1.23 => '1.23',
+    [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
+    { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D'
+  }
+  EMPTY_TAG = {
+    '' => '_'
+  }
+  NON_UTF8_TAGS = {
+    "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
+    "abc#{[0x92].pack('C*')}" => 'abc%20',
+    "#{[0x92].pack('C*')}" => '%20'
+  }
+
   # Shared tests.
 
   def test_configure_service_account_application_default
@@ -630,30 +654,6 @@ module BaseTest
     end
   end
 
-  # Tags and their sanitized and encoded version.
-  VALID_TAGS = {
-    'test' => 'test',
-    'germanß' => 'german%C3%9F',
-    'chinese中' => 'chinese%E4%B8%AD',
-    'specialCharacter/_-.' => 'specialCharacter%2F_-.',
-    'abc@&^$*' => 'abc%40%26%5E%24%2A',
-    '@&^$*' => '%40%26%5E%24%2A'
-  }
-  NON_STRING_TAGS = {
-    123 => '123',
-    1.23 => '1.23',
-    [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
-    { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D'
-  }
-  EMPTY_TAG = {
-    '' => '_'
-  }
-  NON_UTF8_TAGS = {
-    "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
-    "abc#{[0x92].pack('C*')}" => 'abc%20',
-    "#{[0x92].pack('C*')}" => '%20'
-  }
-
   # Verify that we drop the log entries when 'require_valid_tags' is true and
   # any non-string tags or tags with non-utf8 characters are detected.
   def test_reject_invalid_tags_with_require_valid_tags_true
@@ -682,7 +682,7 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
-      # Each batch in the logs sent share the same log name, so we only verify
+      # Each batch in the logs sent shares the same log name, so we only verify
       # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
                    @logs_sent[0]['logName']
@@ -705,7 +705,7 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, params, 'textPayload')
-      # Each batch in the logs sent share the same log name, so we only verify
+      # Each batch in the logs sent shares the same log name, so we only verify
       # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
                    @logs_sent[0]['logName']
@@ -727,7 +727,7 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
-      # Each batch in the logs sent share the same log name, so we only verify
+      # Each batch in the logs sent shares the same log name, so we only verify
       # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{sanitized_tag}",
                    @logs_sent[0]['logName']
@@ -759,7 +759,7 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, params, 'textPayload')
-      # Each batch in the logs sent share the same log name, so we only verify
+      # Each batch in the logs sent shares the same log name, so we only verify
       # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_container_name}",
                    @logs_sent[0]['logName']
