@@ -333,16 +333,12 @@ module BaseTest
     'abc@&^$*' => 'abc%40%26%5E%24%2A',
     '@&^$*' => '%40%26%5E%24%2A'
   }
-  NON_STRING_TAGS = {
+  INVALID_TAGS = {
+    '' => '_',
     123 => '123',
     1.23 => '1.23',
     [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
-    { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D'
-  }
-  EMPTY_TAG = {
-    '' => '_'
-  }
-  NON_UTF8_TAGS = {
+    { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D',
     "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
     "abc#{[0x92].pack('C*')}" => 'abc%20',
     "#{[0x92].pack('C*')}" => '%20'
@@ -658,8 +654,7 @@ module BaseTest
   # any non-string tags or tags with non-utf8 characters are detected.
   def test_reject_invalid_tags_with_require_valid_tags_true
     setup_gce_metadata_stubs
-    invalid_tags = NON_STRING_TAGS.merge(EMPTY_TAG).merge(NON_UTF8_TAGS)
-    invalid_tags.each do |tag, _|
+    INVALID_TAGS.keys.each do |tag|
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
@@ -682,8 +677,6 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
-      # Each batch in the logs sent shares the same log name, so we only verify
-      # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
                    @logs_sent[0]['logName']
     end
@@ -705,8 +698,6 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, params, 'textPayload')
-      # Each batch in the logs sent shares the same log name, so we only verify
-      # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
                    @logs_sent[0]['logName']
     end
@@ -717,9 +708,7 @@ module BaseTest
   # strings, and replace non-utf8 characters with a replacement string.
   def test_sanitize_tags_with_require_valid_tags_false
     setup_gce_metadata_stubs
-    all_tags = VALID_TAGS.merge(NON_STRING_TAGS).merge(EMPTY_TAG).merge(
-      NON_UTF8_TAGS)
-    all_tags.each do |tag, sanitized_tag|
+    VALID_TAGS.merge(INVALID_TAGS).each do |tag, sanitized_tag|
       setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: sanitized_tag)]) do
         @logs_sent = []
         d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
@@ -727,8 +716,6 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'structPayload')
-      # Each batch in the logs sent shares the same log name, so we only verify
-      # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{sanitized_tag}",
                    @logs_sent[0]['logName']
     end
@@ -743,14 +730,16 @@ module BaseTest
     # names are extracted from the tag based on a regex match pattern. As a
     # prerequisite, the tag should already be a string, thus we only test
     # non-empty string cases here.
-    non_empty_string_tags = VALID_TAGS.merge(NON_UTF8_TAGS)
-    non_empty_string_tags.each do |container_name, encoded_container_name|
-      params = CONTAINER_FROM_METADATA_PARAMS.clone
-      params[:labels] = CONTAINER_FROM_METADATA_PARAMS[:labels].clone
-      # Container name in the label is not encoded, while the log name is.
-      params[:labels]["#{CONTAINER_SERVICE_NAME}/container_name"] = \
-        URI.decode(encoded_container_name)
-      params[:log_name] = encoded_container_name
+    VALID_TAGS.merge(
+      INVALID_TAGS.select { |tag, _| tag.is_a?(String) && !tag.empty? }
+    ).each do |container_name, encoded_container_name|
+      # Container name in the label is sanitized but not encoded, while the log
+      # name is encoded.
+      params = CONTAINER_FROM_METADATA_PARAMS.merge(
+        labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
+          "#{CONTAINER_SERVICE_NAME}/container_name" =>
+            URI.decode(encoded_container_name)),
+        log_name: encoded_container_name)
       setup_logging_stubs([params]) do
         @logs_sent = []
         d = create_driver(APPLICATION_DEFAULT_CONFIG,
@@ -759,8 +748,6 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, params, 'textPayload')
-      # Each batch in the logs sent shares the same log name, so we only verify
-      # the first one.
       assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_container_name}",
                    @logs_sent[0]['logName']
     end

@@ -236,10 +236,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       matched = @expected_log_names.take_while do |expected|
         expected == request.log_name
       end
-      unless matched
-        message = "Unexpected request: #{request.inspect}"
-        fail GRPC::BadStatus.new(99, message)
-      end
+      fail GRPC::BadStatus.new(99, "Unexpected request: #{request.inspect}") \
+        unless matched
       @requests_received << request
       WriteLogEntriesResponse.new
     end
@@ -295,7 +293,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # Set up grpc stubs to mock the external calls.
   def setup_logging_stubs(override_stub_params = nil, should_fail = false,
                           code = 0, message = 'Ok')
-    stub_params = [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
+    stub_params = override_stub_params || \
+                  [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
                    CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
                    CUSTOM_PARAMS, EC2_PARAMS]
     stub_params = override_stub_params unless override_stub_params.nil?
