@@ -691,10 +691,11 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     VALID_TAGS.each do |tag, encoded_tag|
-      params = CONTAINER_FROM_METADATA_PARAMS.clone
-      params[:labels] = CONTAINER_FROM_METADATA_PARAMS[:labels].clone
-      params[:labels]["#{CONTAINER_SERVICE_NAME}/container_name"] = tag
-      setup_logging_stubs([params.merge(log_name: encoded_tag)]) do
+      params = CONTAINER_FROM_METADATA_PARAMS.merge(
+        labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
+          "#{CONTAINER_SERVICE_NAME}/container_name" => tag),
+        log_name: encoded_tag)
+      setup_logging_stubs([params]) do
         @logs_sent = []
         d = create_driver(REQUIRE_VALID_TAGS_CONFIG,
                           container_tag_with_container_name(tag))
