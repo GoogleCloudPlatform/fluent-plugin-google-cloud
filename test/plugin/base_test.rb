@@ -671,10 +671,12 @@ module BaseTest
 
   # Verify that empty string container name should fail the kubernetes regex
   # match, thus the original tag is used as the log name.
-  def test_handle_empty_container_name_with_require_valid_tags_true
+  def test_handle_empty_container_name
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     container_name = ''
+    # This tag will not match the kubernetes regex because the container name
+    # part is empty.
     tag = container_tag_with_container_name(container_name)
     params = CONTAINER_FROM_METADATA_PARAMS.merge(
       labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
@@ -781,9 +783,7 @@ module BaseTest
     # names are extracted from the tag based on a regex match pattern. As a
     # prerequisite, the tag should already be a string, thus we only test
     # non-empty string cases here.
-    string_tags = VALID_TAGS.merge(INVALID_TAGS).select do |tag, _|
-      tag.is_a?(String) && !tag.empty?
-    end
+    string_tags = ALL_TAGS.select { |tag, _| tag.is_a?(String) && !tag.empty? }
     string_tags.each do |container_name, encoded_container_name|
       # Container name in the label is sanitized but not encoded, while the log
       # name is encoded.

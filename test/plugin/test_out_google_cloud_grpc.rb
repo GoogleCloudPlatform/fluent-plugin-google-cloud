@@ -233,11 +233,11 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     def write_log_entries(request, _call)
-      matched = @expected_log_names.take_while do |expected|
+      matched = @expected_log_names.select do |expected|
         expected == request.log_name
       end
       fail GRPC::BadStatus.new(99, "Unexpected request: #{request.inspect}") \
-        unless matched
+        if matched.empty?
       @requests_received << request
       WriteLogEntriesResponse.new
     end
