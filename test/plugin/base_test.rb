@@ -675,8 +675,8 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     container_name = ''
-    # This tag will not match the kubernetes regex because the container name
-    # part is empty.
+    # This tag will not match the kubernetes regex because it requires a
+    # non-empty container name.
     tag = container_tag_with_container_name(container_name)
     params = CONTAINER_FROM_METADATA_PARAMS.merge(
       labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
