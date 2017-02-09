@@ -147,6 +147,10 @@ module BaseTest
   )
   # rubocop:enable Metrics/LineLength
 
+  REQUIRE_VALID_TAGS_CONFIG = %(
+    require_valid_tags true
+  )
+
   NO_METADATA_SERVICE_CONFIG = %(
     use_metadata_service false
   )
@@ -414,6 +418,30 @@ module BaseTest
     'cacheHit' => true,
     'cacheValidatedWithOriginServer' => true
   }
+
+  # Tags and their sanitized and encoded version.
+  VALID_TAGS = {
+    'test' => 'test',
+    'germanß' => 'german%C3%9F',
+    'chinese中' => 'chinese%E4%B8%AD',
+    'specialCharacter/_-.' => 'specialCharacter%2F_-.',
+    'abc@&^$*' => 'abc%40%26%5E%24%2A',
+    '@&^$*' => '%40%26%5E%24%2A'
+  }
+  INVALID_TAGS = {
+    # Non-string tags.
+    123 => '123',
+    1.23 => '1.23',
+    [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
+    { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D',
+    # Non-utf8 string tags.
+    "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
+    "abc#{[0x92].pack('C*')}" => 'abc%20',
+    "#{[0x92].pack('C*')}" => '%20',
+    # Empty string tag.
+    '' => '_'
+  }
+  ALL_TAGS = VALID_TAGS.merge(INVALID_TAGS)
 
   # Shared tests.
 
@@ -718,6 +746,160 @@ module BaseTest
         assert_equal 5000, get_number(fields['data']), entry
         assert_equal null_value, fields['some_null_field'], entry
       end
+    end
+  end
+
+  # Verify that we drop the log entries when 'require_valid_tags' is true and
+  # any non-string tags or tags with non-utf8 characters are detected.
+  def test_reject_invalid_tags_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    INVALID_TAGS.keys.each do |tag|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(0, COMPUTE_PARAMS, 'jsonPayload')
+    end
+  end
+
+  # Verify that empty string container name should fail the kubernetes regex
+  # match, thus the original tag is used as the log name.
+  def test_handle_empty_container_name
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    container_name = ''
+    # This tag will not match the kubernetes regex because it requires a
+    # non-empty container name.
+    tag = container_tag_with_container_name(container_name)
+    setup_logging_stubs do
+      d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
+      d.emit(container_log_entry_with_metadata(log_entry(0), container_name))
+      d.run
+    end
+    params = CONTAINER_FROM_METADATA_PARAMS.merge(
+      resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
+        labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
+          'container_name' => container_name)),
+      log_name: tag)
+    verify_log_entries(1, params, 'textPayload')
+    assert_equal "projects/#{PROJECT_ID}/logs/#{tag}", @logs_sent[0]['logName']
+  end
+
+  # Verify that container names with non-utf8 characters should be rejected when
+  # 'require_valid_tags' is true.
+  def test_reject_non_utf8_container_name_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    non_utf8_tags = INVALID_TAGS.select do |tag, _|
+      tag.is_a?(String) && !tag.empty?
+    end
+    non_utf8_tags.each do |container_name, encoded_name|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG,
+                          container_tag_with_container_name(container_name))
+        d.emit(container_log_entry_with_metadata(log_entry(0), container_name))
+        d.run
+      end
+      params = CONTAINER_FROM_METADATA_PARAMS.merge(
+        labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
+          "#{CONTAINER_CONSTANTS[:service]}/container_name" =>
+            URI.decode(encoded_name)),
+        log_name: encoded_name)
+      verify_log_entries(0, params, 'textPayload')
+    end
+  end
+
+  # Verify that tags are properly encoded. When 'require_valid_tags' is true, we
+  # only accept string tags with utf8 characters.
+  def test_encode_tags_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    VALID_TAGS.each do |tag, encoded_tag|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS.merge(log_name: encoded_tag),
+                         'jsonPayload')
+      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
+                   @logs_sent[0]['logName']
+    end
+  end
+
+  # Verify that tags extracted from container names are properly encoded.
+  def test_encode_tags_from_container_name_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    VALID_TAGS.each do |tag, encoded_tag|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG,
+                          container_tag_with_container_name(tag))
+        d.emit(container_log_entry_with_metadata(log_entry(0), tag))
+        d.run
+      end
+      params = CONTAINER_FROM_METADATA_PARAMS.merge(
+        resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
+          labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
+            'container_name' => tag)),
+        log_name: encoded_tag)
+      verify_log_entries(1, params, 'textPayload')
+      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
+                   @logs_sent[0]['logName']
+    end
+  end
+
+  # Verify that tags are properly encoded and sanitized. When
+  # 'require_valid_tags' is false, we try to convert any non-string tags to
+  # strings, and replace non-utf8 characters with a replacement string.
+  def test_sanitize_tags_with_require_valid_tags_false
+    setup_gce_metadata_stubs
+    ALL_TAGS.each do |tag, sanitized_tag|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
+        d.emit('msg' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS.merge(log_name: sanitized_tag),
+                         'jsonPayload')
+      assert_equal "projects/#{PROJECT_ID}/logs/#{sanitized_tag}",
+                   @logs_sent[0]['logName']
+    end
+  end
+
+  # Verify that tags extracted from container names are properly encoded and
+  # sanitized.
+  def test_sanitize_tags_from_container_name_with_require_valid_tags_false
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    # Log names are derived from container names for containers. And container
+    # names are extracted from the tag based on a regex match pattern. As a
+    # prerequisite, the tag should already be a string, thus we only test
+    # non-empty string cases here.
+    string_tags = ALL_TAGS.select { |tag, _| tag.is_a?(String) && !tag.empty? }
+    string_tags.each do |container_name, encoded_container_name|
+      # Container name in the label is sanitized but not encoded, while the log
+      # name is encoded.
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG,
+                          container_tag_with_container_name(container_name))
+        d.emit(container_log_entry_with_metadata(log_entry(0), container_name))
+        d.run
+      end
+      params = CONTAINER_FROM_METADATA_PARAMS.merge(
+        resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
+          labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
+            'container_name' => URI.decode(encoded_container_name))),
+        log_name: encoded_container_name)
+      verify_log_entries(1, params, 'textPayload')
+      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_container_name}",
+                   @logs_sent[0]['logName']
     end
   end
 
@@ -1274,7 +1456,13 @@ module BaseTest
                           CLOUDFUNCTIONS_REGION)
   end
 
-  def container_log_entry_with_metadata(log)
+  def container_tag_with_container_name(container_name)
+    "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
+      "#{container_name}"
+  end
+
+  def container_log_entry_with_metadata(
+      log, container_name = CONTAINER_CONTAINER_NAME)
     {
       log: log,
       stream: CONTAINER_STREAM,
@@ -1284,7 +1472,7 @@ module BaseTest
         namespace_name: CONTAINER_NAMESPACE_NAME,
         pod_id: CONTAINER_POD_ID,
         pod_name: CONTAINER_POD_NAME,
-        container_name: CONTAINER_CONTAINER_NAME,
+        container_name: container_name,
         labels: {
           CONTAINER_LABEL_KEY => CONTAINER_LABEL_VALUE
         }

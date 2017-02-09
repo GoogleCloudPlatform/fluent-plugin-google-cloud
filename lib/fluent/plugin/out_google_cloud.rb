@@ -114,6 +114,11 @@ module Fluent
     # The subservice_name overrides the subservice detection, if provided.
     config_param :subservice_name, :string, :default => nil
 
+    # Whether to reject log entries with invalid tags. If this option is set to
+    # false, tags will be made valid by converting any non-string tag to a
+    # string, and sanitizing any non-utf8 or other invalid characters.
+    config_param :require_valid_tags, :bool, :default => false
+
     # The regular expression to use on Kubernetes logs to extract some basic
     # information about the log source. The regex must contain capture groups
     # for pod_name, namespace_name, and container_name.
@@ -295,7 +300,7 @@ module Fluent
       # Functions.
       @running_cloudfunctions = false
 
-      # Set up the MonitoredResource, labels, etc. based on the config
+      # Set up the MonitoredResource, labels, etc. based on the config.
       case @platform
       when Platform::GCE
         @resource.type = COMPUTE_CONSTANTS[:resource_type]
@@ -386,6 +391,20 @@ module Fluent
 
     def format(tag, time, record)
       [tag, time, record].to_msgpack
+    end
+
+    # Given a tag, returns the corresponding valid tag if possible, or nil if
+    # the tag should be rejected. If 'require_valid_tags' is false, non-string
+    # tags are converted to strings, and invalid characters are sanitized;
+    # otherwise such tags are rejected.
+    def sanitize_tag(tag)
+      if @require_valid_tags &&
+         (!tag.is_a?(String) || tag == '' || convert_to_utf8(tag) != tag)
+        return nil
+      end
+      tag = convert_to_utf8(tag.to_s)
+      tag = '_' if tag == ''
+      tag
     end
 
     # Compute the monitored resource and common labels shared by a collection of
@@ -497,8 +516,14 @@ module Fluent
       # Group the entries since we have to make one call per tag.
       grouped_entries = {}
       chunk.msgpack_each do |tag, *arr|
-        grouped_entries[tag] = [] unless grouped_entries.key?(tag)
-        grouped_entries[tag].push(arr)
+        sanitized_tag = sanitize_tag(tag)
+        if sanitized_tag.nil?
+          @log.warn "Dropping log entries with invalid tag: '#{tag}'. " \
+                    'A tag should be a string with utf8 characters.'
+          next
+        end
+        grouped_entries[sanitized_tag] ||= []
+        grouped_entries[sanitized_tag].push(arr)
       end
 
       grouped_entries.each do |tag, arr|
@@ -600,7 +625,7 @@ module Fluent
             end
 
             write_request = Google::Logging::V2::WriteLogEntriesRequest.new(
-              log_name: convert_to_utf8(log_name),
+              log_name: log_name,
               resource: Google::Api::MonitoredResource.new(
                 type: group_resource.type,
                 labels: group_resource.labels.to_h
@@ -1090,8 +1115,8 @@ module Fluent
       return {} if label_map.nil? || !label_map.is_a?(Hash)
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
-        extracted_labels[new_label] = record.delete(original_label).to_s if \
-          record.key?(original_label)
+        extracted_labels[new_label] = convert_to_utf8(
+          record.delete(original_label).to_s) if record.key?(original_label)
       end
     end
 
@@ -1192,17 +1217,19 @@ module Fluent
 
     def log_name(tag, resource)
       if resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        return 'cloud-functions'
+        tag = 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
-        return "#{APPENGINE_CONSTANTS[:service]}%2F#{tag}"
+        tag = "#{APPENGINE_CONSTANTS[:service]}/#{tag}"
       elsif resource.type == CONTAINER_CONSTANTS[:resource_type]
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         if resource.labels && resource.labels.key?('container_name')
-          return resource.labels['container_name']
+          sanitized_tag = sanitize_tag(resource.labels['container_name'])
+          tag = sanitized_tag unless sanitized_tag.nil?
         end
       end
+      tag = ERB::Util.url_encode(tag)
       tag
     end
 
