@@ -87,6 +87,11 @@ module Fluent
     # The subservice_name overrides the subservice detection, if provided.
     config_param :subservice_name, :string, :default => nil
 
+    # Whether to reject log entries with invalid tags. If this option is set to
+    # false, tags will be made valid by converting any non-string tag to a
+    # string, and sanitizing any non-utf8 or other invalid characters.
+    config_param :require_valid_tags, :bool, :default => false
+
     # The regular expression to use on Kubernetes logs to extract some basic
     # information about the log source. The regex must contain capture groups
     # for pod_name, namespace_name, and container_name.
@@ -334,12 +339,32 @@ module Fluent
       [tag, time, record].to_msgpack
     end
 
+    # Given a tag, returns the corresponding valid tag if possible, or nil if
+    # the tag should be rejected. If 'require_valid_tags' is false, non-string
+    # tags are converted to strings, and invalid characters are sanitized;
+    # otherwise such tags are rejected.
+    def sanitize_tag(tag)
+      if @require_valid_tags &&
+         (!tag.is_a?(String) || tag == '' || convert_to_utf8(tag) != tag)
+        return nil
+      end
+      tag = convert_to_utf8(tag.to_s)
+      tag = '_' if tag == ''
+      tag
+    end
+
     def write(chunk)
       # Group the entries since we have to make one call per tag.
       grouped_entries = {}
       chunk.msgpack_each do |tag, *arr|
-        grouped_entries[tag] = [] unless grouped_entries.key?(tag)
-        grouped_entries[tag].push(arr)
+        sanitized_tag = sanitize_tag(tag)
+        if sanitized_tag.nil?
+          @log.warn "Dropping log entries with invalid tag: '#{tag}'. " \
+                    'A tag should be a string with utf8 characters.'
+          next
+        end
+        grouped_entries[sanitized_tag] ||= []
+        grouped_entries[sanitized_tag].push(arr)
       end
 
       grouped_entries.each do |tag, arr|
@@ -504,10 +529,9 @@ module Fluent
             labels_utf8_pairs = labels.map do |k, v|
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
-            utf8_log_name = convert_to_utf8(log_name)
 
             write_request = Google::Logging::V1::WriteLogEntriesRequest.new(
-              log_name: "projects/#{@project_id}/logs/#{utf8_log_name}",
+              log_name: "projects/#{@project_id}/logs/#{log_name}",
               common_labels: Hash[labels_utf8_pairs],
               entries: entries
             )
@@ -986,7 +1010,7 @@ module Fluent
 
     def field_to_label(record, field, labels, label)
       return unless record.key?(field)
-      labels[label] = record[field].to_s
+      labels[label] = convert_to_utf8(record[field].to_s)
       record.delete(field)
     end
 
@@ -1081,18 +1105,22 @@ module Fluent
 
     def log_name(tag, common_labels)
       if @service_name == CLOUDFUNCTIONS_SERVICE
-        return 'cloud-functions'
+        tag = 'cloud-functions'
       elsif @running_on_managed_vm
         # Add a prefix to Managed VM logs to prevent namespace collisions.
-        return "#{APPENGINE_SERVICE}/#{tag}"
+        tag = "#{APPENGINE_SERVICE}/#{tag}"
       elsif @service_name == CONTAINER_SERVICE
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         container_name_key = "#{CONTAINER_SERVICE}/container_name"
         if common_labels && common_labels.key?(container_name_key)
-          return common_labels[container_name_key]
+          sanitized_log_name = sanitize_tag(common_labels[container_name_key])
+          tag = sanitized_log_name unless sanitized_log_name.nil?
         end
       end
+      # Only encode the log name for the grpc path, since the non-grpc client
+      # lib already handles encoding.
+      tag = ERB::Util.url_encode(tag) if @use_grpc
       tag
     end
 

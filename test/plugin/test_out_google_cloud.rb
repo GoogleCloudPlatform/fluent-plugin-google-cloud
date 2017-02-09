@@ -229,12 +229,15 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs
-    [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
-     CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS, CUSTOM_PARAMS,
-     EC2_PARAMS].each do |params|
+  def setup_logging_stubs(override_stub_params = nil)
+    stub_params = override_stub_params || \
+                  [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
+                   CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
+                   CUSTOM_PARAMS, EC2_PARAMS]
+    stub_params.each do |params|
       stub_request(:post, uri_for_log(params)).to_return do |request|
-        @logs_sent << JSON.parse(request.body)
+        log_name = "projects/#{params[:project_id]}/logs/#{params[:log_name]}"
+        @logs_sent << JSON.parse(request.body).merge('logName' => log_name)
         { body: '' }
       end
     end
