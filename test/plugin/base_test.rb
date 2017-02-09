@@ -669,6 +669,52 @@ module BaseTest
     end
   end
 
+  # Verify that empty string container name should fail the kubernetes regex
+  # match, thus the original tag is used as the log name.
+  def test_handle_empty_container_name_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    container_name = ''
+    tag = container_tag_with_container_name(container_name)
+    params = CONTAINER_FROM_METADATA_PARAMS.merge(
+      labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
+        "#{CONTAINER_SERVICE_NAME}/container_name" => container_name),
+      log_name: tag)
+    setup_logging_stubs([params]) do
+      @logs_sent = []
+      d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
+      d.emit(container_log_entry_with_metadata(log_entry(0), container_name))
+      d.run
+    end
+    verify_log_entries(1, params, 'textPayload')
+    assert_equal "projects/#{PROJECT_ID}/logs/#{tag}", @logs_sent[0]['logName']
+  end
+
+  # Verify that container names with non-utf8 characters should be rejected when
+  # 'require_valid_tags' is true.
+  def test_reject_non_utf8_container_name_with_require_valid_tags_true
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    non_utf8_tags = INVALID_TAGS.select do |tag, _|
+      tag.is_a?(String) && !tag.empty?
+    end
+    non_utf8_tags.each do |container_name, encoded_name|
+      params = CONTAINER_FROM_METADATA_PARAMS.merge(
+        labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
+          "#{CONTAINER_SERVICE_NAME}/container_name" =>
+            URI.decode(encoded_name)),
+        log_name: encoded_name)
+      setup_logging_stubs([params]) do
+        @logs_sent = []
+        d = create_driver(REQUIRE_VALID_TAGS_CONFIG,
+                          container_tag_with_container_name(container_name))
+        d.emit(container_log_entry_with_metadata(log_entry(0), container_name))
+        d.run
+      end
+      verify_log_entries(0, params, 'textPayload')
+    end
+  end
+
   # Verify that tags are properly encoded. When 'require_valid_tags' is true, we
   # only accept string tags with utf8 characters.
   def test_encode_tags_with_require_valid_tags_true
