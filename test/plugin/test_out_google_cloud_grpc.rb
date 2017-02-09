@@ -297,7 +297,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
                   [COMPUTE_PARAMS, VMENGINE_PARAMS, CONTAINER_FROM_TAG_PARAMS,
                    CONTAINER_FROM_METADATA_PARAMS, CLOUDFUNCTIONS_PARAMS,
                    CUSTOM_PARAMS, EC2_PARAMS]
-    stub_params = override_stub_params unless override_stub_params.nil?
     srv = GRPC::RpcServer.new
     @failed_attempts = []
     @requests_sent = []

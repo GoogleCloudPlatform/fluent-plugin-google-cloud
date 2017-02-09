@@ -334,15 +334,19 @@ module BaseTest
     '@&^$*' => '%40%26%5E%24%2A'
   }
   INVALID_TAGS = {
-    '' => '_',
+    # Non-string tags.
     123 => '123',
     1.23 => '1.23',
     [1, 2, 3] => '%5B1%2C%202%2C%203%5D',
     { key: 'value' } => '%7B%22key%22%3D%3E%22value%22%7D',
+    # Non-utf8 string tags.
     "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
     "abc#{[0x92].pack('C*')}" => 'abc%20',
-    "#{[0x92].pack('C*')}" => '%20'
+    "#{[0x92].pack('C*')}" => '%20',
+    # Empty string tag.
+    '' => '_'
   }
+  ALL_TAGS = VALID_TAGS.merge(INVALID_TAGS)
 
   # Shared tests.
 
@@ -708,7 +712,7 @@ module BaseTest
   # strings, and replace non-utf8 characters with a replacement string.
   def test_sanitize_tags_with_require_valid_tags_false
     setup_gce_metadata_stubs
-    VALID_TAGS.merge(INVALID_TAGS).each do |tag, sanitized_tag|
+    ALL_TAGS.each do |tag, sanitized_tag|
       setup_logging_stubs([COMPUTE_PARAMS.merge(log_name: sanitized_tag)]) do
         @logs_sent = []
         d = create_driver(APPLICATION_DEFAULT_CONFIG, tag)
@@ -730,9 +734,10 @@ module BaseTest
     # names are extracted from the tag based on a regex match pattern. As a
     # prerequisite, the tag should already be a string, thus we only test
     # non-empty string cases here.
-    VALID_TAGS.merge(
-      INVALID_TAGS.select { |tag, _| tag.is_a?(String) && !tag.empty? }
-    ).each do |container_name, encoded_container_name|
+    string_tags = VALID_TAGS.merge(INVALID_TAGS).select do |tag, _|
+      tag.is_a?(String) && !tag.empty?
+    end
+    string_tags.each do |container_name, encoded_container_name|
       # Container name in the label is sanitized but not encoded, while the log
       # name is encoded.
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
