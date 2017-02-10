@@ -784,7 +784,6 @@ module BaseTest
           'container_name' => container_name)),
       log_name: tag)
     verify_log_entries(1, params, 'textPayload')
-    assert_equal "projects/#{PROJECT_ID}/logs/#{tag}", @logs_sent[0]['logName']
   end
 
   # Verify that container names with non-utf8 characters should be rejected when
@@ -825,8 +824,6 @@ module BaseTest
       end
       verify_log_entries(1, COMPUTE_PARAMS.merge(log_name: encoded_tag),
                          'jsonPayload')
-      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
-                   @logs_sent[0]['logName']
     end
   end
 
@@ -848,8 +845,6 @@ module BaseTest
             'container_name' => tag)),
         log_name: encoded_tag)
       verify_log_entries(1, params, 'textPayload')
-      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_tag}",
-                   @logs_sent[0]['logName']
     end
   end
 
@@ -867,8 +862,6 @@ module BaseTest
       end
       verify_log_entries(1, COMPUTE_PARAMS.merge(log_name: sanitized_tag),
                          'jsonPayload')
-      assert_equal "projects/#{PROJECT_ID}/logs/#{sanitized_tag}",
-                   @logs_sent[0]['logName']
     end
   end
 
@@ -898,8 +891,6 @@ module BaseTest
             'container_name' => URI.decode(encoded_container_name))),
         log_name: encoded_container_name)
       verify_log_entries(1, params, 'textPayload')
-      assert_equal "projects/#{PROJECT_ID}/logs/#{encoded_container_name}",
-                   @logs_sent[0]['logName']
     end
   end
 
