@@ -60,7 +60,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         begin
           d.run
         rescue GRPC::Cancelled => error
-          assert_equal "GRPC::#{message}", error.message
           exception_count += 1
         rescue GRPC::BadStatus => error
           assert_equal "#{code}:#{message}", error.message
