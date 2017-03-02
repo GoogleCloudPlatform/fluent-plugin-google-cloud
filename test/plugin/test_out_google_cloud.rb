@@ -70,24 +70,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
-  def test_http_request_from_record_with_referer_nil
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => http_request_message_with_nil_referer)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      # The request we send to Logging API has json like:
-      # "httpRequest": { "referer": null }, but eventually the stored LogEntry
-      # would be "httpRequest": {}, since 'referer' is defined as a string in
-      # the proto.
-      assert_equal http_request_message_with_nil_referer,
-                   entry['httpRequest'], entry
-      assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
-    end
-  end
-
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".

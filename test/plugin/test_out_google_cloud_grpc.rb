@@ -72,34 +72,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  def test_http_request_from_record_with_referer_nil
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => http_request_message_with_nil_referer)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal http_request_message_with_absent_referer,
-                   entry['httpRequest'], entry
-      assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
-    end
-  end
-
-  def test_http_request_from_record_with_referer_absent
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => http_request_message_with_absent_referer)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal http_request_message_with_absent_referer,
-                   entry['httpRequest'], entry
-      assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
-    end
-  end
-
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
@@ -337,13 +309,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       yield
     else
       assert_equal expected_value, field, entry
-    end
-  end
-
-  # Unset the 'referer' field.
-  def http_request_message_with_absent_referer
-    HTTP_REQUEST_MESSAGE.reject do |k, _|
-      k == 'referer'
     end
   end
 

@@ -590,7 +590,7 @@ module Fluent
                 nanos: ts_nanos
               )
             end
-            set_http_request_grpc(record, entry)
+            set_http_request(record, entry)
             set_payload_grpc(entry_resource.type, record, entry, is_json)
           else
             # Remove the labels if we didn't populate them with anything.
@@ -930,29 +930,14 @@ module Fluent
     def set_http_request(record, entry)
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
-      output = Google::Apis::LoggingV2beta1::HttpRequest.new
-      output.request_method = input.delete('requestMethod')
-      output.request_url = input.delete('requestUrl')
-      output.request_size = input.delete('requestSize')
-      output.status = input.delete('status')
-      output.response_size = input.delete('responseSize')
-      output.user_agent = input.delete('userAgent')
-      output.remote_ip = input.delete('remoteIp')
-      output.referer = input.delete('referer')
-      output.cache_hit = input.delete('cacheHit')
-      output.cache_validated_with_origin_server = \
-        input.delete('cacheValidatedWithOriginServer')
-      record.delete('httpRequest') if input.empty?
-      entry.http_request = output
-    end
-
-    def set_http_request_grpc(record, entry)
-      return nil unless record['httpRequest'].is_a?(Hash)
-      input = record['httpRequest']
-      output = Google::Logging::Type::HttpRequest.new
+      if @use_grpc
+        output = Google::Logging::Type::HttpRequest.new
+      else
+        output = Google::Apis::LoggingV2beta1::HttpRequest.new
+      end
       # We need to delete each field from 'httpRequest' even if its value is
-      # nil. However we do not want to assign this nil value to proto fields
-      # defined as strings / integers.
+      # nil. However we do not want to assign this nil value to the constructed
+      # json or proto.
       request_method = input.delete('requestMethod')
       output.request_method = request_method unless request_method.nil?
       request_url = input.delete('requestUrl')
