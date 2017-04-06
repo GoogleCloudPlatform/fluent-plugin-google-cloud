@@ -1348,6 +1348,26 @@ module BaseTest
     end
   end
 
+  def test_http_request_from_record_with_referer_nil_or_absent
+    setup_gce_metadata_stubs
+    [
+      http_request_message_with_nil_referer,
+      http_request_message_with_absent_referer
+    ].each do |input|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver
+        d.emit('httpRequest' => input)
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+        assert_equal http_request_message_with_absent_referer,
+                     entry['httpRequest'], entry
+        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
+      end
+    end
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1563,6 +1583,13 @@ module BaseTest
   # Replace the 'referer' field with nil.
   def http_request_message_with_nil_referer
     HTTP_REQUEST_MESSAGE.merge('referer' => nil)
+  end
+
+  # Unset the 'referer' field.
+  def http_request_message_with_absent_referer
+    HTTP_REQUEST_MESSAGE.reject do |k, _|
+      k == 'referer'
+    end
   end
 
   # This module expects the methods below to be overridden.
