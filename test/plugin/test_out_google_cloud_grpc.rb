@@ -152,6 +152,24 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '1.5 m' => { 'seconds' => 90 },
+      '1 min 32 s' => { 'seconds' => 92 },
+      '1 min' => { 'seconds' => 60 },
+      '32 s' => { 'seconds' => 32 },
+      '32s' => { 'seconds' => 32 },
+      '32 second' => { 'seconds' => 32 },
+      '32 seconds' => { 'seconds' => 32 },
+      '32 sec' => { 'seconds' => 32 },
+      '32 secs' => { 'seconds' => 32 },
+      '0.32s' => { 'nanos' => 320_000_000 },
+      '123' => { 'seconds' => 123 },
+      '1.3442' => { 'seconds' => 1, 'nanos' => 344_200_000 }
+    }
+  end
+
   private
 
   GRPC_MOCK_HOST = 'localhost:56789'

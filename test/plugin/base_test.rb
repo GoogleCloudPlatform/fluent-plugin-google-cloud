@@ -1368,6 +1368,39 @@ module BaseTest
     end
   end
 
+  def test_http_request_with_latency
+    setup_gce_metadata_stubs
+    latency_conversion.each do |input, expected|
+      setup_logging_stubs do
+        d = create_driver
+        @logs_sent = []
+        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+        assert_equal HTTP_REQUEST_MESSAGE.merge('latency' => expected),
+                     entry['httpRequest'], entry
+        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
+      end
+    end
+  end
+
+  def test_http_request_with_null_latency
+    setup_gce_metadata_stubs
+    ['', nil, 'null'].each do |input|
+      setup_logging_stubs do
+        d = create_driver
+        @logs_sent = []
+        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+        assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
+        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
+      end
+    end
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1590,6 +1623,24 @@ module BaseTest
     HTTP_REQUEST_MESSAGE.reject do |k, _|
       k == 'referer'
     end
+  end
+
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '1.5 m' => '90.0s',
+      '1 min 32 s' => '92.0s',
+      '1 min' => '60.0s',
+      '32 s' => '32.0s',
+      '32s' => '32.0s',
+      '32 second' => '32.0s',
+      '32 seconds' => '32.0s',
+      '32 sec' => '32.0s',
+      '32 secs' => '32.0s',
+      '0.32s' => '0.32s',
+      '123' => '123.0s',
+      '1.3442' => '1.34s'
+    }
   end
 
   # This module expects the methods below to be overridden.

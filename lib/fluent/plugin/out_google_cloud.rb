@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'chronic_duration'
 require 'grpc'
 require 'json'
 require 'open-uri'
@@ -927,6 +928,8 @@ module Fluent
       end
     end
 
+    NANOS_IN_A_SECOND = 1000 * 1000 * 1000
+
     def set_http_request(record, entry)
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
@@ -961,6 +964,27 @@ module Fluent
       output.cache_validated_with_origin_server = \
         cache_validated_with_origin_server \
         unless cache_validated_with_origin_server.nil?
+
+      latency = input.delete('latency')
+      unless latency.nil?
+        # Parse latency to duration. If failed, skip setting latency.
+        duration_in_seconds = ChronicDuration.parse(latency)
+        if duration_in_seconds
+          if @use_grpc
+            # Split the integer and decimal parts in order to calculate seconds
+            # and nanos.
+            (integer_part, decimal_part) = duration_in_seconds.divmod 1
+            output.latency = Google::Protobuf::Duration.new(
+              seconds: integer_part,
+              nanos: (decimal_part * NANOS_IN_A_SECOND).round
+            )
+          else
+            # Logging API only takes a string with digits that ends with 's'.
+            output.latency = "#{duration_in_seconds.round(2)}s"
+          end
+        end
+      end
+
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
