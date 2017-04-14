@@ -970,17 +970,20 @@ module Fluent
         # Parse latency to duration. If failed, skip setting latency.
         duration_in_seconds = ChronicDuration.parse(latency)
         if duration_in_seconds
+          # Split the integer and decimal parts in order to calculate seconds
+          # and nanos.
+          (latency_seconds, decimal_part) = duration_in_seconds.divmod 1
+          latency_nanos = (decimal_part * NANOS_IN_A_SECOND).round
           if @use_grpc
-            # Split the integer and decimal parts in order to calculate seconds
-            # and nanos.
-            (integer_part, decimal_part) = duration_in_seconds.divmod 1
             output.latency = Google::Protobuf::Duration.new(
-              seconds: integer_part,
-              nanos: (decimal_part * NANOS_IN_A_SECOND).round
+              seconds: latency_seconds,
+              nanos: latency_nanos
             )
           else
-            # Logging API only takes a string with digits that ends with 's'.
-            output.latency = "#{duration_in_seconds.round(2)}s"
+            output.latency = {
+              seconds: latency_seconds,
+              nanos: latency_nanos
+            }
           end
         end
       end

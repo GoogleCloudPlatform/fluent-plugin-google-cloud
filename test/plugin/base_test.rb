@@ -1628,18 +1628,18 @@ module BaseTest
   # The conversions from user input to output.
   def latency_conversion
     {
-      '1.5 m' => '90.0s',
-      '1 min 32 s' => '92.0s',
-      '1 min' => '60.0s',
-      '32 s' => '32.0s',
-      '32s' => '32.0s',
-      '32 second' => '32.0s',
-      '32 seconds' => '32.0s',
-      '32 sec' => '32.0s',
-      '32 secs' => '32.0s',
-      '0.32s' => '0.32s',
-      '123' => '123.0s',
-      '1.3442' => '1.34s'
+      '1.5 m' => { 'seconds' => 90, 'nanos' => 0 },
+      '1 min 32 s' => { 'seconds' => 92, 'nanos' => 0 },
+      '1 min' => { 'seconds' => 60, 'nanos' => 0 },
+      '32 s' => { 'seconds' => 32, 'nanos' => 0 },
+      '32s' => { 'seconds' => 32, 'nanos' => 0 },
+      '32 second' => { 'seconds' => 32, 'nanos' => 0 },
+      '32 seconds' => { 'seconds' => 32, 'nanos' => 0 },
+      '32 sec' => { 'seconds' => 32, 'nanos' => 0 },
+      '32 secs' => { 'seconds' => 32, 'nanos' => 0 },
+      '0.32s' => { 'seconds' => 0, 'nanos' => 320_000_000 },
+      '123' => { 'seconds' => 123, 'nanos' => 0 },
+      '1.3442' => { 'seconds' => 1, 'nanos' => 344_200_000 }
     }
   end
 
