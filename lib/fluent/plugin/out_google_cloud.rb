@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-require 'chronic_duration'
 require 'grpc'
 require 'json'
 require 'open-uri'
@@ -67,6 +66,8 @@ module Fluent
         service: 'ml.googleapis.com',
         resource_type: 'ml_job'
       }
+
+      LATENCY_REGEX = /^[ \t]*(\d+)(\.\d+)?[ \t]*s[ \t]*$/
     end
 
     include self::Constants
@@ -967,12 +968,16 @@ module Fluent
 
       latency = input.delete('latency')
       unless latency.nil?
-        # Parse latency to duration. If failed, skip setting latency.
-        duration_in_seconds = ChronicDuration.parse(latency)
-        if duration_in_seconds
+        # Parse latency. If no valid format is detected, skip setting latency.
+        # Format: space/tab (optional) + integer + point & decimal (optional)
+        #       + space/tab (optional) + "s" + space/tab (optional)
+        # e.g.: "1.42 s"
+        parsed_groups = latency.scan(LATENCY_REGEX)
+        if !parsed_groups.empty? && parsed_groups[0].length == 2
           # Split the integer and decimal parts in order to calculate seconds
           # and nanos.
-          (latency_seconds, decimal_part) = duration_in_seconds.divmod 1
+          latency_seconds = parsed_groups[0][0].to_i
+          decimal_part = parsed_groups[0][1].to_f
           latency_nanos = (decimal_part * NANOS_IN_A_SECOND).round
           if @use_grpc
             output.latency = Google::Protobuf::Duration.new(
