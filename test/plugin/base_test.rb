@@ -1632,8 +1632,17 @@ module BaseTest
       '32s' => { 'seconds' => 32, 'nanos' => 0 },
       '0.32s' => { 'seconds' => 0, 'nanos' => 320_000_000 },
       ' 123 s ' => { 'seconds' => 123, 'nanos' => 0 },
-      '		123		s		' => { 'seconds' => 123, 'nanos' => 0 },
-      '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 }
+      '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 },
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123\ts\t" => { 'seconds' => 123, 'nanos' => 0 },
+      "\r123\rs\r" => { 'seconds' => 123, 'nanos' => 0 },
+      "\n123\ns\n" => { 'seconds' => 123, 'nanos' => 0 },
+      "\v123\vs\v" => { 'seconds' => 123, 'nanos' => 0 },
+      "\f123\fs\f" => { 'seconds' => 123, 'nanos' => 0 },
+      "\r123\ts\f" => { 'seconds' => 123, 'nanos' => 0 }
     }
   end
 

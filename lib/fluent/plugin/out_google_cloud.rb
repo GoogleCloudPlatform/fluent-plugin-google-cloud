@@ -242,6 +242,7 @@ module Fluent
         \[(?<timestamp>.{24})\]
         (?:\[(?<execution_id>[^\]]+)\])?
         [ ](?<text>.*)$/x
+
       @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
 
       # set attributes from metadata (unless overriden by static config)
