@@ -66,8 +66,6 @@ module Fluent
         service: 'ml.googleapis.com',
         resource_type: 'ml_job'
       }
-
-      LATENCY_REGEX = /^[ \t]*(\d+)(\.\d+)?[ \t]*s[ \t]*$/
     end
 
     include self::Constants
@@ -244,6 +242,7 @@ module Fluent
         \[(?<timestamp>.{24})\]
         (?:\[(?<execution_id>[^\]]+)\])?
         [ ](?<text>.*)$/x
+      @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
 
       # set attributes from metadata (unless overriden by static config)
       @vm_name = Socket.gethostname if @vm_name.nil?
@@ -969,15 +968,15 @@ module Fluent
       latency = input.delete('latency')
       unless latency.nil?
         # Parse latency. If no valid format is detected, skip setting latency.
-        # Format: space/tab (optional) + integer + point & decimal (optional)
-        #       + space/tab (optional) + "s" + space/tab (optional)
+        # Format: whitespace (optional) + integer + point & decimal (optional)
+        #       + whitespace (optional) + "s" + whitespace (optional)
         # e.g.: "1.42 s"
-        parsed_groups = latency.scan(LATENCY_REGEX)
-        if !parsed_groups.empty? && parsed_groups[0].length == 2
+        match = @http_latency_regexp.match(latency)
+        if match
           # Split the integer and decimal parts in order to calculate seconds
           # and nanos.
-          latency_seconds = parsed_groups[0][0].to_i
-          decimal_part = parsed_groups[0][1].to_f
+          latency_seconds = match['seconds'].to_i
+          decimal_part = match['decimal'].to_f
           latency_nanos = (decimal_part * NANOS_IN_A_SECOND).round
           if @use_grpc
             output.latency = Google::Protobuf::Duration.new(

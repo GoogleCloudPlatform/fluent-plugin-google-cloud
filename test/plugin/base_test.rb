@@ -1632,6 +1632,7 @@ module BaseTest
       '32s' => { 'seconds' => 32, 'nanos' => 0 },
       '0.32s' => { 'seconds' => 0, 'nanos' => 320_000_000 },
       ' 123 s ' => { 'seconds' => 123, 'nanos' => 0 },
+      '		123		s		' => { 'seconds' => 123, 'nanos' => 0 },
       '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 }
     }
   end
