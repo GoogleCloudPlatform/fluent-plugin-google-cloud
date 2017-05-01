@@ -977,19 +977,15 @@ module Fluent
           # Split the integer and decimal parts in order to calculate seconds
           # and nanos.
           latency_seconds = match['seconds'].to_i
-          decimal_part = match['decimal'].to_f
-          latency_nanos = (decimal_part * NANOS_IN_A_SECOND).round
+          latency_nanos = (match['decimal'].to_f * NANOS_IN_A_SECOND).round
           if @use_grpc
-            output.latency = Google::Protobuf::Duration.new(
-              seconds: latency_seconds,
-              nanos: latency_nanos
-            )
+            output.latency = Google::Protobuf::Duration.new
           else
-            output.latency = {
-              seconds: latency_seconds,
-              nanos: latency_nanos
-            }
+            output.latency = {}
           end
+          output.latency['seconds'] = latency_seconds \
+            unless latency_seconds == 0
+          output.latency['nanos'] = latency_nanos unless latency_nanos == 0
         end
       end
 

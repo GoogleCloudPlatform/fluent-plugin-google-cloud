@@ -1628,21 +1628,21 @@ module BaseTest
   # The conversions from user input to output.
   def latency_conversion
     {
-      '32 s' => { 'seconds' => 32, 'nanos' => 0 },
-      '32s' => { 'seconds' => 32, 'nanos' => 0 },
-      '0.32s' => { 'seconds' => 0, 'nanos' => 320_000_000 },
-      ' 123 s ' => { 'seconds' => 123, 'nanos' => 0 },
+      '32 s' => { 'seconds' => 32 },
+      '32s' => { 'seconds' => 32 },
+      '0.32s' => { 'nanos' => 320_000_000 },
+      ' 123 s ' => { 'seconds' => 123 },
       '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 },
 
       # Test whitespace.
       # \t: tab. \r: carriage return. \n: line break.
       # \v: vertical whitespace. \f: form feed.
-      "\t123\ts\t" => { 'seconds' => 123, 'nanos' => 0 },
-      "\r123\rs\r" => { 'seconds' => 123, 'nanos' => 0 },
-      "\n123\ns\n" => { 'seconds' => 123, 'nanos' => 0 },
-      "\v123\vs\v" => { 'seconds' => 123, 'nanos' => 0 },
-      "\f123\fs\f" => { 'seconds' => 123, 'nanos' => 0 },
-      "\r123\ts\f" => { 'seconds' => 123, 'nanos' => 0 }
+      "\t123.5\ts\t" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\rs\r" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\n123.5\ns\n" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\v123.5\vs\v" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\f123.5\fs\f" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\ts\f" => { 'seconds' => 123, 'nanos' => 500_000_000 }
     }
   end
 

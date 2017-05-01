@@ -152,18 +152,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  # The conversions from user input to output.
-  def latency_conversion
-    # TODO(lingshi): Use http://ruby-doc.org/core-2.4.0/Hash.html#method-i-transform_values
-    # instead when we upgrade to ruby 2.4.0.
-    # super.transform_values do |expected|
-    #   expected.reject { |_, value| value == 0 }
-    # end
-    super.map do |input, expected|
-      [input, expected.reject { |_, value| value == 0 }]
-    end.to_h
-  end
-
   private
 
   GRPC_MOCK_HOST = 'localhost:56789'
