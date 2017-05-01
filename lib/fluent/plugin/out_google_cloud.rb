@@ -979,13 +979,16 @@ module Fluent
           latency_seconds = match['seconds'].to_i
           latency_nanos = (match['decimal'].to_f * NANOS_IN_A_SECOND).round
           if @use_grpc
-            output.latency = Google::Protobuf::Duration.new
+            output.latency = Google::Protobuf::Duration.new(
+              seconds: latency_seconds,
+              nanos: latency_nanos
+            )
           else
-            output.latency = {}
+            output.latency = {
+              seconds: latency_seconds,
+              nanos: latency_nanos
+            }.delete_if { |_, v| v == 0 }
           end
-          output.latency['seconds'] = latency_seconds \
-            unless latency_seconds == 0
-          output.latency['nanos'] = latency_nanos unless latency_nanos == 0
         end
       end
 
