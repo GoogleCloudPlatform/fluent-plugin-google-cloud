@@ -1385,9 +1385,12 @@ module BaseTest
     end
   end
 
-  def test_http_request_with_null_latency
+  # Skip setting latency when the field is null or with invalid format.
+  def test_http_request_skip_setting_latency
     setup_gce_metadata_stubs
-    ['', nil, 'null'].each do |input|
+    [
+      '', ' ', nil, 'null', '123', '1.23 seconds', '1min', 'abc&^!$*('
+    ].each do |input|
       setup_logging_stubs do
         d = create_driver
         @logs_sent = []
