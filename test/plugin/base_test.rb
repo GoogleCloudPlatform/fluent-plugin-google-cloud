@@ -1368,6 +1368,43 @@ module BaseTest
     end
   end
 
+  def test_http_request_with_latency
+    setup_gce_metadata_stubs
+    latency_conversion.each do |input, expected|
+      setup_logging_stubs do
+        d = create_driver
+        @logs_sent = []
+        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+        assert_equal HTTP_REQUEST_MESSAGE.merge('latency' => expected),
+                     entry['httpRequest'], entry
+        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
+      end
+    end
+  end
+
+  # Skip setting latency when the field is null or has invalid format.
+  def test_http_request_skip_setting_latency
+    setup_gce_metadata_stubs
+    [
+      '', ' ', nil, 'null', '123', '1.23 seconds',
+      ' 123 s econds ', '1min', 'abc&^!$*('
+    ].each do |input|
+      setup_logging_stubs do
+        d = create_driver
+        @logs_sent = []
+        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
+        assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
+        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
+      end
+    end
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1590,6 +1627,27 @@ module BaseTest
     HTTP_REQUEST_MESSAGE.reject do |k, _|
       k == 'referer'
     end
+  end
+
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '32 s' => { 'seconds' => 32 },
+      '32s' => { 'seconds' => 32 },
+      '0.32s' => { 'nanos' => 320_000_000 },
+      ' 123 s ' => { 'seconds' => 123 },
+      '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 },
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123.5\ts\t" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\rs\r" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\n123.5\ns\n" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\v123.5\vs\v" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\f123.5\fs\f" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\ts\f" => { 'seconds' => 123, 'nanos' => 500_000_000 }
+    }
   end
 
   # This module expects the methods below to be overridden.

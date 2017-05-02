@@ -243,6 +243,8 @@ module Fluent
         (?:\[(?<execution_id>[^\]]+)\])?
         [ ](?<text>.*)$/x
 
+      @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
+
       # set attributes from metadata (unless overriden by static config)
       @vm_name = Socket.gethostname if @vm_name.nil?
       @platform = detect_platform
@@ -927,6 +929,8 @@ module Fluent
       end
     end
 
+    NANOS_IN_A_SECOND = 1000 * 1000 * 1000
+
     def set_http_request(record, entry)
       return nil unless record['httpRequest'].is_a?(Hash)
       input = record['httpRequest']
@@ -961,6 +965,33 @@ module Fluent
       output.cache_validated_with_origin_server = \
         cache_validated_with_origin_server \
         unless cache_validated_with_origin_server.nil?
+
+      latency = input.delete('latency')
+      unless latency.nil?
+        # Parse latency. If no valid format is detected, skip setting latency.
+        # Format: whitespace (optional) + integer + point & decimal (optional)
+        #       + whitespace (optional) + "s" + whitespace (optional)
+        # e.g.: "1.42 s"
+        match = @http_latency_regexp.match(latency)
+        if match
+          # Split the integer and decimal parts in order to calculate seconds
+          # and nanos.
+          latency_seconds = match['seconds'].to_i
+          latency_nanos = (match['decimal'].to_f * NANOS_IN_A_SECOND).round
+          if @use_grpc
+            output.latency = Google::Protobuf::Duration.new(
+              seconds: latency_seconds,
+              nanos: latency_nanos
+            )
+          else
+            output.latency = {
+              seconds: latency_seconds,
+              nanos: latency_nanos
+            }.delete_if { |_, v| v == 0 }
+          end
+        end
+      end
+
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
     end
