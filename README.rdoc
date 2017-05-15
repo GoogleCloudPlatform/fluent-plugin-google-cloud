@@ -26,15 +26,28 @@ will also install and configure the gem.
 To send logs to Google Cloud Logging, specify <code>type google_cloud</code>
 in a
 {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
-of your fluentd configuration file, for example:
+of your fluentd configuration file. Logs from most GCP and AWS runtimes can be
+sent with a default configuration, for example:
 
     <match **>
       type google_cloud
     </match>
 
+For other environments that do not provide system information through a
+{metadata service}[https://cloud.google.com/compute/docs/storing-retrieving-metadata]
+you will need to directly configure at minimum zone and VM identifiers, for
+example:
+
+    <match **>
+      @type google_cloud
+      use_metadata_service false
+      zone "rack-1"
+      vm_id "i-123"
+    </match>
+
 No further configuration is required. The plugin uses
 {Google Application Default Credentials}[https://developers.google.com/identity/protocols/application-default-credentials]
-for authorization - for additional information see 
+for authorization - for additional information see
 {here}[https://cloud.google.com/logging/docs/agent/authorization].
 
 <em>The previously documented parameters auth_method, private_key_email,
