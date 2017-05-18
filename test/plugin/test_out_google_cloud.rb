@@ -197,6 +197,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
+  WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
+
   def rename_key(hash, old_key, new_key)
     hash.merge(new_key => hash[old_key]).reject { |k, _| k == old_key }
   end

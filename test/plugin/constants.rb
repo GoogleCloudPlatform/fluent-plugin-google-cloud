@@ -1,4 +1,4 @@
-# Copyright 2016 Google Inc. All rights reserved.
+# Copyright 2017 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,29 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Constants used by unit tests for Google Cloud Logging plugin
+# Constants used by unit tests for Google Cloud Logging plugin.
 module Constants
   include Fluent::GoogleCloudOutput::Constants
 
-  # generic attributes
+  # Generic attributes.
   HOSTNAME = Socket.gethostname
 
-  WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
-
-  # attributes used for the GCE metadata service
+  # TODO(lingshi) Separate constants into different submodules.
+  # Attributes used for the GCE metadata service.
   PROJECT_ID = 'test-project-id'
   ZONE = 'us-central1-b'
   FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   VM_ID = '9876543210'
 
-  # attributes used for custom (overridden) configs
+  # Attributes used for custom (overridden) configs.
   CUSTOM_PROJECT_ID = 'test-custom-project-id'
   CUSTOM_ZONE = 'us-custom-central1-b'
   CUSTOM_FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   CUSTOM_VM_ID = 'C9876543210'
   CUSTOM_HOSTNAME = 'custom.hostname.org'
 
-  # attributes used for the EC2 metadata service
+  # Attributes used for the EC2 metadata service.
   EC2_PROJECT_ID = 'test-ec2-project-id'
   EC2_ZONE = 'us-west-2b'
   EC2_PREFIXED_ZONE = 'aws:' + EC2_ZONE
@@ -48,11 +47,11 @@ module Constants
     "instanceId" : "#{EC2_VM_ID}"
   })
 
-  # Managed VMs specific labels
+  # Managed VMs specific labels.
   MANAGED_VM_BACKEND_NAME = 'default'
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'
 
-  # Container Engine / Kubernetes specific labels
+  # Container Engine / Kubernetes specific labels.
   CONTAINER_CLUSTER_NAME = 'cluster-1'
   CONTAINER_NAMESPACE_ID = '898268c8-4a36-11e5-9d81-42010af0194c'
   CONTAINER_NAMESPACE_NAME = 'kube-system'
@@ -63,12 +62,12 @@ module Constants
   CONTAINER_LABEL_VALUE = 'redis-component'
   CONTAINER_STREAM = 'stdout'
   CONTAINER_SEVERITY = 'INFO'
-  # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch
+  # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch.
   CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'
   CONTAINER_SECONDS_EPOCH = 1_234_567_890
   CONTAINER_NANOS = 987_654_321
 
-  # Cloud Functions specific labels
+  # Cloud Functions specific labels.
   CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'
   CLOUDFUNCTIONS_REGION = 'us-central1'
   CLOUDFUNCTIONS_EXECUTION_ID = '123-0'
@@ -77,14 +76,14 @@ module Constants
   CLOUDFUNCTIONS_POD_NAME = 'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'
   CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'
 
-  # Dataflow specific labels
+  # Dataflow specific labels.
   DATAFLOW_REGION = 'us-central1'
   DATAFLOW_JOB_NAME = 'job_name_1'
   DATAFLOW_JOB_ID = 'job_id_1'
   DATAFLOW_STEP_ID = 'step_1'
   DATAFLOW_TAG = 'dataflow.googleapis.com/worker'
 
-  # ML specific labels
+  # ML specific labels.
   ML_REGION = 'us-central1'
   ML_JOB_ID = 'job_name_1'
   ML_TASK_NAME = 'task_name_1'
@@ -92,7 +91,7 @@ module Constants
   ML_LOG_AREA = 'log_area_1'
   ML_TAG = 'master-replica-0'
 
-  # Parameters used for authentication
+  # Parameters used for authentication.
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
   FAKE_AUTH_TOKEN = 'abc123'
 
@@ -112,7 +111,7 @@ module Constants
     project_id: ''
   }
 
-  # Configuration files for various test scenarios
+  # Configuration files for various test scenarios.
   APPLICATION_DEFAULT_CONFIG = %(
   )
 
@@ -187,7 +186,7 @@ module Constants
     label_map { "name": "#{ML_CONSTANTS[:service]}/job_id/log_area" }
   )
 
-  # Service configurations for various services
+  # Service configurations for various services.
   COMPUTE_PARAMS = {
     resource: {
       type: COMPUTE_CONSTANTS[:resource_type],
