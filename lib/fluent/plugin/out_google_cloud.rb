@@ -450,12 +450,9 @@ module Fluent
         # Do this here to avoid having to repeat it for each record.
         match_data = @compiled_kubernetes_tag_regexp.match(tag)
         if match_data
-          group_resource.labels['container_name'] =
-            match_data['container_name']
-          %w(namespace_name pod_name).each do |field|
-            group_common_labels["#{CONTAINER_CONSTANTS[:service]}/#{field}"] =
-              match_data[field]
-          end
+          group_resource.labels['container_name'] = match_data['container_name']
+          group_resource.labels['namespace_id'] = match_data['namespace_name']
+          group_resource.labels['pod_id'] = match_data['pod_name']
         end
       end
 
