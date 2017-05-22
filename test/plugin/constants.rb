@@ -19,7 +19,7 @@ module Constants
   # Generic attributes.
   HOSTNAME = Socket.gethostname
 
-  # TODO(lingshi) Separate constants into different submodules.
+  # TODO(qingling128) Separate constants into different submodules.
   # Attributes used for the GCE metadata service.
   PROJECT_ID = 'test-project-id'
   ZONE = 'us-central1-b'
