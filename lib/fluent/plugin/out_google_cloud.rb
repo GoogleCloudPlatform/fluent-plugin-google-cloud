@@ -453,6 +453,10 @@ module Fluent
           group_resource.labels['container_name'] = match_data['container_name']
           group_resource.labels['namespace_id'] = match_data['namespace_name']
           group_resource.labels['pod_id'] = match_data['pod_name']
+          %w(namespace_name pod_name).each do |field|
+            group_common_labels["#{CONTAINER_CONSTANTS[:service]}/#{field}"] =
+              match_data[field]
+          end
         end
       end
 
