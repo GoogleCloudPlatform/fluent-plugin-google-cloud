@@ -270,13 +270,16 @@ module BaseTest
     }
   }
 
-  # Almost the same as from metadata, but missing namespace_id and pod_id.
+  # Almost the same as from metadata, but namespace_id and pod_id come from
+  # namespace and pod names.
   CONTAINER_FROM_TAG_PARAMS = {
     resource: {
       type: CONTAINER_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
+        'namespace_id' => CONTAINER_NAMESPACE_NAME,
         'instance_id' => VM_ID,
+        'pod_id' => CONTAINER_POD_NAME,
         'container_name' => CONTAINER_CONTAINER_NAME,
         'zone' => ZONE
       }
