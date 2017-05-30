@@ -246,7 +246,8 @@ module Constants
     }
   }
 
-  # Almost the same as from metadata, but missing namespace_id and pod_id.
+  # Almost the same as from metadata, but namespace_id and pod_id come from
+  # namespace and pod names.
   CONTAINER_FROM_TAG_PARAMS = {
     resource: {
       type: CONTAINER_CONSTANTS[:resource_type],
