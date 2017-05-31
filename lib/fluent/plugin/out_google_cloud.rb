@@ -58,6 +58,10 @@ module Fluent
         service: 'dataflow.googleapis.com',
         resource_type: 'dataflow_step'
       }
+      DATAPROC_CONSTANTS = {
+        service: 'cluster.dataproc.googleapis.com',
+        resource_type: 'cloud_dataproc_cluster'
+      }
       EC2_CONSTANTS = {
         service: 'ec2.amazonaws.com',
         resource_type: 'aws_ec2_instance'
@@ -314,6 +318,14 @@ module Fluent
             @resource.type = DATAFLOW_CONSTANTS[:resource_type]
           elsif @subservice_name == ML_CONSTANTS[:service]
             @resource.type = ML_CONSTANTS[:resource_type]
+          elsif @subservice_name = DATAPROC_CONSTANTS[:service]
+            @resource.type = DATAPROC_CONSTANTS[:resource_type]
+            @resource.labels['cluster_uuid'] =
+              fetch_gce_metadata('instance/attributes/dataproc-cluster-uuid')
+            @resource.labels['cluster_name'] =
+              fetch_gce_metadata('instance/attributes/dataproc-cluster-name')
+            @resource.labels['region'] =
+              fetch_gce_metadata('instance/attributes/dataproc-region')
           end
         elsif @detect_subservice
           # Check for specialized GCE environments.
@@ -339,6 +351,16 @@ module Fluent
             @resource.labels['cluster_name'] =
               cluster_name_from_kube_env(@kube_env)
             detect_cloudfunctions(attributes)
+          elsif attributes.include?('dataproc-cluster-uuid') &&
+                attributes.include?('dataproc-cluster-name')
+            # Dataproc
+            @resource.type = DATAPROC_CONSTANTS[:resource_type]
+            @resource.labels['cluster_uuid'] =
+              fetch_gce_metadata('instance/attributes/dataproc-cluster-uuid')
+            @resource.labels['cluster_name'] =
+              fetch_gce_metadata('instance/attributes/dataproc-cluster-name')
+            @resource.labels['region'] =
+              fetch_gce_metadata('instance/attributes/dataproc-region')
           end
         end
         # Some services have the GCE instance_id and zone as MonitoredResource
