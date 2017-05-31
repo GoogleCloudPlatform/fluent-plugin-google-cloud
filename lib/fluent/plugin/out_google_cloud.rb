@@ -318,14 +318,6 @@ module Fluent
             @resource.type = DATAFLOW_CONSTANTS[:resource_type]
           elsif @subservice_name == ML_CONSTANTS[:service]
             @resource.type = ML_CONSTANTS[:resource_type]
-          elsif @subservice_name = DATAPROC_CONSTANTS[:service]
-            @resource.type = DATAPROC_CONSTANTS[:resource_type]
-            @resource.labels['cluster_uuid'] =
-              fetch_gce_metadata('instance/attributes/dataproc-cluster-uuid')
-            @resource.labels['cluster_name'] =
-              fetch_gce_metadata('instance/attributes/dataproc-cluster-name')
-            @resource.labels['region'] =
-              fetch_gce_metadata('instance/attributes/dataproc-region')
           end
         elsif @detect_subservice
           # Check for specialized GCE environments.
