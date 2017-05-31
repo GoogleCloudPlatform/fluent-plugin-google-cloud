@@ -84,8 +84,8 @@ module Constants
   DATAFLOW_TAG = 'dataflow.googleapis.com/worker'
 
   # Dataproc specific labels.
-  DATAPROC_CLUSTER_NAME = "test-cluster"
-  DATAPROC_CLUSTER_UUID = "00000000-0000-0000-0000-000000000000"
+  DATAPROC_CLUSTER_NAME = 'test-cluster'
+  DATAPROC_CLUSTER_UUID = '00000000-0000-0000-0000-000000000000'
   DATAPROC_REGION = 'unittest'
 
   # ML specific labels.
@@ -345,8 +345,8 @@ module Constants
       type: DATAPROC_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => DATAPROC_CLUSTER_NAME,
-        "cluster_uuid" => DATAPROC_CLUSTER_UUID,
-        'region' => DATAPROC_REGION,
+        'cluster_uuid' => DATAPROC_CLUSTER_UUID,
+        'region' => DATAPROC_REGION
       }
     },
     log_name: 'test',
@@ -354,7 +354,7 @@ module Constants
     labels: {
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
       "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
-      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE,
+      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
   }
 
