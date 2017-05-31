@@ -1118,10 +1118,11 @@ module BaseTest
       'instance/attributes/',
       "attribute1\ndataproc-cluster-uuid\ndataproc-cluster-name")
     stub_metadata_request('instance/attributes/dataproc-cluster-name',
-                          'test-cluster')
+                          DATAPROC_CLUSTER_NAME)
     stub_metadata_request('instance/attributes/dataproc-cluster-uuid',
-                          '00000000-0000-0000-0000-000000000000')
-    stub_metadata_request('instance/attributes/dataproc-region', 'unittest')
+                          DATAPROC_CLUSTER_UUID)
+    stub_metadata_request('instance/attributes/dataproc-region',
+                          DATAPROC_REGION)
   end
 
   def container_tag_with_container_name(container_name)
