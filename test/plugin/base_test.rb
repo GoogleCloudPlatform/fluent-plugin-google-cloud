@@ -1003,6 +1003,17 @@ module BaseTest
     end
   end
 
+  def test_dataproc_log
+    setup_gce_metadata_stubs
+    setup_dataproc_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(dataproc_log_entry("test message"))
+      d.run
+    end
+    verify_log_entries(1, DATAPROC_PARAMS, "jsonPayload")
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1102,6 +1113,15 @@ module BaseTest
                           CLOUDFUNCTIONS_REGION)
   end
 
+  def setup_dataproc_metadata_stubs
+    stub_metadata_request(
+      'instance/attributes/',
+      "attribute1\ndataproc-cluster-uuid\ndataproc-cluster-name")
+    stub_metadata_request('instance/attributes/dataproc-cluster-name', 'test-cluster')
+    stub_metadata_request('instance/attributes/dataproc-cluster-uuid', '00000000-0000-0000-0000-000000000000')
+    stub_metadata_request('instance/attributes/dataproc-region', 'unittest')
+  end
+
   def container_tag_with_container_name(container_name)
     "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
       "#{container_name}"
@@ -1152,6 +1172,14 @@ module BaseTest
     {
       step: DATAFLOW_STEP_ID,
       message: log_entry(i)
+    }
+  end
+
+  def dataproc_log_entry(message, source_class = "com.example.Example", filename = "test.log")
+    {
+      filename: filename,
+      class: source_class,
+      message: log_entry(message),
     }
   end
 
