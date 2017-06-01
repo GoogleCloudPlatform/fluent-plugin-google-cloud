@@ -903,6 +903,17 @@ module BaseTest
     end
   end
 
+  def test_dataproc_log
+    setup_gce_metadata_stubs
+    setup_dataproc_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(dataproc_log_entry('test message'))
+      d.run
+    end
+    verify_log_entries(1, DATAPROC_PARAMS, 'jsonPayload')
+  end
+
   def test_http_request_from_record
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -1001,17 +1012,6 @@ module BaseTest
         assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
       end
     end
-  end
-
-  def test_dataproc_log
-    setup_gce_metadata_stubs
-    setup_dataproc_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit(dataproc_log_entry('test message'))
-      d.run
-    end
-    verify_log_entries(1, DATAPROC_PARAMS, 'jsonPayload')
   end
 
   private
