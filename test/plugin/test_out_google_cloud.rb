@@ -153,6 +153,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('ERROR', test_obj.parse_severity('E'))
     assert_equal('CRITICAL', test_obj.parse_severity('C'))
     assert_equal('ALERT', test_obj.parse_severity('A'))
+    assert_equal('CRITICAL', test_obj.parse_severity('F'))
     assert_equal('ERROR', test_obj.parse_severity('e'))
 
     assert_equal('DEFAULT', test_obj.parse_severity('x'))

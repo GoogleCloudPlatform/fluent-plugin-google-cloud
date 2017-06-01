@@ -1035,6 +1035,7 @@ module Fluent
       'W' => 'WARNING',
       'E' => 'ERROR',
       'C' => 'CRITICAL',
+      'F' => 'CRITICAL',
       'A' => 'ALERT',
       # other misc. translations.
       'ERR' => 'ERROR',
