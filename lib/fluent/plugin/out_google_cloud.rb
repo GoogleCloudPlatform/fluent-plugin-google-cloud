@@ -264,79 +264,34 @@ module Fluent
                extra.join(' ')
       end
 
-      # TODO: Send instance tags as labels as well?
-      @common_labels = {}
-      @common_labels.merge!(@labels) if @labels
+      # Set regex patterns that is used to parse tags and logs.
+      set_regexp_patterns
 
-      # TODO: Construct Google::Api::MonitoredResource when @use_grpc is
-      # true after the protobuf map corruption issue is fixed.
+      @platform = detect_platform
+
+      # EC2 Metadata server returns everything in one call. Store it to avoid
+      # making multiple calls.
+      @ec2_metadata = fetch_ec2_metadata if @platform == Platform::EC2
+
+      # Set required variables: @project_id, @vm_id, @vm_name and @zone by
+      # making some requests to metadata server.
+      #
+      # Note: Once we support metadata injection at Logging API side, we might
+      # no longer need to require all these metadata in logging agent. But for
+      # now, they are still required.
+      #
+      # TODO(qingling128) After Metadata Agent support is added, try extracting
+      # these info from responses from Metadata Agent first.
+      set_required_metadata_variables
+
+      # TODO(qingling128): Construct Google::Api::MonitoredResource when
+      # @use_grpc is true after the protobuf map corruption issue is fixed.
       @resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
         labels: {})
 
-      @compiled_kubernetes_tag_regexp = nil
-      if @kubernetes_tag_regexp
-        @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
-      end
-
-      @cloudfunctions_tag_regexp =
-        /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
-      @cloudfunctions_log_regexp = /^
-        (?:\[(?<severity>.)\])?
-        \[(?<timestamp>.{24})\]
-        (?:\[(?<execution_id>[^\]]+)\])?
-        [ ](?<text>.*)$/x
-
-      @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
-
-      # set attributes from metadata (unless overriden by static config)
-      @vm_name = Socket.gethostname if @vm_name.nil?
-      @platform = detect_platform
-      case @platform
-      when Platform::GCE
-        if @project_id.nil?
-          @project_id = fetch_gce_metadata('project/project-id')
-        end
-        if @zone.nil?
-          # this returns "projects/<number>/zones/<zone>"; we only want
-          # the part after the final slash.
-          fully_qualified_zone = fetch_gce_metadata('instance/zone')
-          @zone = fully_qualified_zone.rpartition('/')[2]
-        end
-        @vm_id = fetch_gce_metadata('instance/id') if @vm_id.nil?
-      when Platform::EC2
-        metadata = fetch_ec2_metadata
-        if @zone.nil? && metadata.key?('availabilityZone')
-          @zone = 'aws:' + metadata['availabilityZone']
-        end
-        if @vm_id.nil? && metadata.key?('instanceId')
-          @vm_id = metadata['instanceId']
-        end
-        if metadata.key?('accountId')
-          @resource.labels['aws_account'] = metadata['accountId']
-        end
-      when Platform::OTHER
-        # do nothing
-      else
-        fail Fluent::ConfigError, 'Unknown platform ' + @platform
-      end
-
-      # If we still don't have a project ID, try to obtain it from the
-      # credentials.
-      if @project_id.nil?
-        @project_id = CredentialsInfo.project_id
-        @log.info 'Set Project ID from credentials: ', @project_id unless
-          @project_id.nil?
-      end
-
-      # all metadata parameters must now be set
-      unless @project_id && @zone && @vm_id
-        missing = []
-        missing << 'project_id' unless @project_id
-        missing << 'zone' unless @zone
-        missing << 'vm_id' unless @vm_id
-        fail Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
-          missing.join(' ')
-      end
+      # TODO: Send instance tags as labels as well?
+      @common_labels = {}
+      @common_labels.merge!(@labels) if @labels
 
       # Default this to false; it is only overwritten if we detect Cloud
       # Functions.
@@ -402,6 +357,8 @@ module Fluent
         @resource.type = EC2_CONSTANTS[:resource_type]
         @resource.labels['instance_id'] = @vm_id
         @resource.labels['region'] = @zone
+        @resource.labels['aws_account'] = @ec2_metadata['accountId'] if
+          @ec2_metadata.key?('accountId')
         # the aws_account label is populated above.
         common_labels["#{EC2_CONSTANTS[:service]}/resource_name"] = @vm_name
       when Platform::OTHER
@@ -821,6 +778,24 @@ module Fluent
       nil
     end
 
+    # Set regexp patterns to parse tags and logs.
+    def set_regexp_patterns
+      @compiled_kubernetes_tag_regexp = nil
+      if @kubernetes_tag_regexp
+        @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
+      end
+
+      @cloudfunctions_tag_regexp =
+        /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
+      @cloudfunctions_log_regexp = /^
+        (?:\[(?<severity>.)\])?
+        \[(?<timestamp>.{24})\]
+        (?:\[(?<execution_id>[^\]]+)\])?
+        [ ](?<text>.*)$/x
+
+      @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
+    end
+
     # "enum" of Platform values
     module Platform
       OTHER = 0  # Other/unkown platform
@@ -872,6 +847,82 @@ module Fluent
         contents = f.read
         return JSON.parse(contents)
       end
+    end
+
+    # Set required variables like @project_id, @vm_id, @vm_name and @zone.
+    def set_required_metadata_variables
+      set_project_id
+      set_vm_id
+      set_vm_name
+      set_location
+
+      # All metadata parameters must now be set.
+      return if @project_id && @zone && @vm_id
+      missing = []
+      missing << 'project_id' unless @project_id
+      missing << 'zone' unless @zone
+      missing << 'vm_id' unless @vm_id
+      fail Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
+        missing.join(' ')
+    end
+
+    def set_project_id
+      # 1. Check if the value is explicitly in the config thus already set.
+      return unless @project_id.nil?
+      # 2. Try to retrieve it by calling metadata servers directly.
+      @project_id = fetch_gce_metadata('project/project-id') if
+        @platform == Platform::GCE
+      # 3. Try to obtain it from the credentials.
+      @project_id ||= CredentialsInfo.project_id
+    rescue StandardError => e
+      @log.debug 'Failed to obtain project id: ', error: e
+    end
+
+    def set_vm_id
+      # 1. Check if the value is explicitly in the config thus already set.
+      return unless @vm_id.nil?
+      # 2. Check if the response from Metadata Agent includes this info.
+      @vm_id = @resource.labels['instance_id'] if
+        !@resource.nil? && @resource.labels.key?('instance_id')
+      # 3. Try to retrieve it by calling metadata servers directly.
+      @vm_id ||= fetch_gce_metadata('instance/id') if @platform == Platform::GCE
+      @vm_id ||= @ec2_metadata['instanceId'] if @platform == Platform::EC2
+    rescue StandardError => e
+      @log.debug 'Failed to obtain vm_id: ', error: e
+    end
+
+    def set_vm_name
+      # 1. Check if the value is explicitly in the config thus already set.
+      return unless @vm_name.nil?
+      # 2. Check if the response from Metadata Agent includes this info.
+      @vm_name ||= @resource.labels['instance_name'] if
+        !@resource.nil? && @resource.labels.key?('instance_name')
+      # 3. Detect it locally.
+      @vm_name ||= Socket.gethostname
+    rescue StandardError => e
+      @log.debug 'Failed to obtain vm name: ', error: e
+    end
+
+    def set_location
+      # 1. Check if the value is explicitly in the config thus already set.
+      return unless @zone.nil?
+      # 2. Check if the response from Metadata Agent includes this info.
+      unless @resource.nil?
+        @zone ||= @resource.labels['location'] if
+          @resource.labels.key?('location')
+        @zone ||= @resource.labels['zone'] if
+          @platform == Platform::GCE && @resource.labels.key?('zone')
+        @zone ||= @resource.labels['region'] if
+          @platform == Platform::EC2 && @resource.labels.key?('region')
+      end
+      # 3. Detect it locally.
+      # Response format: "projects/<number>/zones/<zone>"
+      @zone ||= fetch_gce_metadata('instance/zone').rpartition('/')[2] if
+        @platform == Platform::GCE
+      @zone ||= 'aws:' + @ec2_metadata['availabilityZone'] if
+        @platform == Platform::EC2 && @ec2_metadata.key?('availabilityZone')
+    rescue StandardError => e
+      @log.debug 'Failed to obtain location: ', error: e
     end
 
     # TODO: This functionality should eventually be available in another
