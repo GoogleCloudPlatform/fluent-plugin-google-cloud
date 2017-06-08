@@ -702,77 +702,30 @@ module BaseTest
     end
   end
 
-  def test_one_container_log_metadata_from_plugin
+  def test_container_log_metadata
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry_with_metadata(log_entry(0)))
-      d.run
-    end
-    verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS) do |entry|
-      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-      assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-    end
-  end
-
-  def test_multiple_container_logs_metadata_from_plugin
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    [2, 3, 5, 11, 50].each do |n|
-      @logs_sent = []
-      setup_logging_stubs do
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-        # The test driver doesn't clear its buffer of entries after running, so
-        # do it manually here.
-        d.instance_variable_get('@entries').clear
-        n.times { |i| d.emit(container_log_entry_with_metadata(log_entry(i))) }
-        d.run
+    {
+      # Metadata from metadata.
+      method(:container_log_entry_with_metadata) =>
+        CONTAINER_FROM_METADATA_PARAMS,
+      # Metadata from tag.
+      method(:container_log_entry) => CONTAINER_FROM_TAG_PARAMS
+    }.each do |log_entry_method, expected_params|
+      [1, 2, 3, 5, 11, 50].each do |n|
+        @logs_sent = []
+        setup_logging_stubs do
+          d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+          n.times { |i| d.emit(log_entry_method.call(log_entry(i))) }
+          d.run
+        end
+        verify_log_entries(n, expected_params) do |entry|
+          assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
+                       entry
+          assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+          assert_equal CONTAINER_SEVERITY, entry['severity'], entry
+        end
       end
-      verify_log_entries(n, CONTAINER_FROM_METADATA_PARAMS) do |entry|
-        assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
-                     entry
-        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-      end
-    end
-  end
-
-  def test_multiple_container_logs_metadata_from_tag
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    [2, 3, 5, 11, 50].each do |n|
-      @logs_sent = []
-      setup_logging_stubs do
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-        # The test driver doesn't clear its buffer of entries after running, so
-        # do it manually here.
-        d.instance_variable_get('@entries').clear
-        n.times { |i| d.emit(container_log_entry(log_entry(i))) }
-        d.run
-      end
-      verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS) do |entry|
-        assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
-                     entry
-        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-      end
-    end
-  end
-
-  def test_one_container_log_metadata_from_tag
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry(log_entry(0)))
-      d.run
-    end
-    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS) do |entry|
-      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-      assert_equal CONTAINER_SEVERITY, entry['severity'], entry
     end
   end
 
