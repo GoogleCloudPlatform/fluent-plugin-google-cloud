@@ -100,7 +100,7 @@ module BaseTest
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
     assert_equal VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
+    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_managed_vm_metadata_loading
@@ -111,9 +111,11 @@ module BaseTest
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
     assert_equal VM_ID, d.instance.vm_id
-    assert_equal true, d.instance.running_on_managed_vm
-    assert_equal MANAGED_VM_BACKEND_NAME, d.instance.gae_backend_name
-    assert_equal MANAGED_VM_BACKEND_VERSION, d.instance.gae_backend_version
+    assert_equal APPENGINE_CONSTANTS[:resource_type], d.instance.resource.type
+    assert_equal MANAGED_VM_BACKEND_NAME,
+                 d.instance.resource.labels['module_id']
+    assert_equal MANAGED_VM_BACKEND_VERSION,
+                 d.instance.resource.labels['version_id']
   end
 
   def test_gce_metadata_does_not_load_when_use_metadata_service_is_false
@@ -123,7 +125,7 @@ module BaseTest
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
+    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_gce_used_when_detect_subservice_is_false
@@ -157,8 +159,6 @@ module BaseTest
       assert_equal parts[1], d.instance.project_id, "Index #{index} failed."
       assert_equal parts[2], d.instance.zone, "Index #{index} failed."
       assert_equal parts[3], d.instance.vm_id, "Index #{index} failed."
-      assert_equal false, d.instance.running_on_managed_vm,
-                   "Index #{index} failed."
     end
   end
 
