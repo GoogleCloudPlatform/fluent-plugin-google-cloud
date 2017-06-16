@@ -702,31 +702,17 @@ module BaseTest
     end
   end
 
-  def test_container_log_metadata
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    {
-      # Metadata from metadata.
-      method(:container_log_entry_with_metadata) =>
-        CONTAINER_FROM_METADATA_PARAMS,
-      # Metadata from tag.
-      method(:container_log_entry) => CONTAINER_FROM_TAG_PARAMS
-    }.each do |log_entry_method, expected_params|
-      [1, 2, 3, 5, 11, 50].each do |n|
-        @logs_sent = []
-        setup_logging_stubs do
-          d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-          n.times { |i| d.emit(log_entry_method.call(log_entry(i))) }
-          d.run
-        end
-        verify_log_entries(n, expected_params) do |entry|
-          assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
-                       entry
-          assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-          assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-        end
-      end
-    end
+  # Test container logs when metadata is extracted from the 'kubernetes' field
+  # in the log record.
+  def test_container_logs_metadata_from_record
+    verify_container_logs(method(:container_log_entry_with_metadata),
+                          CONTAINER_FROM_METADATA_PARAMS)
+  end
+
+  # Test container logs when metadata is extracted from the tag.
+  def test_container_logs_metadata_from_tag
+    verify_container_logs(method(:container_log_entry),
+                          CONTAINER_FROM_TAG_PARAMS)
   end
 
   def test_one_container_log_from_tag_stderr
@@ -1280,6 +1266,25 @@ module BaseTest
       end
     end
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
+  end
+
+  def verify_container_logs(log_entry_method, expected_params)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    [1, 2, 3, 5, 11, 50].each do |n|
+      @logs_sent = []
+      setup_logging_stubs do
+        d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+        n.times { |i| d.emit(log_entry_method.call(log_entry(i))) }
+        d.run
+      end
+      verify_log_entries(n, expected_params) do |entry|
+        assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
+                     entry
+        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
+      end
+    end
   end
 
   # Replace the 'referer' field with nil.

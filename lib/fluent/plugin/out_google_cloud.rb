@@ -134,7 +134,7 @@ module Fluent
     config_param :require_valid_tags, :bool, :default => false
 
     # The regular expression to use on Kubernetes logs to extract some basic
-    # information about the log source. The regex must contain capture groups
+    # information about the log source. The regexp must contain capture groups
     # for pod_name, namespace_name, and container_name.
     config_param :kubernetes_tag_regexp, :string, :default =>
       '\.(?<pod_name>[^_]+)_(?<namespace_name>[^_]+)_(?<container_name>.+)$'
@@ -264,14 +264,9 @@ module Fluent
                extra.join(' ')
       end
 
-      # Set regex patterns that is used to parse tags and logs.
       set_regexp_patterns
 
       @platform = detect_platform
-
-      # EC2 Metadata server returns everything in one call. Store it to avoid
-      # making multiple calls.
-      @ec2_metadata = fetch_ec2_metadata if @platform == Platform::EC2
 
       # Set required variables: @project_id, @vm_id, @vm_name and @zone by
       # making some requests to metadata server.
@@ -293,7 +288,19 @@ module Fluent
       # Set variables specific to CLoud Functions. This has to be called after
       # we have determined the resource type. The purpose is to avoid repeated
       # calls to metadata server.
-      set_cloudfunctions_variables
+      @running_cloudfunctions = false
+      # We only support Cloud Functions logs for GKE right now.
+      if @resource.type == CONTAINER_CONSTANTS[:resource_type] &&
+         fetch_gce_metadata('instance/attributes/').split.include?('gcf_region')
+        # We are not setting resource type as Cloud Functions here because
+        # whether a log entry is truly coming from a Cloud Functions function
+        # depends on the log tag. Only when @running_cloudfunctions is true will
+        # we try to match log tags against Cloud Functions tag regexp when
+        # processing log entries.
+        @running_cloudfunctions = true
+        # Fetch this info and store it to avoid recurring metadata server calls.
+        @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
+      end
 
       # Determine the common labels that should be added to all log entries
       # processed by this logging agent.
@@ -587,24 +594,6 @@ module Fluent
       nil
     end
 
-    # Set regexp patterns to parse tags and logs.
-    def set_regexp_patterns
-      @compiled_kubernetes_tag_regexp = nil
-      if @kubernetes_tag_regexp
-        @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
-      end
-
-      @cloudfunctions_tag_regexp =
-        /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
-      @cloudfunctions_log_regexp = /^
-        (?:\[(?<severity>.)\])?
-        \[(?<timestamp>.{24})\]
-        (?:\[(?<execution_id>[^\]]+)\])?
-        [ ](?<text>.*)$/x
-
-      @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
-    end
-
     # "enum" of Platform values
     module Platform
       OTHER = 0  # Other/unkown platform
@@ -632,7 +621,7 @@ module Fluent
           end
         end
       rescue StandardError => e
-        @log.debug 'Failed to access metadata service: ', error: e
+        @log.error 'Failed to access metadata service: ', error: e
       end
 
       @log.info 'Unable to determine platform'
@@ -647,15 +636,39 @@ module Fluent
            metadata_path, 'Metadata-Flavor' => 'Google', &:read)
     end
 
-    def fetch_ec2_metadata
-      fail "Called fetch_ec2_metadata with platform=#{@platform}" unless
+    # EC2 Metadata server returns everything in one call. Store it after the
+    # first fetch to avoid making multiple calls.
+    def ec2_metadata
+      fail "Called ec2_metadata with platform=#{@platform}" unless
         @platform == Platform::EC2
-      # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
-      open('http://' + METADATA_SERVICE_ADDR +
-           '/latest/dynamic/instance-identity/document') do |f|
-        contents = f.read
-        return JSON.parse(contents)
+      unless @ec2_metadata
+        # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
+        open('http://' + METADATA_SERVICE_ADDR +
+             '/latest/dynamic/instance-identity/document') do |f|
+          contents = f.read
+          @ec2_metadata = JSON.parse(contents)
+        end
       end
+
+      @ec2_metadata
+    end
+
+    # Set regexp patterns to parse tags and logs.
+    def set_regexp_patterns
+      @compiled_kubernetes_tag_regexp = nil
+      if @kubernetes_tag_regexp
+        @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
+      end
+
+      @cloudfunctions_tag_regexp =
+        /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
+      @cloudfunctions_log_regexp = /^
+        (?:\[(?<severity>.)\])?
+        \[(?<timestamp>.{24})\]
+        (?:\[(?<execution_id>[^\]]+)\])?
+        [ ](?<text>.*)$/x
+
+      @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
     end
 
     # Set required variables like @project_id, @vm_id, @vm_name and @zone.
@@ -675,68 +688,49 @@ module Fluent
         missing.join(' ')
     end
 
+    # 1. Return the value if it is explicitly set in the config already.
+    # 2. If not, try to retrieve it by calling metadata server directly.
+    # 3. If still not set, try to obtain it from the credentials.
     def set_project_id
-      # 1. Check if the value is explicitly in the config thus already set.
-      return unless @project_id.nil?
-      # 2. Try to retrieve it by calling metadata servers directly.
-      @project_id = fetch_gce_metadata('project/project-id') if
+      @project_id ||= fetch_gce_metadata('project/project-id') if
         @platform == Platform::GCE
-      # 3. Try to obtain it from the credentials.
       @project_id ||= CredentialsInfo.project_id
     rescue StandardError => e
-      @log.debug 'Failed to obtain project id: ', error: e
+      @log.error 'Failed to obtain project id: ', error: e
     end
 
+    # 1. Return the value if it is explicitly set in the config already.
+    # 2. If not, try to retrieve it by calling metadata servers directly.
     def set_vm_id
-      # 1. Check if the value is explicitly in the config thus already set.
-      return unless @vm_id.nil?
-      # 2. Check if the response from Metadata Agent includes this info.
-      @vm_id = @resource.labels['instance_id'] if
-        !@resource.nil? && @resource.labels.key?('instance_id')
-      # 3. Try to retrieve it by calling metadata servers directly.
       @vm_id ||= fetch_gce_metadata('instance/id') if @platform == Platform::GCE
-      @vm_id ||= @ec2_metadata['instanceId'] if @platform == Platform::EC2
+      @vm_id ||= ec2_metadata['instanceId'] if @platform == Platform::EC2
     rescue StandardError => e
-      @log.debug 'Failed to obtain vm_id: ', error: e
+      @log.error 'Failed to obtain vm_id: ', error: e
     end
 
+    # 1. Return the value if it is explicitly set in the config already.
+    # 2. If not, try to retrieve it locally.
     def set_vm_name
-      # 1. Check if the value is explicitly in the config thus already set.
-      return unless @vm_name.nil?
-      # 2. Check if the response from Metadata Agent includes this info.
-      @vm_name ||= @resource.labels['instance_name'] if
-        !@resource.nil? && @resource.labels.key?('instance_name')
-      # 3. Detect it locally.
       @vm_name ||= Socket.gethostname
     rescue StandardError => e
-      @log.debug 'Failed to obtain vm name: ', error: e
+      @log.error 'Failed to obtain vm name: ', error: e
     end
 
+    # 1. Return the value if it is explicitly set in the config already.
+    # 2. If not, try to retrieve it locally.
     def set_location
-      # 1. Check if the value is explicitly in the config thus already set.
-      return unless @zone.nil?
-      # 2. Check if the response from Metadata Agent includes this info.
-      unless @resource.nil?
-        @zone ||= @resource.labels['location'] if
-          @resource.labels.key?('location')
-        @zone ||= @resource.labels['zone'] if
-          @platform == Platform::GCE && @resource.labels.key?('zone')
-        @zone ||= @resource.labels['region'] if
-          @platform == Platform::EC2 && @resource.labels.key?('region')
-      end
-      # 3. Detect it locally.
       # Response format: "projects/<number>/zones/<zone>"
       @zone ||= fetch_gce_metadata('instance/zone').rpartition('/')[2] if
         @platform == Platform::GCE
-      @zone ||= 'aws:' + @ec2_metadata['availabilityZone'] if
-        @platform == Platform::EC2 && @ec2_metadata.key?('availabilityZone')
+      @zone ||= 'aws:' + ec2_metadata['availabilityZone'] if
+        @platform == Platform::EC2 && ec2_metadata.key?('availabilityZone')
     rescue StandardError => e
-      @log.debug 'Failed to obtain location: ', error: e
+      @log.error 'Failed to obtain location: ', error: e
     end
 
     # Retrieve monitored resource via the legacy way.
     #
-    # TODO(qingling128) Use this as only a fallback plan after Metadata Agent
+    # TODO(qingling128): Use this as only a fallback plan after Metadata Agent
     # support is added.
     def determine_agent_level_monitored_resource_via_legacy
       resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
@@ -847,30 +841,10 @@ module Fluent
       when EC2_CONSTANTS[:resource_type]
         labels['instance_id'] = @vm_id
         labels['region'] = @zone
-        labels['aws_account'] = @ec2_metadata['accountId'] if
-          @ec2_metadata.key?('accountId')
+        labels['aws_account'] = ec2_metadata['accountId'] if
+          ec2_metadata.key?('accountId')
       end
       labels
-    end
-
-    # Set variables specific to CLoud Functions. This has to be called after we
-    # we have determined the resource type.
-    def set_cloudfunctions_variables
-      # We only support Cloud Functions logs for GKE right now.
-      if @resource.type == CONTAINER_CONSTANTS[:resource_type] &&
-         fetch_gce_metadata('instance/attributes/').split.include?('gcf_region')
-        # We are not setting resource type as Cloud Functions here because
-        # whether a log entry is truly coming from a Cloud Functions function
-        # depends on the log tag.
-
-        # Only when @running_cloudfunctions is true will we try to match log
-        # tags against Cloud Functions tag regex when processing log entries.
-        @running_cloudfunctions = true
-        # Fetch this info and store it to avoid recurring metadata server calls.
-        @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
-      else
-        @running_cloudfunctions = false
-      end
     end
 
     # Determine the common labels that should be added to all log entries
@@ -917,7 +891,7 @@ module Fluent
       labels
     end
 
-    # Determin the group level monitored resource and common labels shared by a
+    # Determine the group level monitored resource and common labels shared by a
     # collection of entries.
     def determine_group_level_monitored_resource_and_labels(tag)
       # Determine group level monitored resource type. For certain types,
@@ -946,9 +920,9 @@ module Fluent
 
     # Determine group level monitored resource type shared by a collection of
     # entries.
-    # Returns the resource type and tag regex matched groups. The matched groups
-    # only apply to some resource types. Return nil if not applicable or if
-    # there is no match.
+    # Returns the resource type and tag regexp matched groups. The matched
+    # groups only apply to some resource types. Return nil if not applicable or
+    # if there is no match.
     def determine_group_level_monitored_resource_type(tag)
       # Match tag against Cloud Functions format.
       if @running_cloudfunctions
