@@ -1313,9 +1313,10 @@ module BaseTest
     _undefined
   end
 
-  def assert_prometheus_metric_value(_metric_name, _expected_value, _labels)
-    metric = Prometheus::Client.registry.get(_metric_name)
-    assert_equal(_expected_value, metric.get(_labels))
+  def assert_prometheus_metric_value(metric_name, expected_value, labels)
+    metric = Prometheus::Client.registry.get(metric_name)
+    assert_not_nil(metric)
+    assert_equal(expected_value, metric.get(labels))
   end
 
   # Get the fields of the payload.

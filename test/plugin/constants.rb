@@ -141,7 +141,8 @@ module Constants
   )
 
   PROMETHEUS_ENABLE_CONFIG = %(
-    prometheus_monitoring_enabled true
+    monitoring_enabled true
+    monitoring_type prometheus
   )
 
   CUSTOM_METADATA_CONFIG = %(

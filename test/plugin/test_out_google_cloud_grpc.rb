@@ -77,11 +77,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_prometheus
     setup_logging_stubs(false, 0, 'OK') do
       d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                          GRPCLoggingMockFailingService.rpc_stub_class)
+                        GRPCLoggingMockFailingService.rpc_stub_class)
       d.emit('message' => log_entry(0))
       d.run
     end
-    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1, { grpc: true, code: 0 })
+    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1,
+                                   grpc: true, code: 0)
   end
 
   def test_prometheus_failed_call
@@ -89,14 +90,15 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_prometheus
     setup_logging_stubs(true, 13, 'Internal') do
       d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                          GRPCLoggingMockFailingService.rpc_stub_class)
+                        GRPCLoggingMockFailingService.rpc_stub_class)
       d.emit('message' => log_entry(0))
       begin
         d.run
-      rescue GRPC::BadStatus
+      rescue GRPC::BadStatus # rubocop:disable Lint/HandleExceptions
       end
     end
-    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1, { grpc: true, code: 13 })
+    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1,
+                                   grpc: true, code: 13)
   end
 
   def test_prometheus_successfully_ingested_entries
@@ -104,12 +106,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_prometheus
     setup_logging_stubs(false, 0, 'OK') do
       d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                          GRPCLoggingMockFailingService.rpc_stub_class)
+                        GRPCLoggingMockFailingService.rpc_stub_class)
       d.emit('message' => log_entry(0))
       d.run
     end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1, { success: true })
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: false })
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1,
+                                   success: true)
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
+                                   success: false)
   end
 
   def test_prometheus_dropped_entries
@@ -117,15 +121,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_prometheus
     setup_logging_stubs(true, 16, 'Unauthenticated') do
       d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                          GRPCLoggingMockFailingService.rpc_stub_class)
+                        GRPCLoggingMockFailingService.rpc_stub_class)
       d.emit('message' => log_entry(0))
       begin
         d.run
-      rescue GRPC::BadStatus
+      rescue GRPC::BadStatus # rubocop:disable Lint/HandleExceptions
       end
     end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: true })
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1, { success: false })
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
+                                   success: true)
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1,
+                                   success: false)
   end
 
   def test_prometheus_retry_without_ingesting
@@ -133,15 +139,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_prometheus
     setup_logging_stubs(true, 13, 'Internal') do
       d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                          GRPCLoggingMockFailingService.rpc_stub_class)
+                        GRPCLoggingMockFailingService.rpc_stub_class)
       d.emit('message' => log_entry(0))
       begin
         d.run
-      rescue GRPC::BadStatus
+      rescue GRPC::BadStatus # rubocop:disable Lint/HandleExceptions
       end
     end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: true })
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: false })
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
+                                   success: true)
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
+                                   success: false)
   end
 
   # This test looks similar between the grpc and non-grpc paths except that when

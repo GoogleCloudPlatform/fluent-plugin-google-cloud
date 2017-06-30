@@ -24,6 +24,8 @@ require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
 require 'googleauth'
 
+require_relative 'monitoring'
+
 module Google
   module Protobuf
     # Alias the has_key? method to have the same interface as a regular map.
@@ -186,11 +188,17 @@ module Fluent
                  :default => nil,
                  :secret => true
 
-    # Whether to use prometheus client to initialize and set metrics. Setting
-    # this option to true doesn't expose an endpoint with metrics in prometheus
-    # format, it only uses default prometheus client to store values. To
-    # actually expose metrics, a separate fluentd plugin should be used.
-    config_param :prometheus_monitoring_enabled, :bool, :default => false
+    # Whether to collect metrics about the plugin usage. Use configuration
+    # parameter monitoring_type to select a monitoring system you want to use.
+    config_param :monitoring_enabled, :bool, :default => false
+
+    # What system to use when collecting metrics. Possible values are:
+    #   - 'prometheus', in this case default registry in the Prometheus
+    #     client library is used, without actually exposing the endpoint
+    #     to serve metrics in the Prometheus format.
+    #    - any other value will result in the absence of metrics.
+    config_param :monitoring_type, :string,
+                 :default => Monitoring::PrometheusMonitoringRegistry.name
 
     # rubocop:enable Style/HashSyntax
 
@@ -215,6 +223,18 @@ module Fluent
 
     def configure(conf)
       super
+
+      # If monitoring is enabled, register metrics in the default registry
+      # and store metric objects for future use.
+      if @monitoring_enabled
+        registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
+        @http_requests_count = registry.counter(
+          :stackdriver_http_requests_count,
+          'A number of http requests to Stackdriver Logging API')
+        @log_entries_count = registry.counter(
+          :stackdriver_log_entries_count,
+          'A number of log entries sent to Stackdriver Logging API')
+      end
 
       # Alert on old authentication configuration.
       unless @auth_method.nil? && @private_key_email.nil? &&
@@ -393,33 +413,6 @@ module Fluent
       @resource.freeze
       @resource.labels.freeze
       @common_labels.freeze
-
-      # If prometheus monitoring is enabled, register metrics in the default
-      # registry and store metric objects for future use. If metrics are
-      # registed already, just store the metric objects.
-      if @prometheus_monitoring_enabled
-        require 'prometheus/client'
-
-        prometheus = Prometheus::Client.registry
-
-        # Exception-driven behavior to avoid synchronization errors
-        begin
-          @prometheus_http_requests_count = prometheus.counter(
-            :stackdriver_http_requests_count,
-            'A number of http requests to Stackdriver Logging API')
-        rescue Prometheus::Client::Registry::AlreadyRegisteredError
-          @prometheus_http_requests_count = prometheus.get(
-            :stackdriver_http_requests_count)
-        end
-        begin
-          @prometheus_log_entries_count = prometheus.counter(
-            :stackdriver_log_entries_count,
-            'A number of log entries sent to Stackdriver Logging API')
-        rescue Prometheus::Client::Registry::AlreadyRegisteredError
-          @prometheus_log_entries_count = prometheus.get(
-            :stackdriver_log_entries_count)
-        end
-      end
 
       # Log an informational message containing the Logs viewer URL
       @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
@@ -1399,17 +1392,15 @@ module Fluent
     # Increment the metric for the number of requests, labeled by
     # the provided status code.
     def increment_requests_metric(code)
-      if @prometheus_monitoring_enabled
-        @prometheus_http_requests_count.increment({ grpc: @use_grpc, code: code })
-      end
+      return unless @http_requests_count
+      @http_requests_count.increment(grpc: @use_grpc, code: code)
     end
 
     # Increment the metric for the number of log entries, labeled by
     # the success status of their ingestion.
     def increment_log_entries_metric(count, success)
-      if @prometheus_monitoring_enabled
-        @prometheus_log_entries_count.increment({ success: success }, count)
-      end
+      return unless @log_entries_count
+      @log_entries_count.increment({ success: success }, count)
     end
   end
 end
