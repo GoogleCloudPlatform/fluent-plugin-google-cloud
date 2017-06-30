@@ -70,6 +70,76 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
+  def test_prometheus_successful_call
+    setup_gce_metadata_stubs
+    setup_prometheus
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
+      .to_return(status: 200, body: 'OK')
+    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+    d.emit('message' => log_entry(0))
+    d.run
+    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1, { grpc: false, code: 200 })
+  end
+
+  def test_prometheus_failed_call
+    setup_gce_metadata_stubs
+    setup_prometheus
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
+      .to_return(status: 401, body: 'Unauthorized')
+    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+    d.emit('message' => log_entry(0))
+    begin
+      d.run
+    rescue Google::Apis::AuthorizationError => error
+      assert_equal 'Unauthorized', error.message
+    end
+    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1, { grpc: false, code: 401 })
+  end
+
+  def test_prometheus_successfully_ingested_entries
+    setup_gce_metadata_stubs
+    setup_prometheus
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
+      .to_return(status: 200, body: 'OK')
+    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+    d.emit('message' => log_entry(0))
+    d.run
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1, { success: true })
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: false })
+  end
+
+  def test_prometheus_dropped_entries
+    setup_gce_metadata_stubs
+    setup_prometheus
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
+      .to_return(status: 401, body: 'Unauthorized')
+    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+    d.emit('message' => log_entry(0))
+    begin
+      d.run
+    rescue Google::Apis::AuthorizationError => error
+      assert_equal 'Unauthorized', error.message
+    end
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: true })
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1, { success: false })
+  end
+
+  def test_prometheus_retry_without_ingesting
+    setup_gce_metadata_stubs
+    setup_prometheus
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
+      .to_return(status: 500, body: 'Server Error')
+    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+    d.emit('message' => log_entry(0))
+    begin
+      d.run
+    rescue Google::Apis::ServerError => error
+      assert_equal 'Server error', error.message
+    end
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: true })
+    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0, { success: false })
+  end
+
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".

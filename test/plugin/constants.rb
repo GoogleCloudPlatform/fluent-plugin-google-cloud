@@ -140,6 +140,10 @@ module Constants
     detect_subservice false
   )
 
+  PROMETHEUS_ENABLE_CONFIG = %(
+    prometheus_monitoring_enabled true
+  )
+
   CUSTOM_METADATA_CONFIG = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}

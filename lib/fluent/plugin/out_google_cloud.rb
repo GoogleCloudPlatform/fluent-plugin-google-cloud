@@ -186,6 +186,12 @@ module Fluent
                  :default => nil,
                  :secret => true
 
+    # Whether to use prometheus client to initialize and set metrics. Setting
+    # this option to true doesn't expose an endpoint with metrics in prometheus
+    # format, it only uses default prometheus client to store values. To
+    # actually expose metrics, a separate fluentd plugin should be used.
+    config_param :prometheus_monitoring_enabled, :bool, :default => false
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -387,6 +393,33 @@ module Fluent
       @resource.freeze
       @resource.labels.freeze
       @common_labels.freeze
+
+      # If prometheus monitoring is enabled, register metrics in the default
+      # registry and store metric objects for future use. If metrics are
+      # registed already, just store the metric objects.
+      if @prometheus_monitoring_enabled
+        require 'prometheus/client'
+
+        prometheus = Prometheus::Client.registry
+
+        # Exception-driven behavior to avoid synchronization errors
+        begin
+          @prometheus_http_requests_count = prometheus.counter(
+            :stackdriver_http_requests_count,
+            'A number of http requests to Stackdriver Logging API')
+        rescue Prometheus::Client::Registry::AlreadyRegisteredError
+          @prometheus_http_requests_count = prometheus.get(
+            :stackdriver_http_requests_count)
+        end
+        begin
+          @prometheus_log_entries_count = prometheus.counter(
+            :stackdriver_log_entries_count,
+            'A number of log entries sent to Stackdriver Logging API')
+        rescue Prometheus::Client::Registry::AlreadyRegisteredError
+          @prometheus_log_entries_count = prometheus.get(
+            :stackdriver_log_entries_count)
+        end
+      end
 
       # Log an informational message containing the Logs viewer URL
       @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
@@ -652,6 +685,8 @@ module Fluent
             )
 
             client.write_log_entries(write_request)
+            increment_requests_metric(GRPC::Core::StatusCodes::OK)
+            increment_log_entries_metric(entries.length, true)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -661,10 +696,12 @@ module Fluent
             end
 
           rescue GRPC::Cancelled => error
+            increment_requests_metric(GRPC::Core::StatusCodes::CANCELLED)
             # RPC cancelled, so retry via re-raising the error.
             raise error
 
           rescue GRPC::BadStatus => error
+            increment_requests_metric(error.code)
             case error.code
             when GRPC::Core::StatusCodes::CANCELLED,
                  GRPC::Core::StatusCodes::UNAVAILABLE,
@@ -679,6 +716,7 @@ module Fluent
               # Most client errors indicate a problem with the request itself
               # and should not be retried.
               dropped = entries.length
+              increment_log_entries_metric(dropped, false)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             when GRPC::Core::StatusCodes::UNAUTHENTICATED
@@ -686,12 +724,14 @@ module Fluent
               # These are usually solved via a `gcloud auth` call, or by
               # modifying the permissions on the Google Cloud project.
               dropped = entries.length
+              increment_log_entries_metric(dropped, false)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
               # Assume this is a problem with the request itself
               # and don't retry.
               dropped = entries.length
+              increment_log_entries_metric(dropped, false)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{dropped} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
@@ -707,7 +747,14 @@ module Fluent
                 entries: entries)
 
             # TODO: RequestOptions
-            client.write_entry_log_entries(write_request)
+            begin
+              client.write_entry_log_entries(write_request)
+            rescue Google::Apis::Error => error
+              increment_requests_metric(error.status_code)
+              raise error
+            end
+            increment_requests_metric(200)
+            increment_log_entries_metric(entries.length, true)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -725,6 +772,7 @@ module Fluent
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
             dropped = entries.length
+            increment_log_entries_metric(dropped, false)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
 
@@ -732,6 +780,7 @@ module Fluent
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
             dropped = entries.length
+            increment_log_entries_metric(dropped, false)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
           end
@@ -1344,6 +1393,22 @@ module Fluent
                      'to true.'
           raise
         end
+      end
+    end
+
+    # Increment the metric for the number of requests, labeled by
+    # the provided status code.
+    def increment_requests_metric(code)
+      if @prometheus_monitoring_enabled
+        @prometheus_http_requests_count.increment({ grpc: @use_grpc, code: code })
+      end
+    end
+
+    # Increment the metric for the number of log entries, labeled by
+    # the success status of their ingestion.
+    def increment_log_entries_metric(count, success)
+      if @prometheus_monitoring_enabled
+        @prometheus_log_entries_count.increment({ success: success }, count)
       end
     end
   end
