@@ -72,84 +72,68 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  def test_prometheus_successful_call
+  def test_prometheus_requests_count
     setup_gce_metadata_stubs
-    setup_prometheus
-    setup_logging_stubs(false, 0, 'OK') do
-      d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                        GRPCLoggingMockFailingService.rpc_stub_class)
-      d.emit('message' => log_entry(0))
-      d.run
-    end
-    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1,
-                                   grpc: true, code: 0)
-  end
-
-  def test_prometheus_failed_call
-    setup_gce_metadata_stubs
-    setup_prometheus
-    setup_logging_stubs(true, 13, 'Internal') do
-      d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                        GRPCLoggingMockFailingService.rpc_stub_class)
-      d.emit('message' => log_entry(0))
-      begin
-        d.run
-      rescue GRPC::BadStatus # rubocop:disable Lint/HandleExceptions
+    [
+      # Single successful request.
+      [false, 0, 1, 1, 0],
+      # Several successful requests.
+      [false, 0, 2, 2, 0],
+      # Single failed request.
+      [true, 13, 1, 0, 1]
+    ].each do |is_fail, code, emit_count, successful_count, failed_count|
+      setup_prometheus
+      setup_logging_stubs(is_fail, code, 'SomeMessage') do
+        (1..emit_count).each do |i|
+          d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
+                            GRPCLoggingMockFailingService.rpc_stub_class)
+          d.emit('message' => log_entry(i.to_s))
+          # rubocop:disable Lint/HandleExceptions
+          begin
+            d.run
+          rescue GRPC::BadStatus
+          end
+          # rubocop:enable Lint/HandleExceptions
+        end
       end
+      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                     successful_count, grpc: true)
+      assert_prometheus_metric_value(:stackdriver_failed_requests_count,
+                                     failed_count, grpc: true, code: code)
     end
-    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1,
-                                   grpc: true, code: 13)
   end
 
-  def test_prometheus_successfully_ingested_entries
+  def test_prometheus_ingested_entries
     setup_gce_metadata_stubs
-    setup_prometheus
-    setup_logging_stubs(false, 0, 'OK') do
-      d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                        GRPCLoggingMockFailingService.rpc_stub_class)
-      d.emit('message' => log_entry(0))
-      d.run
-    end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1,
-                                   success: true)
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: false)
-  end
-
-  def test_prometheus_dropped_entries
-    setup_gce_metadata_stubs
-    setup_prometheus
-    setup_logging_stubs(true, 16, 'Unauthenticated') do
-      d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                        GRPCLoggingMockFailingService.rpc_stub_class)
-      d.emit('message' => log_entry(0))
-      begin
-        d.run
-      rescue GRPC::BadStatus # rubocop:disable Lint/HandleExceptions
+    [
+      # Single successful request.
+      [false, 0, 1, 1, 0],
+      # Several successful requests.
+      [false, 0, 2, 2, 0],
+      # Single failed request that caused logs dropping.
+      [true, 16, 1, 0, 1],
+      # Single failed request that was escalated without logs dropping.
+      [true, 13, 1, 0, 0]
+    ].each do |is_fail, code, emit_count, successful_count, failed_count|
+      setup_prometheus
+      setup_logging_stubs(is_fail, code, 'SomeMessage') do
+        (1..emit_count).each do |i|
+          d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
+                            GRPCLoggingMockFailingService.rpc_stub_class)
+          d.emit('message' => log_entry(i.to_s))
+          # rubocop:disable Lint/HandleExceptions
+          begin
+            d.run
+          rescue GRPC::BadStatus
+          end
+          # rubocop:enable Lint/HandleExceptions
+        end
       end
+      assert_prometheus_metric_value(:stackdriver_log_entries_count,
+                                     successful_count, success: true)
+      assert_prometheus_metric_value(:stackdriver_log_entries_count,
+                                     failed_count, success: false)
     end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: true)
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1,
-                                   success: false)
-  end
-
-  def test_prometheus_retry_without_ingesting
-    setup_gce_metadata_stubs
-    setup_prometheus
-    setup_logging_stubs(true, 13, 'Internal') do
-      d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                        GRPCLoggingMockFailingService.rpc_stub_class)
-      d.emit('message' => log_entry(0))
-      begin
-        d.run
-      rescue GRPC::BadStatus # rubocop:disable Lint/HandleExceptions
-      end
-    end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: true)
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: false)
   end
 
   # This test looks similar between the grpc and non-grpc paths except that when

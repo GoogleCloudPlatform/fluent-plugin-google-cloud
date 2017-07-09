@@ -25,20 +25,7 @@ require 'google/logging/v2/log_entry_pb'
 require 'googleauth'
 
 module Monitoring
-  # Factory that is used to create a monitoring registry based on
-  # the monitoring solution name
-  class MonitoringRegistryFactory
-    def self.create(name)
-      case name
-      when PrometheusMonitoringRegistry.name
-        return PrometheusMonitoringRegistry.new
-      else
-        return BaseMonitoringRegistry.new
-      end
-    end
-  end
-
-  # Base class for the monitoring registry
+  # Base class for the monitoring registry.
   class BaseMonitoringRegistry
     def counter(_name, _desc)
       _undefined
@@ -57,11 +44,24 @@ module Monitoring
       @registry = Prometheus::Client.registry
     end
 
-    # Exception-driven behavior to avoid synchronization errors
+    # Exception-driven behavior to avoid synchronization errors.
     def counter(name, desc)
       return @registry.counter(name, desc)
     rescue Prometheus::Client::Registry::AlreadyRegisteredError
       return @registry.get(name)
+    end
+  end
+
+  # Factory that is used to create a monitoring registry based on
+  # the monitoring solution name.
+  class MonitoringRegistryFactory
+    @known_registry_types = {
+      PrometheusMonitoringRegistry.name =>
+        PrometheusMonitoringRegistry
+    }
+
+    def self.create(name)
+      (@known_registry_types[name] || BaseMonitoringRegistry).new
     end
   end
 end

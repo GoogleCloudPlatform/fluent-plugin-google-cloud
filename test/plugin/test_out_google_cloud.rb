@@ -70,82 +70,68 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
-  def test_prometheus_successful_call
+  def test_prometheus_requests_count
     setup_gce_metadata_stubs
-    setup_prometheus
-    stub_request(:post, WRITE_LOG_ENTRIES_URI)
-      .to_return(status: 200, body: 'OK')
-    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
-    d.emit('message' => log_entry(0))
-    d.run
-    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1,
-                                   grpc: false, code: 200)
-  end
-
-  def test_prometheus_failed_call
-    setup_gce_metadata_stubs
-    setup_prometheus
-    stub_request(:post, WRITE_LOG_ENTRIES_URI)
-      .to_return(status: 401, body: 'Unauthorized')
-    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
-    d.emit('message' => log_entry(0))
-    begin
-      d.run
-    rescue Google::Apis::AuthorizationError => error
-      assert_equal 'Unauthorized', error.message
+    [
+      # Single successful request.
+      [200, 1, 1, 0],
+      # Several successful requests.
+      [200, 2, 2, 0],
+      # Single failed request.
+      [401, 1, 0, 1]
+    ].each do |code, emit_count, successful_count, failed_count|
+      setup_prometheus
+      stub_request(:post, WRITE_LOG_ENTRIES_URI)
+        .to_return(status: code, body: 'Some Message')
+      (1..emit_count).each do |i|
+        d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+        d.emit('message' => log_entry(i.to_s))
+        # rubocop:disable Lint/HandleExceptions
+        begin
+          d.run
+        rescue Google::Apis::AuthorizationError
+        rescue Google::Apis::ServerError
+        end
+        # rubocop:enable Lint/HandleExceptions
+      end
+      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                     successful_count, grpc: false)
+      assert_prometheus_metric_value(:stackdriver_failed_requests_count,
+                                     failed_count, grpc: false, code: code)
     end
-    assert_prometheus_metric_value(:stackdriver_http_requests_count, 1,
-                                   grpc: false, code: 401)
   end
 
-  def test_prometheus_successfully_ingested_entries
+  def test_prometheus_ingested_entries
     setup_gce_metadata_stubs
-    setup_prometheus
-    stub_request(:post, WRITE_LOG_ENTRIES_URI)
-      .to_return(status: 200, body: 'OK')
-    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
-    d.emit('message' => log_entry(0))
-    d.run
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1,
-                                   success: true)
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: false)
-  end
-
-  def test_prometheus_dropped_entries
-    setup_gce_metadata_stubs
-    setup_prometheus
-    stub_request(:post, WRITE_LOG_ENTRIES_URI)
-      .to_return(status: 401, body: 'Unauthorized')
-    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
-    d.emit('message' => log_entry(0))
-    begin
-      d.run
-    rescue Google::Apis::AuthorizationError => error
-      assert_equal 'Unauthorized', error.message
+    [
+      # Single successful request.
+      [200, 1, 1, 0],
+      # Several successful requests.
+      [200, 2, 2, 0],
+      # Single failed request that caused logs dropping.
+      [401, 1, 0, 1],
+      # Single failed request that was escalated without logs dropping.
+      [500, 1, 0, 0]
+    ].each do |code, emit_count, successful_count, failed_count|
+      setup_prometheus
+      stub_request(:post, WRITE_LOG_ENTRIES_URI)
+        .to_return(status: code, body: 'Some Message')
+      (1..emit_count).each do |i|
+        d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+        d.emit('message' => log_entry(i.to_s))
+        # rubocop:disable Lint/HandleExceptions
+        begin
+          d.run
+        rescue Google::Apis::AuthorizationError
+        rescue Google::Apis::ServerError
+        end
+        # rubocop:enable Lint/HandleExceptions
+      end
+      assert_prometheus_metric_value(:stackdriver_log_entries_count,
+                                     successful_count, success: true)
+      assert_prometheus_metric_value(:stackdriver_log_entries_count,
+                                     failed_count, success: false)
     end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: true)
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 1,
-                                   success: false)
-  end
-
-  def test_prometheus_retry_without_ingesting
-    setup_gce_metadata_stubs
-    setup_prometheus
-    stub_request(:post, WRITE_LOG_ENTRIES_URI)
-      .to_return(status: 500, body: 'Server Error')
-    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
-    d.emit('message' => log_entry(0))
-    begin
-      d.run
-    rescue Google::Apis::ServerError => error
-      assert_equal 'Server error', error.message
-    end
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: true)
-    assert_prometheus_metric_value(:stackdriver_log_entries_count, 0,
-                                   success: false)
   end
 
   # This test looks similar between the grpc and non-grpc paths except that when

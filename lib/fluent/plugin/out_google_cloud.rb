@@ -228,12 +228,15 @@ module Fluent
       # and store metric objects for future use.
       if @monitoring_enabled
         registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
-        @http_requests_count = registry.counter(
-          :stackdriver_http_requests_count,
-          'A number of http requests to Stackdriver Logging API')
+        @successful_requests_count = registry.counter(
+          :stackdriver_successful_requests_count,
+          'A number of successful requests to the Stackdriver Logging API')
+        @failed_requests_count = registry.counter(
+          :stackdriver_failed_requests_count,
+          'A number of failed requests to the Stackdriver Logging API')
         @log_entries_count = registry.counter(
           :stackdriver_log_entries_count,
-          'A number of log entries sent to Stackdriver Logging API')
+          'A number of log entries sent to the Stackdriver Logging API')
       end
 
       # Alert on old authentication configuration.
@@ -678,8 +681,8 @@ module Fluent
             )
 
             client.write_log_entries(write_request)
-            increment_requests_metric(GRPC::Core::StatusCodes::OK)
-            increment_log_entries_metric(entries.length, true)
+            increment_successful_requests_count
+            increment_log_entries_count(entries.length, true)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -689,12 +692,12 @@ module Fluent
             end
 
           rescue GRPC::Cancelled => error
-            increment_requests_metric(GRPC::Core::StatusCodes::CANCELLED)
+            increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
             # RPC cancelled, so retry via re-raising the error.
             raise error
 
           rescue GRPC::BadStatus => error
-            increment_requests_metric(error.code)
+            increment_failed_requests_count(error.code)
             case error.code
             when GRPC::Core::StatusCodes::CANCELLED,
                  GRPC::Core::StatusCodes::UNAVAILABLE,
@@ -709,7 +712,7 @@ module Fluent
               # Most client errors indicate a problem with the request itself
               # and should not be retried.
               dropped = entries.length
-              increment_log_entries_metric(dropped, false)
+              increment_log_entries_count(dropped, false)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             when GRPC::Core::StatusCodes::UNAUTHENTICATED
@@ -717,14 +720,14 @@ module Fluent
               # These are usually solved via a `gcloud auth` call, or by
               # modifying the permissions on the Google Cloud project.
               dropped = entries.length
-              increment_log_entries_metric(dropped, false)
+              increment_log_entries_count(dropped, false)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
               # Assume this is a problem with the request itself
               # and don't retry.
               dropped = entries.length
-              increment_log_entries_metric(dropped, false)
+              increment_log_entries_count(dropped, false)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{dropped} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
@@ -743,11 +746,11 @@ module Fluent
             begin
               client.write_entry_log_entries(write_request)
             rescue Google::Apis::Error => error
-              increment_requests_metric(error.status_code)
+              increment_failed_requests_count(error.status_code)
               raise error
             end
-            increment_requests_metric(200)
-            increment_log_entries_metric(entries.length, true)
+            increment_successful_requests_count
+            increment_log_entries_count(entries.length, true)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -765,7 +768,7 @@ module Fluent
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
             dropped = entries.length
-            increment_log_entries_metric(dropped, false)
+            increment_log_entries_count(dropped, false)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
 
@@ -773,7 +776,7 @@ module Fluent
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
             dropped = entries.length
-            increment_log_entries_metric(dropped, false)
+            increment_log_entries_count(dropped, false)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
           end
@@ -1389,16 +1392,22 @@ module Fluent
       end
     end
 
-    # Increment the metric for the number of requests, labeled by
+    # Increment the metric for the number of successful requests.
+    def increment_successful_requests_count
+      return unless @successful_requests_count
+      @successful_requests_count.increment(grpc: @use_grpc)
+    end
+
+    # Increment the metric for the number of failed requests, labeled by
     # the provided status code.
-    def increment_requests_metric(code)
-      return unless @http_requests_count
-      @http_requests_count.increment(grpc: @use_grpc, code: code)
+    def increment_failed_requests_count(code)
+      return unless @failed_requests_count
+      @failed_requests_count.increment(grpc: @use_grpc, code: code)
     end
 
     # Increment the metric for the number of log entries, labeled by
     # the success status of their ingestion.
-    def increment_log_entries_metric(count, success)
+    def increment_log_entries_count(count, success)
       return unless @log_entries_count
       @log_entries_count.increment({ success: success }, count)
     end
