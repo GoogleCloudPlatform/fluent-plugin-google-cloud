@@ -11,18 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-require 'grpc'
-require 'json'
-require 'open-uri'
-require 'socket'
-require 'time'
-require 'yaml'
-require 'google/apis'
-require 'google/apis/logging_v2beta1'
-require 'google/logging/v2/logging_pb'
-require 'google/logging/v2/logging_services_pb'
-require 'google/logging/v2/log_entry_pb'
-require 'googleauth'
 
 module Monitoring
   # Base class for the monitoring registry.
