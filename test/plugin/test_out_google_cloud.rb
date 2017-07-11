@@ -70,22 +70,28 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
-  def test_prometheus_requests_count
+  def test_prometheus_metrics
     setup_gce_metadata_stubs
     [
       # Single successful request.
-      [200, 1, 1, 0],
+      [200, 1, 1, [1, 0, 1, 0]],
       # Several successful requests.
-      [200, 2, 2, 0],
-      # Single failed request.
-      [401, 1, 0, 1]
-    ].each do |code, emit_count, successful_count, failed_count|
+      [200, 2, 1, [2, 0, 2, 0]],
+      # Single successful request with several entries.
+      [200, 1, 2, [1, 0, 2, 0]],
+      # Single failed request that causes logs to be dropped.
+      [401, 1, 1, [0, 1, 0, 1]],
+      # Single failed request that escalates without logs being dropped.
+      [500, 1, 1, [0, 1, 0, 0]]
+    ].each do |code, request_count, entry_count, metric_values|
       setup_prometheus
       stub_request(:post, WRITE_LOG_ENTRIES_URI)
         .to_return(status: code, body: 'Some Message')
-      (1..emit_count).each do |i|
+      (1..request_count).each do
         d = create_driver(PROMETHEUS_ENABLE_CONFIG)
-        d.emit('message' => log_entry(i.to_s))
+        (1..entry_count).each do |i|
+          d.emit('message' => log_entry(i.to_s))
+        end
         # rubocop:disable Lint/HandleExceptions
         begin
           d.run
@@ -94,43 +100,17 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         end
         # rubocop:enable Lint/HandleExceptions
       end
+      successful_requests_count, failed_requests_count,
+        ingested_entries_count, dropped_entries_count = metric_values
       assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     successful_count, grpc: false)
+                                     successful_requests_count, grpc: false)
       assert_prometheus_metric_value(:stackdriver_failed_requests_count,
-                                     failed_count, grpc: false, code: code)
-    end
-  end
-
-  def test_prometheus_ingested_entries
-    setup_gce_metadata_stubs
-    [
-      # Single successful request.
-      [200, 1, 1, 0],
-      # Several successful requests.
-      [200, 2, 2, 0],
-      # Single failed request that caused logs dropping.
-      [401, 1, 0, 1],
-      # Single failed request that was escalated without logs dropping.
-      [500, 1, 0, 0]
-    ].each do |code, emit_count, successful_count, failed_count|
-      setup_prometheus
-      stub_request(:post, WRITE_LOG_ENTRIES_URI)
-        .to_return(status: code, body: 'Some Message')
-      (1..emit_count).each do |i|
-        d = create_driver(PROMETHEUS_ENABLE_CONFIG)
-        d.emit('message' => log_entry(i.to_s))
-        # rubocop:disable Lint/HandleExceptions
-        begin
-          d.run
-        rescue Google::Apis::AuthorizationError
-        rescue Google::Apis::ServerError
-        end
-        # rubocop:enable Lint/HandleExceptions
-      end
-      assert_prometheus_metric_value(:stackdriver_log_entries_count,
-                                     successful_count, success: true)
-      assert_prometheus_metric_value(:stackdriver_log_entries_count,
-                                     failed_count, success: false)
+                                     failed_requests_count,
+                                     grpc: false, code: code)
+      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
+                                     ingested_entries_count)
+      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
+                                     dropped_entries_count)
     end
   end
 

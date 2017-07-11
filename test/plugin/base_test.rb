@@ -1313,7 +1313,7 @@ module BaseTest
     _undefined
   end
 
-  def assert_prometheus_metric_value(metric_name, expected_value, labels)
+  def assert_prometheus_metric_value(metric_name, expected_value, labels = {})
     metric = Prometheus::Client.registry.get(metric_name)
     assert_not_nil(metric)
     assert_equal(expected_value, metric.get(labels))

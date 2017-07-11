@@ -233,10 +233,14 @@ module Fluent
           'A number of successful requests to the Stackdriver Logging API')
         @failed_requests_count = registry.counter(
           :stackdriver_failed_requests_count,
-          'A number of failed requests to the Stackdriver Logging API')
-        @log_entries_count = registry.counter(
-          :stackdriver_log_entries_count,
-          'A number of log entries sent to the Stackdriver Logging API')
+          'A number of failed requests to the Stackdriver Logging API,'\
+            ' broken down by the error code')
+        @ingested_entries_count = registry.counter(
+          :stackdriver_ingested_entries_count,
+          'A number of log entries ingested by Stackdriver Logging')
+        @dropped_entries_count = registry.counter(
+          :stackdriver_dropped_entries_count,
+          'A number of log entries dropped by the Stackdriver output plugin')
       end
 
       # Alert on old authentication configuration.
@@ -682,7 +686,7 @@ module Fluent
 
             client.write_log_entries(write_request)
             increment_successful_requests_count
-            increment_log_entries_count(entries.length, true)
+            increment_ingested_entries_count(entries.length)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -712,7 +716,7 @@ module Fluent
               # Most client errors indicate a problem with the request itself
               # and should not be retried.
               dropped = entries.length
-              increment_log_entries_count(dropped, false)
+              increment_dropped_entries_count(dropped)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             when GRPC::Core::StatusCodes::UNAUTHENTICATED
@@ -720,14 +724,14 @@ module Fluent
               # These are usually solved via a `gcloud auth` call, or by
               # modifying the permissions on the Google Cloud project.
               dropped = entries.length
-              increment_log_entries_count(dropped, false)
+              increment_dropped_entries_count(dropped)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
               # Assume this is a problem with the request itself
               # and don't retry.
               dropped = entries.length
-              increment_log_entries_count(dropped, false)
+              increment_dropped_entries_count(dropped)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{dropped} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
@@ -750,7 +754,7 @@ module Fluent
               raise error
             end
             increment_successful_requests_count
-            increment_log_entries_count(entries.length, true)
+            increment_ingested_entries_count(entries.length)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -768,7 +772,7 @@ module Fluent
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
             dropped = entries.length
-            increment_log_entries_count(dropped, false)
+            increment_dropped_entries_count(dropped)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
 
@@ -776,7 +780,7 @@ module Fluent
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
             dropped = entries.length
-            increment_log_entries_count(dropped, false)
+            increment_dropped_entries_count(dropped)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
           end
@@ -1405,11 +1409,18 @@ module Fluent
       @failed_requests_count.increment(grpc: @use_grpc, code: code)
     end
 
-    # Increment the metric for the number of log entries, labeled by
-    # the success status of their ingestion.
-    def increment_log_entries_count(count, success)
-      return unless @log_entries_count
-      @log_entries_count.increment({ success: success }, count)
+    # Increment the metric for the number of log entries, successfully
+    # ingested by the Stackdriver Logging API.
+    def increment_ingested_entries_count(count)
+      return unless @ingested_entries_count
+      @ingested_entries_count.increment({}, count)
+    end
+
+    # Increment the metric for the number of log entries that were dropped
+    # and not ingested by the Stackdriver Logging API.
+    def increment_dropped_entries_count(count)
+      return unless @dropped_entries_count
+      @dropped_entries_count.increment({}, count)
     end
   end
 end
