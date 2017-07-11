@@ -24,6 +24,8 @@ require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
 require 'googleauth'
 
+require_relative 'monitoring'
+
 module Google
   module Protobuf
     # Alias the has_key? method to have the same interface as a regular map.
@@ -186,6 +188,19 @@ module Fluent
                  :default => nil,
                  :secret => true
 
+    # Whether to collect metrics about the plugin usage. The mechanism for
+    # collecting and exposing metrics is controlled by the monitoring_type
+    # parameter.
+    config_param :enable_monitoring, :bool, :default => false
+
+    # What system to use when collecting metrics. Possible values are:
+    #   - 'prometheus', in this case default registry in the Prometheus
+    #     client library is used, without actually exposing the endpoint
+    #     to serve metrics in the Prometheus format.
+    #    - any other value will result in the absence of metrics.
+    config_param :monitoring_type, :string,
+                 :default => Monitoring::PrometheusMonitoringRegistry.name
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -209,6 +224,25 @@ module Fluent
 
     def configure(conf)
       super
+
+      # If monitoring is enabled, register metrics in the default registry
+      # and store metric objects for future use.
+      if @enable_monitoring
+        registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
+        @successful_requests_count = registry.counter(
+          :stackdriver_successful_requests_count,
+          'A number of successful requests to the Stackdriver Logging API')
+        @failed_requests_count = registry.counter(
+          :stackdriver_failed_requests_count,
+          'A number of failed requests to the Stackdriver Logging API,'\
+            ' broken down by the error code')
+        @ingested_entries_count = registry.counter(
+          :stackdriver_ingested_entries_count,
+          'A number of log entries ingested by Stackdriver Logging')
+        @dropped_entries_count = registry.counter(
+          :stackdriver_dropped_entries_count,
+          'A number of log entries dropped by the Stackdriver output plugin')
+      end
 
       # Alert on old authentication configuration.
       unless @auth_method.nil? && @private_key_email.nil? &&
@@ -652,6 +686,8 @@ module Fluent
             )
 
             client.write_log_entries(write_request)
+            increment_successful_requests_count
+            increment_ingested_entries_count(entries.length)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -661,10 +697,12 @@ module Fluent
             end
 
           rescue GRPC::Cancelled => error
+            increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
             # RPC cancelled, so retry via re-raising the error.
             raise error
 
           rescue GRPC::BadStatus => error
+            increment_failed_requests_count(error.code)
             case error.code
             when GRPC::Core::StatusCodes::CANCELLED,
                  GRPC::Core::StatusCodes::UNAVAILABLE,
@@ -679,6 +717,7 @@ module Fluent
               # Most client errors indicate a problem with the request itself
               # and should not be retried.
               dropped = entries.length
+              increment_dropped_entries_count(dropped)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             when GRPC::Core::StatusCodes::UNAUTHENTICATED
@@ -686,12 +725,14 @@ module Fluent
               # These are usually solved via a `gcloud auth` call, or by
               # modifying the permissions on the Google Cloud project.
               dropped = entries.length
+              increment_dropped_entries_count(dropped)
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
               # Assume this is a problem with the request itself
               # and don't retry.
               dropped = entries.length
+              increment_dropped_entries_count(dropped)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{dropped} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
@@ -707,7 +748,14 @@ module Fluent
                 entries: entries)
 
             # TODO: RequestOptions
-            client.write_entry_log_entries(write_request)
+            begin
+              client.write_entry_log_entries(write_request)
+            rescue Google::Apis::Error => error
+              increment_failed_requests_count(error.status_code)
+              raise error
+            end
+            increment_successful_requests_count
+            increment_ingested_entries_count(entries.length)
 
             # Let the user explicitly know when the first call succeeded,
             # to aid with verification and troubleshooting.
@@ -725,6 +773,7 @@ module Fluent
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
             dropped = entries.length
+            increment_dropped_entries_count(dropped)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
 
@@ -732,6 +781,7 @@ module Fluent
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
             dropped = entries.length
+            increment_dropped_entries_count(dropped)
             @log.warn "Dropping #{dropped} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
           end
@@ -1345,6 +1395,33 @@ module Fluent
           raise
         end
       end
+    end
+
+    # Increment the metric for the number of successful requests.
+    def increment_successful_requests_count
+      return unless @successful_requests_count
+      @successful_requests_count.increment(grpc: @use_grpc)
+    end
+
+    # Increment the metric for the number of failed requests, labeled by
+    # the provided status code.
+    def increment_failed_requests_count(code)
+      return unless @failed_requests_count
+      @failed_requests_count.increment(grpc: @use_grpc, code: code)
+    end
+
+    # Increment the metric for the number of log entries, successfully
+    # ingested by the Stackdriver Logging API.
+    def increment_ingested_entries_count(count)
+      return unless @ingested_entries_count
+      @ingested_entries_count.increment({}, count)
+    end
+
+    # Increment the metric for the number of log entries that were dropped
+    # and not ingested by the Stackdriver Logging API.
+    def increment_dropped_entries_count(count)
+      return unless @dropped_entries_count
+      @dropped_entries_count.increment({}, count)
     end
   end
 end

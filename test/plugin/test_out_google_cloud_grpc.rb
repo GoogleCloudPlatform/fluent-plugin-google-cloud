@@ -72,6 +72,53 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
+  # Refactor and remove duplication.
+  # TODO: Use status codes instead of int literals.
+  def test_prometheus_metrics
+    setup_gce_metadata_stubs
+    [
+      # Single successful request.
+      [false, 0, 1, 1, [1, 0, 1, 0]],
+      # Several successful requests.
+      [false, 0, 2, 1, [2, 0, 2, 0]],
+      # Single successful request with several entries.
+      [false, 0, 1, 2, [1, 0, 2, 0]],
+      # Single failed request that causes logs to be dropped.
+      [true, 16, 1, 1, [0, 1, 0, 1]],
+      # Single failed request that escalates without logs being dropped.
+      [true, 13, 1, 1, [0, 1, 0, 0]]
+    ].each do |should_fail, code, request_count, entry_count, metric_values|
+      setup_prometheus
+      setup_logging_stubs(should_fail, code, 'SomeMessage') do
+        (1..request_count).each do
+          d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
+                            GRPCLoggingMockFailingService.rpc_stub_class)
+          (1..entry_count).each do |i|
+            d.emit('message' => log_entry(i.to_s))
+          end
+          # rubocop:disable Lint/HandleExceptions
+          begin
+            d.run
+          rescue GRPC::BadStatus
+          end
+          # rubocop:enable Lint/HandleExceptions
+        end
+      end
+      successful_requests_count, failed_requests_count,
+        ingested_entries_count, dropped_entries_count = metric_values
+      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                     successful_requests_count, grpc: true)
+      assert_prometheus_metric_value(:stackdriver_failed_requests_count,
+                                     failed_requests_count,
+                                     grpc: true, code: code)
+      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
+                                     ingested_entries_count)
+      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
+                                     dropped_entries_count)
+    end
+  end
+
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".

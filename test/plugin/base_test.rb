@@ -16,6 +16,7 @@ require 'google/apis'
 require 'helper'
 require 'mocha/test_unit'
 require 'webmock/test_unit'
+require 'prometheus/client'
 
 require_relative 'constants'
 
@@ -1125,6 +1126,10 @@ module BaseTest
                           DATAPROC_REGION)
   end
 
+  def setup_prometheus
+    Prometheus::Client.registry.instance_variable_set('@metrics', {})
+  end
+
   def container_tag_with_container_name(container_name)
     "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
       "#{container_name}"
@@ -1306,6 +1311,12 @@ module BaseTest
   # a plain equal. e.g. assert_in_delta.
   def assert_equal_with_default(_field, _expected_value, _default_value, _entry)
     _undefined
+  end
+
+  def assert_prometheus_metric_value(metric_name, expected_value, labels = {})
+    metric = Prometheus::Client.registry.get(metric_name)
+    assert_not_nil(metric)
+    assert_equal(expected_value, metric.get(labels))
   end
 
   # Get the fields of the payload.
