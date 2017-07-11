@@ -190,7 +190,7 @@ module Fluent
 
     # Whether to collect metrics about the plugin usage. Use configuration
     # parameter monitoring_type to select a monitoring system you want to use.
-    config_param :monitoring_enabled, :bool, :default => false
+    config_param :enable_monitoring, :bool, :default => false
 
     # What system to use when collecting metrics. Possible values are:
     #   - 'prometheus', in this case default registry in the Prometheus
@@ -226,7 +226,7 @@ module Fluent
 
       # If monitoring is enabled, register metrics in the default registry
       # and store metric objects for future use.
-      if @monitoring_enabled
+      if @enable_monitoring
         registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
         @successful_requests_count = registry.counter(
           :stackdriver_successful_requests_count,

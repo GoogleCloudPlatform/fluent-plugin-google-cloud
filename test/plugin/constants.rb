@@ -141,7 +141,7 @@ module Constants
   )
 
   PROMETHEUS_ENABLE_CONFIG = %(
-    monitoring_enabled true
+    enable_monitoring true
     monitoring_type prometheus
   )
 
