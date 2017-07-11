@@ -72,6 +72,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
   # Refactor and remove duplication.
+  # TODO: Use status codes instead of int literals.
   def test_prometheus_metrics
     setup_gce_metadata_stubs
     [
