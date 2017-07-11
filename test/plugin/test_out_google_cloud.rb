@@ -70,6 +70,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
+  # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
+  # Refactor and remove duplciation.
   def test_prometheus_metrics
     setup_gce_metadata_stubs
     [
@@ -85,6 +87,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       [500, 1, 1, [0, 1, 0, 0]]
     ].each do |code, request_count, entry_count, metric_values|
       setup_prometheus
+      # TODO: Do this as part of setup_logging_stubs.
       stub_request(:post, WRITE_LOG_ENTRIES_URI)
         .to_return(status: code, body: 'Some Message')
       (1..request_count).each do
