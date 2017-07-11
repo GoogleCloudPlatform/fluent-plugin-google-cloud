@@ -37,7 +37,7 @@ No further configuration is required. The plugin uses
 for authorization - for additional information see 
 {here}[https://cloud.google.com/logging/docs/agent/authorization].
 
-If your GCE and Logging service are in different project, you can specify the project id in your fluentd configuration by `project_id` parameter like this:
+If your GCE and Logging service are in different project, you can specify the project id in your fluentd configuration by `project_id` parameter like below and add Logging service credentials to your GCE.
 
     <match **>
       type google_cloud
