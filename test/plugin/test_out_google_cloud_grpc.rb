@@ -73,7 +73,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
-  # Refactor and remove duplciation.
+  # Refactor and remove duplication.
   def test_prometheus_metrics
     setup_gce_metadata_stubs
     [
