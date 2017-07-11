@@ -188,8 +188,9 @@ module Fluent
                  :default => nil,
                  :secret => true
 
-    # Whether to collect metrics about the plugin usage. The way metrics are
-    # collected and exposed is controlled by the parameter monitoring_type.
+    # Whether to collect metrics about the plugin usage. The mechanism for
+    # collecting and exposing metrics is controlled by the monitoring_type
+    # parameter.
     config_param :enable_monitoring, :bool, :default => false
 
     # What system to use when collecting metrics. Possible values are:
