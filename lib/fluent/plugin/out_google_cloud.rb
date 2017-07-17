@@ -863,12 +863,9 @@ module Fluent
         labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
         labels["#{COMPUTE_CONSTANTS[:service]}/zone"] = @zone
 
-      # GCE.
-      when COMPUTE_CONSTANTS[:resource_type]
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
-
-      # GKE container.
-      when CONTAINER_CONSTANTS[:resource_type]
+      # GCE and GKE container.
+      when COMPUTE_CONSTANTS[:resource_type],
+           CONTAINER_CONSTANTS[:resource_type]
         labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
 
       # Cloud Dataflow and Cloud Dataproc.
