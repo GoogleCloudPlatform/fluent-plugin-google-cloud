@@ -23,7 +23,9 @@ eos
   gem.add_runtime_dependency 'googleapis-common-protos', '~> 1.3'
   gem.add_runtime_dependency 'google-api-client', '~> 0.9.0'
   gem.add_runtime_dependency 'google-cloud-logging', '~> 0.23.2'
-  gem.add_runtime_dependency 'googleauth', '~> 0.4'
+  # Pin the gem at earlier versions because this bug was introduced in v0.5.2:
+  # https://github.com/google/google-auth-library-ruby/issues/113
+  gem.add_runtime_dependency 'googleauth', '~> 0.4', '< 0.5.2'
   gem.add_runtime_dependency 'grpc', '~> 1.0', '< 1.3'
   gem.add_runtime_dependency 'json', '~> 1.8'
 
