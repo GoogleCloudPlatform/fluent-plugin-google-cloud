@@ -109,6 +109,12 @@ module Fluent
     config_param :vm_id, :string, :default => nil
     config_param :vm_name, :string, :default => nil
 
+    # Set values from JSON payload with this key to the "trace" LogEntry field
+    config_param :trace_key, :string, :default =>
+      'logging.googleapis.com/trace'
+    # Whether to keep the trace LogEntry field/value in the jsonPayload also
+    config_param :keep_trace_key, :bool, :default => false
+
     # Whether to try to detect if the VM is owned by a "subservice" such as App
     # Engine of Kubernetes, rather than just associating the logs with the
     # compute service of the platform. This currently only has any effect when
@@ -621,15 +627,21 @@ module Fluent
           severity = compute_severity(
             entry_resource.type, record, entry_common_labels)
 
+          # Extract "trace" as LogEntry field according to specified config
+          trace = record[@trace_key]
+          record.delete(@trace_key) unless @keep_trace_key
+
           if @use_grpc
-            entry = Google::Logging::V2::LogEntry.new(
+            entry_data = {
               labels: entry_common_labels,
               resource: Google::Api::MonitoredResource.new(
                 type: entry_resource.type,
                 labels: entry_resource.labels.to_h
               ),
               severity: grpc_severity(severity)
-            )
+            }
+            entry_data[:trace] = trace if trace
+            entry = Google::Logging::V2::LogEntry.new(entry_data)
             # If "seconds" is null or not an integer, we will omit the timestamp
             # field and defer the decision on how to handle it to the downstream
             # Logging API. If "nanos" is null or not an integer, it will be set
@@ -646,7 +658,7 @@ module Fluent
           else
             # Remove the labels if we didn't populate them with anything.
             entry_resource.labels = nil if entry_resource.labels.empty?
-            entry = Google::Apis::LoggingV2beta1::LogEntry.new(
+            entry_data = {
               labels: entry_common_labels,
               resource: entry_resource,
               severity: severity,
@@ -654,7 +666,9 @@ module Fluent
                 seconds: ts_secs,
                 nanos: ts_nanos
               }
-            )
+            }
+            entry_data[:trace] = trace if trace
+            entry = Google::Apis::LoggingV2beta1::LogEntry.new(entry_data)
             set_http_request(record, entry)
             set_payload(entry_resource.type, record, entry, is_json)
           end

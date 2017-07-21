@@ -1015,6 +1015,67 @@ module BaseTest
     end
   end
 
+  def test_log_with_trace
+    setup_gce_metadata_stubs
+    message = log_entry(0)
+    trace = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
+    default_trace_key = 'logging.googleapis.com/trace'
+    [
+      {
+        # It leaves trace entry field nil if no trace value sent
+        driver_config: APPLICATION_DEFAULT_CONFIG,
+        emitted_log: { 'msg' => message },
+        expected_trace_value: nil,
+        expected_json_payload: { 'msg' => message }
+      },
+      {
+        # By default, it sets trace via Google-specific key and removes from
+        # jsonPayload.
+        driver_config: APPLICATION_DEFAULT_CONFIG,
+        emitted_log: { 'msg' => message, default_trace_key => trace },
+        expected_trace_value: trace,
+        expected_json_payload: { 'msg' => message }
+      },
+      {
+        # It allows keeping the trace vallue in the jsonPayload if specified
+        driver_config: CONFIG_KEEP_TRACE_KEY_TRUE,
+        emitted_log: { 'msg' => message, default_trace_key => trace },
+        expected_trace_value: trace,
+        expected_json_payload: { 'msg' => message, default_trace_key => trace }
+      },
+      {
+        # It allows setting the trace via a custom configured key
+        driver_config: CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
+        emitted_log: { 'msg' => message, 'custom_trace_key' => trace },
+        expected_trace_value: trace,
+        expected_json_payload: { 'msg' => message }
+      },
+      {
+        # It no longer sets trace by the default key if custom key specified
+        driver_config: CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
+        emitted_log: { 'msg' => message, default_trace_key => trace },
+        expected_trace_value: nil,
+        expected_json_payload: { 'msg' => message, default_trace_key => trace }
+      }
+    ].each do |input|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(input[:driver_config])
+        d.emit(input[:emitted_log])
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+        assert_equal input[:expected_trace_value], entry['trace'], input
+        fields = get_fields(entry['jsonPayload'])
+        assert_equal input[:expected_json_payload].size, fields.size, input
+        fields.each do |key, value|
+          assert_equal(input[:expected_json_payload][key],
+                       get_string(value), input)
+        end
+      end
+    end
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1065,14 +1126,14 @@ module BaseTest
 
   def setup_auth_stubs
     # Used when loading credentials from a JSON file.
-    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
+    stub_request(:post, 'https://www.googleapis.com/oauth2/v4/token')
       .with(body: hash_including(grant_type: AUTH_GRANT_TYPE))
       .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
                  status: 200,
                  headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
                             'Content-Type' => 'application/json' })
 
-    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
+    stub_request(:post, 'https://www.googleapis.com/oauth2/v4/token')
       .with(body: hash_including(grant_type: 'refresh_token'))
       .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
                  status: 200,
