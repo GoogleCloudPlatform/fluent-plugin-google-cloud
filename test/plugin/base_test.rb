@@ -1019,7 +1019,7 @@ module BaseTest
     setup_gce_metadata_stubs
     message = log_entry(0)
     trace = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
-    default_trace_key = 'logging.googleapis.com/trace'
+    default_trace_key = Fluent::GoogleCloudOutput::DEFAULT_TRACE_KEY
     [
       {
         # It leaves trace entry field nil if no trace value sent
