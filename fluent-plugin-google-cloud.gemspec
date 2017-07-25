@@ -30,7 +30,7 @@ eos
   gem.add_development_dependency 'mocha', '~> 1.1'
   gem.add_development_dependency 'rake', '~> 10.3'
   gem.add_development_dependency 'rubocop', '~> 0.35.0'
-  gem.add_development_dependency 'webmock', '~> 1.17'
+  gem.add_development_dependency 'webmock', '~> 2.3.1'
   gem.add_development_dependency 'test-unit', '~> 3.0'
   gem.add_development_dependency 'prometheus-client', '~> 0.7.1'
 end
