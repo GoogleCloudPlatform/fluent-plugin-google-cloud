@@ -306,11 +306,6 @@ module Fluent
       # processed by this logging agent.
       @common_labels = determine_agent_level_common_labels
 
-      # For each resource type, there is a list of labels that we want to report
-      # as monitored resource instead of metadata labels. Move them if present.
-      @resource.labels.merge!(
-        extract_resource_labels(@resource.type, common_labels))
-
       # The resource and labels are now set up; ensure they can't be modified
       # without first duping them.
       @resource.freeze
@@ -1009,23 +1004,21 @@ module Fluent
       if group_resource.type == CONTAINER_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
-          fields_to_labels(
+          delete_and_extract_labels(
             record, 'stream' => "#{CONTAINER_CONSTANTS[:service]}/stream"))
 
         # If the record has been annotated by the kubernetes_metadata_filter
         # plugin, then use that metadata. Otherwise, rely on commonLabels
         # populated at the grouped_entries level from the group's tag.
         if record.key?('kubernetes')
-          %w(namespace_id pod_id container_name).each do |field|
-            resource_labels.merge!(
-              fields_to_labels(record['kubernetes'], field => field))
-          end
-          %w(namespace_name pod_name).each do |field|
-            common_labels.merge!(
-              fields_to_labels(
-                record['kubernetes'],
-                field => "#{CONTAINER_CONSTANTS[:service]}/#{field}"))
-          end
+          resource_labels.merge!(
+            delete_and_extract_labels(
+              record['kubernetes'], %w(namespace_id pod_id container_name)
+                .map { |l| [l, l] }.to_h))
+          common_labels.merge!(
+            delete_and_extract_labels(
+              record['kubernetes'], %w(namespace_name pod_name)
+                .map { |l| [l, "#{CONTAINER_CONSTANTS[:service]}/#{l}"] }.to_h))
           # Prepend label/ to all user-defined labels' keys.
           if record['kubernetes'].key?('labels')
             record['kubernetes']['labels'].each do |key, value|
@@ -1043,10 +1036,27 @@ module Fluent
       # If the name of a field in the record is present in the @label_map
       # configured by users, report its value as a label and do not send that
       # field as part of the payload.
-      common_labels.merge!(fields_to_labels(record, @label_map))
+      common_labels.merge!(delete_and_extract_labels(record, @label_map))
 
-      resource_labels.merge!(
-        extract_resource_labels(group_resource.type, common_labels))
+      # Cloud Dataflow.
+      # These labels can be set via configuring 'labels' or 'label_map'.
+      # Report them as monitored resource labels instead of common labels.
+      if group_resource.type == DATAFLOW_CONSTANTS[:resource_type]
+        resource_labels.merge!(
+          delete_and_extract_labels(
+            common_labels, %w(region job_name job_id step_id)
+              .map { |l| ["#{DATAFLOW_CONSTANTS[:service]}/#{l}", l] }.to_h))
+      end
+
+      # Cloud ML.
+      # These labels can be set via configuring 'labels' or 'label_map'.
+      # Report them as monitored resource labels instead of common labels.
+      if group_resource.type == ML_CONSTANTS[:resource_type]
+        resource_labels.merge!(
+          delete_and_extract_labels(
+            common_labels, %w(job_id task_name)
+              .map { |l| ["#{ML_CONSTANTS[:service]}/#{l}", l] }.to_h))
+      end
 
       [resource_labels, common_labels]
     end
@@ -1357,14 +1367,16 @@ module Fluent
     end
 
     # For every original_label => new_label pair in the label_map, delete the
-    # original_label from the record if it exists, and extract the value to form
-    # a map with the new_label as the key.
-    def fields_to_labels(record, label_map)
-      return {} if label_map.nil? || !label_map.is_a?(Hash)
+    # original_label from the original_resource map if it exists, and extract
+    # the value to form a map with the new_label as the key.
+    def delete_and_extract_labels(original_resource, label_map)
+      return {} if label_map.nil? || !label_map.is_a?(Hash) ||
+                   original_resource.nil? || !original_resource.is_a?(Hash)
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
         extracted_labels[new_label] = convert_to_utf8(
-          record.delete(original_label).to_s) if record.key?(original_label)
+          original_resource.delete(original_label).to_s) if
+            original_resource.key?(original_label)
       end
     end
 
@@ -1479,32 +1491,6 @@ module Fluent
       end
       tag = ERB::Util.url_encode(tag)
       tag
-    end
-
-    # Some services set labels (via configuring 'labels' or 'label_map') which
-    # are now MonitoredResource labels in v2.
-    # For these services, remove resource labels from 'labels' and return a
-    # Hash of labels to be merged into the MonitoredResource labels.
-    # Otherwise, return an empty hash and leave 'labels' unmodified.
-    def extract_resource_labels(resource_type, labels)
-      extracted_labels = {}
-      return extracted_labels if labels.nil? || !labels.is_a?(Hash)
-
-      if resource_type == DATAFLOW_CONSTANTS[:resource_type]
-        label_prefix = DATAFLOW_CONSTANTS[:service]
-        labels_to_extract = %w(region job_name job_id step_id)
-      elsif resource_type == ML_CONSTANTS[:resource_type]
-        label_prefix = ML_CONSTANTS[:service]
-        labels_to_extract = %w(job_id task_name)
-      else
-        return extracted_labels
-      end
-
-      labels_to_extract.each do |label|
-        extracted_labels[label] = labels.delete("#{label_prefix}/#{label}") if
-          labels.key?("#{label_prefix}/#{label}")
-      end
-      extracted_labels
     end
 
     def init_api_client
