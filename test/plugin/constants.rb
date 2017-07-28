@@ -196,6 +196,14 @@ module Constants
     label_map { "name": "#{ML_CONSTANTS[:service]}/job_id/log_area" }
   )
 
+  CONFIG_KEEP_TRACE_KEY_TRUE = %(
+    keep_trace_key true
+  )
+
+  CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
+    trace_key custom_trace_key
+  )
+
   # Service configurations for various services.
   COMPUTE_PARAMS = {
     resource: {

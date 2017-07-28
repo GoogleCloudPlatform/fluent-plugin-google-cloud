@@ -72,6 +72,9 @@ module Fluent
         service: 'ml.googleapis.com',
         resource_type: 'ml_job'
       }
+
+      # Default value for trace_key config param to set "trace" LogEntry field.
+      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
     end
 
     include self::Constants
@@ -108,6 +111,11 @@ module Fluent
     config_param :zone, :string, :default => nil
     config_param :vm_id, :string, :default => nil
     config_param :vm_name, :string, :default => nil
+
+    # Set values from JSON payload with this key to the "trace" LogEntry field.
+    config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
+    # Whether to also keep the trace key/value in the payload.
+    config_param :keep_trace_key, :bool, :default => false
 
     # Whether to try to detect if the VM is owned by a "subservice" such as App
     # Engine of Kubernetes, rather than just associating the logs with the
@@ -621,6 +629,13 @@ module Fluent
           severity = compute_severity(
             entry_resource.type, record, entry_common_labels)
 
+          # Get fully-qualified trace id for LogEntry "trace" field per config.
+          fq_trace_id = if @keep_trace_key
+                          record[@trace_key]
+                        else
+                          record.delete(@trace_key)
+                        end
+
           if @use_grpc
             entry = Google::Logging::V2::LogEntry.new(
               labels: entry_common_labels,
@@ -630,6 +645,7 @@ module Fluent
               ),
               severity: grpc_severity(severity)
             )
+            entry.trace = fq_trace_id if fq_trace_id
             # If "seconds" is null or not an integer, we will omit the timestamp
             # field and defer the decision on how to handle it to the downstream
             # Logging API. If "nanos" is null or not an integer, it will be set
@@ -655,6 +671,7 @@ module Fluent
                 nanos: ts_nanos
               }
             )
+            entry.trace = fq_trace_id if fq_trace_id
             set_http_request(record, entry)
             set_payload(entry_resource.type, record, entry, is_json)
           end
