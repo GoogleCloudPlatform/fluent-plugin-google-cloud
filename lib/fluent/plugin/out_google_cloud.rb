@@ -972,6 +972,8 @@ module Fluent
         if matched_regex_group
           group_resource_labels['container_name'] =
             matched_regex_group['container_name']
+          # The kubernetes_tag_regexp is poorly named. 'namespace_name' is in
+          # fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
           group_resource_labels['namespace_id'] =
             matched_regex_group['namespace_name']
           group_resource_labels['pod_id'] =
@@ -1014,10 +1016,27 @@ module Fluent
         # plugin, then use that metadata. Otherwise, rely on commonLabels
         # populated at the grouped_entries level from the group's tag.
         if record.key?('kubernetes')
-          extracted_resource_labels, extracted_common_labels = \
-            extract_container_metadata(record)
-          resource_labels.merge!(extracted_resource_labels)
-          common_labels.merge!(extracted_common_labels)
+          %w(namespace_id pod_id container_name).each do |field|
+            resource_labels.merge!(
+              fields_to_labels(record['kubernetes'], field => field))
+          end
+          %w(namespace_name pod_name).each do |field|
+            common_labels.merge!(
+              fields_to_labels(
+                record['kubernetes'],
+                field => "#{CONTAINER_CONSTANTS[:service]}/#{field}"))
+          end
+          # Prepend label/ to all user-defined labels' keys.
+          if record['kubernetes'].key?('labels')
+            record['kubernetes']['labels'].each do |key, value|
+              common_labels["label/#{key}"] = value
+            end
+          end
+          # We've explicitly consumed all the fields we care about -- don't
+          # litter the log entries with the remaining fields that the kubernetes
+          # metadata filter plugin includes (or an empty 'kubernetes' field).
+          record.delete('kubernetes')
+          record.delete('docker')
         end
       end
 
@@ -1317,34 +1336,6 @@ module Fluent
     def decode_cloudfunctions_function_name(function_name)
       function_name.gsub(/c\.[a-z]/) { |s| s.upcase[-1] }
         .gsub('u.u', '_').gsub('d.d', '$').gsub('a.a', '@').gsub('p.p', '.')
-    end
-
-    # Requires that record has a 'kubernetes' field.
-    def extract_container_metadata(record)
-      resource_labels = {}
-      common_labels = {}
-      %w(namespace_id pod_id container_name).each do |field|
-        resource_labels.merge!(
-          fields_to_labels(record['kubernetes'], field => field))
-      end
-      %w(namespace_name pod_name).each do |field|
-        common_labels.merge!(
-          fields_to_labels(
-            record['kubernetes'],
-            field => "#{CONTAINER_CONSTANTS[:service]}/#{field}"))
-      end
-      # Prepend label/ to all user-defined labels' keys.
-      if record['kubernetes'].key?('labels')
-        record['kubernetes']['labels'].each do |key, value|
-          common_labels["label/#{key}"] = value
-        end
-      end
-      # We've explicitly consumed all the fields we care about -- don't litter
-      # the log entries with the remaining fields that the kubernetes metadata
-      # filter plugin includes (or an empty 'kubernetes' field).
-      record.delete('kubernetes')
-      record.delete('docker')
-      [resource_labels, common_labels]
     end
 
     def format(tag, time, record)
