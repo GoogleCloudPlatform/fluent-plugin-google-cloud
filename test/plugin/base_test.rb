@@ -516,6 +516,11 @@ module BaseTest
                'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec)
         expected_ts.push(ts)
         emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timestampSeconds' => "#{ts.tv_sec}",
+               'timestampNanos' => "#{ts.tv_nsec}")
+        expected_ts.push(ts)
+        emit_index += 1
         d.run
       end
     end
