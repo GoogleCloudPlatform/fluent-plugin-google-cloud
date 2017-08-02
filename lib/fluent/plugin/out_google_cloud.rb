@@ -636,6 +636,16 @@ module Fluent
                           record.delete(@trace_key)
                         end
 
+          ts_secs = begin
+                      Integer ts_secs
+                    rescue ArgumentError, TypeError
+                      ts_secs
+                    end
+          ts_nanos = begin
+                       Integer ts_nanos
+                     rescue ArgumentError, TypeError
+                       ts_nanos
+                     end
           if @use_grpc
             entry = Google::Logging::V2::LogEntry.new(
               labels: entry_common_labels,
