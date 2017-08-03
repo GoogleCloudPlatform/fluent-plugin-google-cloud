@@ -601,10 +601,13 @@ module Fluent
             group_common_labels.merge(extracted_common_labels)
 
           if entry_resource.type == CONTAINER_CONSTANTS[:resource_type]
-            # Save the timestamp if available, then clear it out to allow for
-            # determining whether we should parse the log or message field.
+            # Save the timestamp and stream if available, then clear it out
+            # to allow for determining whether we should parse the log or
+            # message field.
             timestamp = record.key?('time') ? record['time'] : nil
             record.delete('time')
+            stream = record.key?('stream') ? record['stream'] : nil
+            record.delete('stream')
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
             is_json = false
@@ -618,9 +621,12 @@ module Fluent
               record = record_json
               is_json = true
             end
-            # Restore timestamp if necessary.
+            # Restore timestamp and stream if necessary.
             unless record.key?('time') || timestamp.nil?
               record['time'] = timestamp
+            end
+            unless record.key?('stream') || stream.nil?
+              record['stream'] = stream
             end
           end
 
