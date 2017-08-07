@@ -446,6 +446,9 @@ module Fluent
               )
             end
             set_http_request(record, entry)
+            set_source_location(record, entry)
+            set_operation(record, entry)
+            set_labels(record, entry)
             set_payload_grpc(entry_resource.type, record, entry, is_json)
           else
             # Remove the labels if we didn't populate them with anything.
@@ -461,6 +464,9 @@ module Fluent
             )
             entry.trace = fq_trace_id if fq_trace_id
             set_http_request(record, entry)
+            set_source_location(record, entry)
+            set_operation(record, entry)
+            set_labels(record, entry)
             set_payload(entry_resource.type, record, entry, is_json)
           end
 
@@ -1240,6 +1246,62 @@ module Fluent
 
       record.delete('httpRequest') if input.empty?
       entry.http_request = output
+    end
+
+    def set_source_location(record, entry)
+      return nil unless record['sourceLocation'].is_a?(Hash)
+      input = record['sourceLocation']
+      if @use_grpc
+        output = Google::Logging::V2::LogEntrySourceLocation.new
+      else
+        output = Google::Apis::LoggingV2beta1::LogEntrySourceLocation.new
+      end
+
+      file = input.delete('file')
+      output.file = file unless file.nil?
+      function = input.delete('function')
+      output.function = function unless function.nil?
+      line = input.delete('line')
+      output.line = line unless line.nil?
+
+      record.delete('sourceLocation') if input.empty?
+      entry.source_location = output
+    end
+
+    def set_operation(record, entry)
+      return nil unless record['operation'].is_a?(Hash)
+
+      input = record['operation']
+      if @use_grpc
+        output = Google::Logging::V2::LogEntryOperation.new
+      else
+        output = Google::Apis::LoggingV2beta1::LogEntryOperation.new
+      end
+
+      id = input.delete('id')
+      output.id = id unless id.nil?
+      producer = input.delete('producer')
+      output.producer = producer unless producer.nil?
+      first = input.delete('first')
+      output.first = first unless first.nil?
+      last = input.delete('last')
+      output.last = last unless last.nil?
+
+      record.delete('operation') if input.empty?
+      entry.operation = output
+    end
+
+    def set_labels(record, entry)
+      return nil unless record['labels'].is_a?(Hash)
+
+      record['labels'].each do |key, value|
+        unless entry.labels.key?(key)
+          record['labels'].delete(key)
+          entry.labels[key] = value
+        end
+      end
+
+      record.delete('labels') if record['labels'].empty?
     end
 
     # Values permitted by the API for 'severity' (which is an enum).

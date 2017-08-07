@@ -430,6 +430,23 @@ module Constants
     'cacheValidatedWithOriginServer' => true
   }
 
+  SOURCE_LOCATION_MESSAGE = {
+    'file' => 'source/file',
+    'function' => 'my_function',
+    'line' => 18
+  }
+
+  OPERATION_MESSAGE = {
+    'id' => 'op_id',
+    'producer' => 'my/app',
+    'last' => true
+  }
+
+  CUSTOM_LABELS_MESSAGE = {
+    'customKey' => 'value'
+  }
+  CONFLICTING_LABEL_KEY = "#{COMPUTE_CONSTANTS[:service]}/resource_name"
+
   # Tags and their sanitized and encoded version.
   VALID_TAGS = {
     'test' => 'test',
