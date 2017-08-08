@@ -95,7 +95,11 @@ module Fluent
         .map { |consts| [consts[:resource_type], consts[:metadata_attributes]] }
         .to_h
 
-      # Default value for trace_key config param to set "trace" LogEntry field.
+      # Default value for trace_key config param to set the "trace",
+      # "sourceLocation", "operation" and "labels" fields in the LogEntry.
+      DEFAULT_LABELS_KEY = 'logging.googleapis.com/labels'
+      DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'
+      DEFAULT_SOURCE_LOCATION_KEY = 'logging.googleapis.com/sourceLocation'
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
     end
 
@@ -134,7 +138,11 @@ module Fluent
     config_param :vm_id, :string, :default => nil
     config_param :vm_name, :string, :default => nil
 
-    # Set values from JSON payload with this key to the "trace" LogEntry field.
+    # Map keys from a JSON payload to corresponding LogEntry fields.
+    config_param :labels_key, :string, :default => DEFAULT_LABELS_KEY
+    config_param :operation_key, :string, :default => DEFAULT_OPERATION_KEY
+    config_param :source_location_key, :string, :default =>
+      DEFAULT_SOURCE_LOCATION_KEY
     config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
 
     # Whether to try to detect if the VM is owned by a "subservice" such as App
@@ -1249,8 +1257,8 @@ module Fluent
     end
 
     def set_source_location(record, entry)
-      return nil unless record['sourceLocation'].is_a?(Hash)
-      input = record['sourceLocation']
+      return nil unless record[@source_location_key].is_a?(Hash)
+      input = record[@source_location_key]
       if @use_grpc
         output = Google::Logging::V2::LogEntrySourceLocation.new
       else
@@ -1264,14 +1272,14 @@ module Fluent
       line = input.delete('line')
       output.line = line unless line.nil?
 
-      record.delete('sourceLocation') if input.empty?
+      record.delete(@source_location_key) if input.empty?
       entry.source_location = output
     end
 
     def set_operation(record, entry)
-      return nil unless record['operation'].is_a?(Hash)
+      return nil unless record[@operation_key].is_a?(Hash)
 
-      input = record['operation']
+      input = record[@operation_key]
       if @use_grpc
         output = Google::Logging::V2::LogEntryOperation.new
       else
@@ -1287,21 +1295,21 @@ module Fluent
       last = input.delete('last')
       output.last = last unless last.nil?
 
-      record.delete('operation') if input.empty?
+      record.delete(@operation_key) if input.empty?
       entry.operation = output
     end
 
     def set_labels(record, entry)
-      return nil unless record['labels'].is_a?(Hash)
+      return nil unless record[@labels_key].is_a?(Hash)
 
-      record['labels'].each do |key, value|
+      record[@labels_key].each do |key, value|
         unless entry.labels.key?(key)
-          record['labels'].delete(key)
+          record[@labels_key].delete(key)
           entry.labels[key] = value
         end
       end
 
-      record.delete('labels') if record['labels'].empty?
+      record.delete(@labels_key) if record[@labels_key].empty?
     end
 
     # Values permitted by the API for 'severity' (which is an enum).

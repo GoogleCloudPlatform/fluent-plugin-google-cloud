@@ -963,12 +963,13 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('sourceLocation' => SOURCE_LOCATION_MESSAGE)
+      d.emit(DEFAULT_SOURCE_LOCATION_KEY => SOURCE_LOCATION_MESSAGE)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'sourceLocation') do |entry|
       assert_equal SOURCE_LOCATION_MESSAGE, entry['sourceLocation'], entry
-      assert_nil get_fields(entry['jsonPayload'])['sourceLocation'], entry
+      fields = get_fields(entry['jsonPayload'])
+      assert_nil fields[DEFAULT_SOURCE_LOCATION_KEY], entry
     end
   end
 
@@ -976,14 +977,14 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('sourceLocation' => SOURCE_LOCATION_MESSAGE.merge(
-        'otherKey' => 'value'))
+      sl = SOURCE_LOCATION_MESSAGE.merge('otherKey' => 'value')
+      d.emit(DEFAULT_SOURCE_LOCATION_KEY => sl)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'sourceLocation') do |entry|
       assert_equal SOURCE_LOCATION_MESSAGE, entry['sourceLocation'], entry
       fields = get_fields(entry['jsonPayload'])
-      request = get_fields(get_struct(fields['sourceLocation']))
+      request = get_fields(get_struct(fields[DEFAULT_SOURCE_LOCATION_KEY]))
       assert_equal 'value', get_string(request['otherKey']), entry
     end
   end
@@ -992,12 +993,12 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('sourceLocation' => 'a_string')
+      d.emit(DEFAULT_SOURCE_LOCATION_KEY => 'a_string')
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
-      assert_equal 'a_string', get_string(fields['sourceLocation']), entry
+      field = get_fields(entry['jsonPayload'])[DEFAULT_SOURCE_LOCATION_KEY]
+      assert_equal 'a_string', get_string(field), entry
       assert_nil entry['sourceLocation'], entry
     end
   end
@@ -1006,12 +1007,12 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('operation' => OPERATION_MESSAGE)
+      d.emit(DEFAULT_OPERATION_KEY => OPERATION_MESSAGE)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'operation') do |entry|
       assert_equal OPERATION_MESSAGE, entry['operation'], entry
-      assert_nil get_fields(entry['jsonPayload'])['operation'], entry
+      assert_nil get_fields(entry['jsonPayload'])[DEFAULT_OPERATION_KEY], entry
     end
   end
 
@@ -1019,14 +1020,14 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('operation' => OPERATION_MESSAGE.merge(
-        'otherKey' => 'value'))
+      msg = OPERATION_MESSAGE.merge('otherKey' => 'value')
+      d.emit(DEFAULT_OPERATION_KEY => msg)
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'operation') do |entry|
       assert_equal OPERATION_MESSAGE, entry['operation'], entry
       fields = get_fields(entry['jsonPayload'])
-      request = get_fields(get_struct(fields['operation']))
+      request = get_fields(get_struct(fields[DEFAULT_OPERATION_KEY]))
       assert_equal 'value', get_string(request['otherKey']), entry
     end
   end
@@ -1035,12 +1036,12 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('operation' => 'a_string')
+      d.emit(DEFAULT_OPERATION_KEY => 'a_string')
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       fields = get_fields(entry['jsonPayload'])
-      assert_equal 'a_string', get_string(fields['operation']), entry
+      assert_equal 'a_string', get_string(fields[DEFAULT_OPERATION_KEY]), entry
       assert_nil entry['operation'], entry
     end
   end
@@ -1049,13 +1050,13 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('labels' => CUSTOM_LABELS_MESSAGE)
+      d.emit(DEFAULT_LABELS_KEY => CUSTOM_LABELS_MESSAGE)
       d.run
     end
     labels = COMPUTE_PARAMS[:labels].merge(CUSTOM_LABELS_MESSAGE)
     params = COMPUTE_PARAMS.merge(labels: labels)
     verify_log_entries(1, params, 'labels') do |entry|
-      assert_nil get_fields(entry['jsonPayload'])['labels'], entry
+      assert_nil get_fields(entry['jsonPayload'])[DEFAULT_LABELS_KEY], entry
     end
   end
 
@@ -1063,12 +1064,12 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('labels' => { CONFLICTING_LABEL_KEY => 'a_string' })
+      d.emit(DEFAULT_LABELS_KEY => { CONFLICTING_LABEL_KEY => 'a_string' })
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       fields = get_fields(entry['jsonPayload'])
-      labels = get_fields(get_struct(fields['labels']))
+      labels = get_fields(get_struct(fields[DEFAULT_LABELS_KEY]))
       assert_equal('a_string', get_string(labels[CONFLICTING_LABEL_KEY]), entry)
     end
   end
@@ -1077,12 +1078,12 @@ module BaseTest
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
-      d.emit('labels' => 'a_string')
+      d.emit(DEFAULT_LABELS_KEY => 'a_string')
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       fields = get_fields(entry['jsonPayload'])
-      assert_equal 'a_string', get_string(fields['labels']), entry
+      assert_equal 'a_string', get_string(fields[DEFAULT_LABELS_KEY]), entry
     end
   end
 
