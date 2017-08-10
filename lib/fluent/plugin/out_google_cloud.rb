@@ -54,11 +54,14 @@ module Fluent
       }
       CONTAINER_CONSTANTS = {
         service: 'container.googleapis.com',
-        resource_type: 'container'
+        resource_type: 'container',
+        extra_resource_labels: %w(namespace_id pod_id container_name),
+        extra_common_labels: %w(namespace_name pod_name)
       }
       DATAFLOW_CONSTANTS = {
         service: 'dataflow.googleapis.com',
-        resource_type: 'dataflow_step'
+        resource_type: 'dataflow_step',
+        extra_common_labels: %w(region job_name job_id step_id)
       }
       DATAPROC_CONSTANTS = {
         service: 'cluster.dataproc.googleapis.com',
@@ -70,8 +73,10 @@ module Fluent
       }
       ML_CONSTANTS = {
         service: 'ml.googleapis.com',
-        resource_type: 'ml_job'
+        resource_type: 'ml_job',
+        extra_common_labels: %w(job_id task_name)
       }
+      SUB_SERVICE_LIST = [DATAFLOW_CONSTANTS, ML_CONSTANTS]
 
       # Default value for trace_key config param to set "trace" LogEntry field.
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
@@ -275,31 +280,36 @@ module Fluent
       # no longer need to require all these metadata in logging agent. But for
       # now, they are still required.
       #
-      # TODO(qingling128) After Metadata Agent support is added, try extracting
+      # TODO(qingling128): After Metadata Agent support is added, try extracting
       # these info from responses from Metadata Agent first.
       set_required_metadata_variables
 
       # Retrieve monitored resource.
       #
-      # TODO(qingling128) After Metadata Agent support is added, try retrieving
+      # TODO(qingling128): After Metadata Agent support is added, try retrieving
       # the monitored resource from Metadata Agent first.
       @resource = determine_agent_level_monitored_resource_via_legacy
 
-      # Set variables specific to CLoud Functions. This has to be called after
-      # we have determined the resource type. The purpose is to avoid repeated
-      # calls to metadata server.
-      @running_cloudfunctions = false
-      # We only support Cloud Functions logs for GKE right now.
-      if @resource.type == CONTAINER_CONSTANTS[:resource_type] &&
-         fetch_gce_metadata('instance/attributes/').split.include?('gcf_region')
-        # We are not setting resource type as Cloud Functions here because
-        # whether a log entry is truly coming from a Cloud Functions function
-        # depends on the log tag. Only when @running_cloudfunctions is true will
-        # we try to match log tags against Cloud Functions tag regexp when
-        # processing log entries.
-        @running_cloudfunctions = true
-        # Fetch this info and store it to avoid recurring metadata server calls.
-        @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
+      # Set regexp that we should match tags against later on. Using a list
+      # instead of a map to ensure order. For example, tags will be matched
+      # against Cloud Functions first, then GKE.
+      @tag_regexp_list = []
+      if @resource.type == CONTAINER_CONSTANTS[:resource_type]
+        # We only support Cloud Functions logs for GKE right now.
+        if fetch_gce_metadata('instance/attributes/'
+                             ).split.include?('gcf_region')
+          # Fetch this info and store it to avoid recurring
+          # metadata server calls.
+          @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
+          @tag_regexp_list << {
+            tag_regexp: @cloudfunctions_tag_regexp,
+            derived_type: CLOUDFUNCTIONS_CONSTANTS[:resource_type]
+          }
+        end
+        @tag_regexp_list << {
+          tag_regexp: @compiled_kubernetes_tag_regexp,
+          derived_type: CONTAINER_CONSTANTS[:resource_type]
+        }
       end
 
       # Determine the common labels that should be added to all log entries
@@ -651,9 +661,8 @@ module Fluent
     # Set regexp patterns to parse tags and logs.
     def set_regexp_patterns
       @compiled_kubernetes_tag_regexp = nil
-      if @kubernetes_tag_regexp
-        @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp)
-      end
+      @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp) if
+        @kubernetes_tag_regexp
 
       @cloudfunctions_tag_regexp =
         /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
@@ -674,11 +683,11 @@ module Fluent
       set_location
 
       # All metadata parameters must now be set.
-      return if @project_id && @zone && @vm_id
       missing = []
       missing << 'project_id' unless @project_id
       missing << 'zone' unless @zone
       missing << 'vm_id' unless @vm_id
+      return if missing.empty?
       fail Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
         missing.join(' ')
     end
@@ -738,108 +747,106 @@ module Fluent
 
     # Determine agent level monitored resource type.
     def determine_agent_level_monitored_resource_type
-      # EC2 instance.
-      return EC2_CONSTANTS[:resource_type] if
-        @platform == Platform::EC2
+      case @platform
+      when Platform::OTHER
+        # Unknown platform will be defaulted to GCE instance.
+        return COMPUTE_CONSTANTS[:resource_type]
 
-      # Unknown platform will be defaulted to GCE instance..
-      return COMPUTE_CONSTANTS[:resource_type] if
-        @platform == Platform::OTHER
+      when Platform::EC2
+        return EC2_CONSTANTS[:resource_type]
 
-      # Resource types determined by @subservice_name config.
-      # Cloud Dataflow.
-      return DATAFLOW_CONSTANTS[:resource_type] if
-        @subservice_name == DATAFLOW_CONSTANTS[:service]
-      # Cloud ML.
-      return ML_CONSTANTS[:resource_type] if
-        @subservice_name == ML_CONSTANTS[:service]
-      # Default back to GCE if invalid value is detected.
-      return COMPUTE_CONSTANTS[:resource_type] if
-        @subservice_name
-
-      # Resource types determined by @detect_subservice config.
-      if @detect_subservice
-        begin
-          attributes = fetch_gce_metadata('instance/attributes/').split
-        rescue StandardError => e
-          @log.error 'Failed to detect subservice: ', error: e
+      when Platform::GCE
+        # Resource types determined by @subservice_name config.
+        if @subservice_name
+          SUB_SERVICE_LIST.each do |resource_constants|
+            return resource_constants[:resource_type] if
+              @subservice_name == resource_constants[:service]
+          end
+          # Default back to GCE if invalid value is detected.
+          return COMPUTE_CONSTANTS[:resource_type]
         end
-        # GAE app.
-        return APPENGINE_CONSTANTS[:resource_type] if
-          attributes.include?('gae_backend_name') &&
-          attributes.include?('gae_backend_version')
-        # GKE container.
-        return CONTAINER_CONSTANTS[:resource_type] if
-          attributes.include?('kube-env')
-        # Cloud Dataproc.
-        return DATAPROC_CONSTANTS[:resource_type] if
-          attributes.include?('dataproc-cluster-uuid') &&
-          attributes.include?('dataproc-cluster-name')
+
+        # Resource types determined by @detect_subservice config.
+        if @detect_subservice
+          begin
+            attributes = fetch_gce_metadata('instance/attributes/').split
+          rescue StandardError => e
+            @log.error 'Failed to detect subservice: ', error: e
+          end
+          # GAE app.
+          return APPENGINE_CONSTANTS[:resource_type] if
+            attributes.include?('gae_backend_name') &&
+            attributes.include?('gae_backend_version')
+          # GKE container.
+          return CONTAINER_CONSTANTS[:resource_type] if
+            attributes.include?('kube-env')
+          # Cloud Dataproc.
+          return DATAPROC_CONSTANTS[:resource_type] if
+            attributes.include?('dataproc-cluster-uuid') &&
+            attributes.include?('dataproc-cluster-name')
+        end
+
+        # GCE instance.
+        return COMPUTE_CONSTANTS[:resource_type]
       end
-      # GCE instance.
-      COMPUTE_CONSTANTS[:resource_type]
     end
 
     # Determine agent level monitored resource labels based on the resource
     # type. Each resource type has its own labels that need to be filled in.
     def determine_agent_level_monitored_resource_labels(type)
-      labels = {}
-
       case type
-
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]
-        begin
-          labels['module_id'] = fetch_gce_metadata(
-            'instance/attributes/gae_backend_name')
-          labels['version_id'] = fetch_gce_metadata(
+        labels = {
+          'module_id' => fetch_gce_metadata(
+            'instance/attributes/gae_backend_name'),
+          'version_id' => fetch_gce_metadata(
             'instance/attributes/gae_backend_version')
-        rescue StandardError => e
-          @log.error 'Failed to set monitored resource labels for GAE: ',
-                     error: e
-        end
+        }
 
       # GCE.
       when COMPUTE_CONSTANTS[:resource_type]
-        labels['instance_id'] = @vm_id
-        labels['zone'] = @zone
+        labels = {
+          'instance_id' => @vm_id,
+          'zone' => @zone
+        }
 
       # GKE container.
       when CONTAINER_CONSTANTS[:resource_type]
-        labels['instance_id'] = @vm_id
-        labels['zone'] = @zone
-        begin
-          raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
-          kube_env = YAML.load(raw_kube_env)
-          labels['cluster_name'] =
-            cluster_name_from_kube_env(kube_env)
-        rescue StandardError => e
-          @log.error 'Failed to set monitored resource labels for GKE: ',
-                     error: e
-        end
+        raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
+        kube_env = YAML.load(raw_kube_env)
+        labels = {
+          'instance_id' => @vm_id,
+          'zone' => @zone,
+          'cluster_name' => cluster_name_from_kube_env(kube_env)
+        }
 
       # Cloud Dataproc.
       when DATAPROC_CONSTANTS[:resource_type]
-        begin
-          labels['cluster_uuid'] =
-            fetch_gce_metadata('instance/attributes/dataproc-cluster-uuid')
-          labels['cluster_name'] =
-            fetch_gce_metadata('instance/attributes/dataproc-cluster-name')
-          labels['region'] =
+        labels = {
+          'cluster_uuid' =>
+            fetch_gce_metadata('instance/attributes/dataproc-cluster-uuid'),
+          'cluster_name' =>
+            fetch_gce_metadata('instance/attributes/dataproc-cluster-name'),
+          'region' =>
             fetch_gce_metadata('instance/attributes/dataproc-region')
-        rescue StandardError => e
-          @log.error 'Failed to set monitored resource labels for Cloud ' \
-                     'Dataproc: ', error: e
-        end
+        }
 
       # EC2.
       when EC2_CONSTANTS[:resource_type]
-        labels['instance_id'] = @vm_id
-        labels['region'] = @zone
+        labels = {
+          'instance_id' => @vm_id,
+          'region' => @zone
+        }
         labels['aws_account'] = ec2_metadata['accountId'] if
           ec2_metadata.key?('accountId')
       end
-      labels
+
+      labels ||= {}
+      return labels
+    rescue StandardError => e
+      @log.error "Failed to set monitored resource labels for #{type}: ",
+                 error: e
     end
 
     # Determine the common labels that should be added to all log entries
@@ -847,38 +854,30 @@ module Fluent
     def determine_agent_level_common_labels
       labels = {}
       # User can specify labels via config. We want to capture those as well.
-      # TODO: Send instance tags as labels as well?
       labels.merge!(@labels) if @labels
 
       case @resource.type
+      # GAE, Cloud Dataflow, Cloud Dataproc and Cloud ML.
+      when APPENGINE_CONSTANTS[:resource_type],
+           DATAFLOW_CONSTANTS[:resource_type],
+           DATAPROC_CONSTANTS[:resource_type],
+           ML_CONSTANTS[:resource_type]
+        labels.merge!(
+          "#{COMPUTE_CONSTANTS[:service]}/resource_id" => @vm_id,
+          "#{COMPUTE_CONSTANTS[:service]}/resource_name" => @vm_name,
+          "#{COMPUTE_CONSTANTS[:service]}/zone" => @zone
+        )
 
-      # GAE app.
-      when APPENGINE_CONSTANTS[:resource_type]
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] = @vm_id
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
-        labels["#{COMPUTE_CONSTANTS[:service]}/zone"] = @zone
-
-      # GCE and GKE container.
+      # GCE instance and GKE container.
       when COMPUTE_CONSTANTS[:resource_type],
            CONTAINER_CONSTANTS[:resource_type]
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
-
-      # Cloud Dataflow and Cloud Dataproc.
-      when DATAFLOW_CONSTANTS[:resource_type],
-           DATAPROC_CONSTANTS[:resource_type]
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] = @vm_id
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
-        labels["#{COMPUTE_CONSTANTS[:service]}/zone"] = @zone
+        labels.merge!(
+          "#{COMPUTE_CONSTANTS[:service]}/resource_name" => @vm_name)
 
       # EC2.
       when EC2_CONSTANTS[:resource_type]
-        labels["#{EC2_CONSTANTS[:service]}/resource_name"] = @vm_name
-
-      # Cloud ML.
-      when ML_CONSTANTS[:resource_type]
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] = @vm_id
-        labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
-        labels["#{COMPUTE_CONSTANTS[:service]}/zone"] = @zone
+        labels.merge!(
+          "#{EC2_CONSTANTS[:service]}/resource_name" => @vm_name)
       end
       labels
     end
@@ -893,8 +892,8 @@ module Fluent
         determine_group_level_monitored_resource_type(tag)
 
       # Determine group level monitored resource labels and common labels.
-      group_resource_labels, group_common_labels = determine_group_level_labels(
-        group_resource_type, matched_regex_group)
+      group_resource_labels, group_common_labels =
+        determine_group_level_labels(group_resource_type, matched_regex_group)
 
       group_resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
         type: group_resource_type,
@@ -912,71 +911,64 @@ module Fluent
 
     # Determine group level monitored resource type shared by a collection of
     # entries.
-    # Returns the resource type and tag regexp matched groups. The matched
-    # groups only apply to some resource types. Return nil if not applicable or
-    # if there is no match.
+    # Return the resource type and tag regexp matched groups. The matched groups
+    # only apply to some resource types. Return nil if not applicable or if
+    # there is no match.
     def determine_group_level_monitored_resource_type(tag)
-      # Match tag against Cloud Functions format.
-      if @running_cloudfunctions
-        matched_regex_group = @cloudfunctions_tag_regexp.match(tag)
-        return [CLOUDFUNCTIONS_CONSTANTS[:resource_type], matched_regex_group] \
-          if matched_regex_group
+      @tag_regexp_list.each do |rule_pair|
+        matched_regex_group = rule_pair[:tag_regexp].match(tag)
+        return [rule_pair[:derived_type], matched_regex_group] if
+          matched_regex_group
       end
-
-      # Match tag against GKE Container format.
-      if @resource.type == CONTAINER_CONSTANTS[:resource_type] &&
-         @compiled_kubernetes_tag_regexp
-        # Container logs in Kubernetes are tagged based on where they came from,
-        # so we can extract useful metadata from the tag. Do this here to avoid
-        # having to repeat it for each record.
-        matched_regex_group = @compiled_kubernetes_tag_regexp.match(tag)
-        return [@resource.type, matched_regex_group] if matched_regex_group
-      end
-
-      # Otherwise, return the original type.
       [@resource.type, nil]
     end
 
     # Determine group level monitored resource labels and common labels. These
     # labels will be shared by a collection of entries.
-    def determine_group_level_labels(group_resource_type,
-                                     matched_regex_group)
+    def determine_group_level_labels(group_resource_type, matched_regex_group)
       group_resource_labels = @resource.labels.dup
       group_common_labels = @common_labels.dup
 
       case group_resource_type
-
       # Cloud Functions.
       when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        group_resource_labels['region'] = @gcf_region
-        group_resource_labels['function_name'] =
-          decode_cloudfunctions_function_name(
+        group_resource_labels.merge!(
+          'region' => @gcf_region,
+          'function_name' => decode_cloudfunctions_function_name(
             matched_regex_group['encoded_function_name'])
+        )
+
         instance_id = group_resource_labels.delete('instance_id')
-        group_common_labels["#{CONTAINER_CONSTANTS[:service]}/cluster_name"] =
-          group_resource_labels.delete('cluster_name')
-        group_common_labels["#{CONTAINER_CONSTANTS[:service]}/instance_id"] =
-          instance_id
-        group_common_labels["#{COMPUTE_CONSTANTS[:service]}/resource_id"] =
-          instance_id
-        group_common_labels["#{COMPUTE_CONSTANTS[:service]}/zone"] =
-          group_resource_labels.delete('zone')
+        group_common_labels.merge!(
+          "#{CONTAINER_CONSTANTS[:service]}/instance_id" => instance_id,
+          "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
+          "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+            group_resource_labels.delete('cluster_name'),
+          "#{COMPUTE_CONSTANTS[:service]}/zone" =>
+            group_resource_labels.delete('zone')
+        )
 
       # GKE container.
       when CONTAINER_CONSTANTS[:resource_type]
-        if matched_regex_group
-          group_resource_labels['container_name'] =
-            matched_regex_group['container_name']
-          # The kubernetes_tag_regexp is poorly named. 'namespace_name' is in
-          # fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
-          group_resource_labels['namespace_id'] =
-            matched_regex_group['namespace_name']
-          group_resource_labels['pod_id'] =
-            matched_regex_group['pod_name']
-          %w(namespace_name pod_name).each do |field|
-            group_common_labels["#{CONTAINER_CONSTANTS[:service]}/#{field}"] =
-              matched_regex_group[field]
-          end
+        unless matched_regex_group.nil?
+          matched_regex_group_hash = Hash[
+            matched_regex_group.names.zip(matched_regex_group.captures)]
+          group_resource_labels.merge!(
+            delete_and_extract_labels(
+              matched_regex_group_hash, {
+                # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
+                # in fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
+                'container_name' => 'container_name',
+                'namespace_name' => 'namespace_id',
+                'pod_name' => 'pod_id'
+              }, false))
+
+          group_common_labels.merge!(
+            delete_and_extract_labels(
+              matched_regex_group_hash,
+              CONTAINER_CONSTANTS[:extra_common_labels]
+                .map { |l| [l, "#{CONTAINER_CONSTANTS[:service]}/#{l}"] }.to_h,
+              false))
         end
       end
 
@@ -1013,17 +1005,18 @@ module Fluent
         if record.key?('kubernetes')
           resource_labels.merge!(
             delete_and_extract_labels(
-              record['kubernetes'], %w(namespace_id pod_id container_name)
+              record['kubernetes'], CONTAINER_CONSTANTS[:extra_resource_labels]
                 .map { |l| [l, l] }.to_h))
           common_labels.merge!(
             delete_and_extract_labels(
-              record['kubernetes'], %w(namespace_name pod_name)
+              record['kubernetes'], CONTAINER_CONSTANTS[:extra_common_labels]
                 .map { |l| [l, "#{CONTAINER_CONSTANTS[:service]}/#{l}"] }.to_h))
           # Prepend label/ to all user-defined labels' keys.
           if record['kubernetes'].key?('labels')
-            record['kubernetes']['labels'].each do |key, value|
-              common_labels["label/#{key}"] = value
-            end
+            common_labels.merge!(
+              delete_and_extract_labels(
+                record['kubernetes']['labels'], record['kubernetes']['labels']
+                  .map { |key, _| [key, "label/#{key}"] }.to_h))
           end
           # We've explicitly consumed all the fields we care about -- don't
           # litter the log entries with the remaining fields that the kubernetes
@@ -1038,24 +1031,16 @@ module Fluent
       # field as part of the payload.
       common_labels.merge!(delete_and_extract_labels(record, @label_map))
 
-      # Cloud Dataflow.
+      # Cloud Dataflow and Cloud ML.
       # These labels can be set via configuring 'labels' or 'label_map'.
       # Report them as monitored resource labels instead of common labels.
-      if group_resource.type == DATAFLOW_CONSTANTS[:resource_type]
+      # e.g. "dataflow.googleapis.com/job_id" => "job_id"
+      [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
+        next unless group_resource.type == service_constants[:resource_type]
         resource_labels.merge!(
           delete_and_extract_labels(
-            common_labels, %w(region job_name job_id step_id)
-              .map { |l| ["#{DATAFLOW_CONSTANTS[:service]}/#{l}", l] }.to_h))
-      end
-
-      # Cloud ML.
-      # These labels can be set via configuring 'labels' or 'label_map'.
-      # Report them as monitored resource labels instead of common labels.
-      if group_resource.type == ML_CONSTANTS[:resource_type]
-        resource_labels.merge!(
-          delete_and_extract_labels(
-            common_labels, %w(job_id task_name)
-              .map { |l| ["#{ML_CONSTANTS[:service]}/#{l}", l] }.to_h))
+            common_labels, service_constants[:extra_common_labels]
+              .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h))
       end
 
       [resource_labels, common_labels]
@@ -1367,16 +1352,20 @@ module Fluent
     end
 
     # For every original_label => new_label pair in the label_map, delete the
-    # original_label from the original_resource map if it exists, and extract
-    # the value to form a map with the new_label as the key.
-    def delete_and_extract_labels(original_resource, label_map)
+    # original_label from the hash map if it exists, and extract the value to
+    # form a map with the new_label as the key.
+    def delete_and_extract_labels(hash, label_map, should_delete = true)
       return {} if label_map.nil? || !label_map.is_a?(Hash) ||
-                   original_resource.nil? || !original_resource.is_a?(Hash)
+                   hash.nil? || !hash.is_a?(Hash)
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
-        extracted_labels[new_label] = convert_to_utf8(
-          original_resource.delete(original_label).to_s) if
-            original_resource.key?(original_label)
+        next unless hash.key?(original_label)
+        value = if should_delete
+                  hash.delete(original_label)
+                else
+                  hash[original_label]
+                end
+        extracted_labels[new_label] = convert_to_utf8(value.to_s)
       end
     end
 

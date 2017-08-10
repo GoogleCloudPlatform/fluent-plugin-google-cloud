@@ -1268,14 +1268,14 @@ module BaseTest
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
   end
 
-  def verify_container_logs(log_entry_method, expected_params)
+  def verify_container_logs(log_entry_factory, expected_params)
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
     [1, 2, 3, 5, 11, 50].each do |n|
       @logs_sent = []
       setup_logging_stubs do
         d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-        n.times { |i| d.emit(log_entry_method.call(log_entry(i))) }
+        n.times { |i| d.emit(log_entry_factory.call(log_entry(i))) }
         d.run
       end
       verify_log_entries(n, expected_params) do |entry|
