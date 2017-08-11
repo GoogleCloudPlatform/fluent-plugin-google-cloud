@@ -198,6 +198,11 @@ module Fluent
       DEFAULT_SOURCE_LOCATION_KEY
     config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
 
+    # Whether to try to detect if the record is a text log entry with JSON
+    # content that needs to be parsed.
+    config_param :detect_json, :bool, :default => false
+    # TODO(igorpeshansky): Add a parameter for the text field in the payload.
+
     # Whether to try to detect if the VM is owned by a "subservice" such as App
     # Engine of Kubernetes, rather than just associating the logs with the
     # compute service of the platform. This currently only has any effect when
@@ -443,19 +448,20 @@ module Fluent
           entry_common_labels = \
             group_common_labels.merge(extracted_common_labels)
 
-          if entry_resource.type == CONTAINER_CONSTANTS[:resource_type]
+          is_json = false
+          if @detect_json
             # Save the timestamp if available, then clear it out to allow for
             # determining whether we should parse the log or message field.
-            timestamp = record.key?('time') ? record['time'] : nil
-            record.delete('time')
+            timestamp = record.delete('time')
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
-            is_json = false
-            if record.length == 1 && record.key?('log')
-              record_json = parse_json_or_nil(record['log'])
-            end
-            if record.length == 1 && record.key?('message')
-              record_json = parse_json_or_nil(record['message'])
+            record_json = nil
+            if record.length == 1 then
+              ['log', 'message', 'msg'].each do |field|
+                if record.key?(field)
+                  record_json = parse_json_or_nil(record[field])
+                end
+              end
             end
             unless record_json.nil?
               record = record_json
