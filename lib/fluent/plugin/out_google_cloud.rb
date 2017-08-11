@@ -76,7 +76,24 @@ module Fluent
         resource_type: 'ml_job',
         extra_common_labels: %w(job_id task_name)
       }
-      SUB_SERVICE_LIST = [DATAFLOW_CONSTANTS, ML_CONSTANTS]
+
+      # The map between a subservice name and a resource type.
+      SUBSERVICE_NAME_MAP = [DATAFLOW_CONSTANTS, ML_CONSTANTS].map \
+        { |constants| [constants[:service], constants[:resource_type]] }.to_h
+      # Default back to GCE if invalid value is detected.
+      SUBSERVICE_NAME_MAP.default = COMPUTE_CONSTANTS[:resource_type]
+
+      # The map between a resource type and expected subservice attributes.
+      SUBSERVICE_ATTRIBUTE_MAP = {
+        # GAE.
+        APPENGINE_CONSTANTS[:resource_type] =>
+          %w(gae_backend_name gae_backend_version),
+        # GKE.
+        CONTAINER_CONSTANTS[:resource_type] => %w(kube-env),
+        # Cloud Dataproc.
+        DATAPROC_CONSTANTS[:resource_type] =>
+          %w(dataproc-cluster-uuid dataproc-cluster-name)
+      }
 
       # Default value for trace_key config param to set "trace" LogEntry field.
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
@@ -301,15 +318,13 @@ module Fluent
           # Fetch this info and store it to avoid recurring
           # metadata server calls.
           @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
-          @tag_regexp_list << {
-            tag_regexp: @cloudfunctions_tag_regexp,
-            derived_type: CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-          }
+          @tag_regexp_list << [
+            CLOUDFUNCTIONS_CONSTANTS[:resource_type], @cloudfunctions_tag_regexp
+          ]
         end
-        @tag_regexp_list << {
-          tag_regexp: @compiled_kubernetes_tag_regexp,
-          derived_type: CONTAINER_CONSTANTS[:resource_type]
-        }
+        @tag_regexp_list << [
+          CONTAINER_CONSTANTS[:resource_type], @compiled_kubernetes_tag_regexp
+        ]
       end
 
       # Determine the common labels that should be added to all log entries
@@ -757,33 +772,19 @@ module Fluent
 
       when Platform::GCE
         # Resource types determined by @subservice_name config.
-        if @subservice_name
-          SUB_SERVICE_LIST.each do |resource_constants|
-            return resource_constants[:resource_type] if
-              @subservice_name == resource_constants[:service]
-          end
-          # Default back to GCE if invalid value is detected.
-          return COMPUTE_CONSTANTS[:resource_type]
-        end
+        return SUBSERVICE_NAME_MAP[@subservice_name] if @subservice_name
 
         # Resource types determined by @detect_subservice config.
         if @detect_subservice
           begin
             attributes = fetch_gce_metadata('instance/attributes/').split
+            SUBSERVICE_ATTRIBUTE_MAP.map do |resource_type, expected_attributes|
+              return resource_type if
+                expected_attributes.all? { |attr| attributes.include?(attr) }
+            end
           rescue StandardError => e
             @log.error 'Failed to detect subservice: ', error: e
           end
-          # GAE app.
-          return APPENGINE_CONSTANTS[:resource_type] if
-            attributes.include?('gae_backend_name') &&
-            attributes.include?('gae_backend_version')
-          # GKE container.
-          return CONTAINER_CONSTANTS[:resource_type] if
-            attributes.include?('kube-env')
-          # Cloud Dataproc.
-          return DATAPROC_CONSTANTS[:resource_type] if
-            attributes.include?('dataproc-cluster-uuid') &&
-            attributes.include?('dataproc-cluster-name')
         end
 
         # GCE instance.
@@ -797,7 +798,7 @@ module Fluent
       case type
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]
-        labels = {
+        return {
           'module_id' => fetch_gce_metadata(
             'instance/attributes/gae_backend_name'),
           'version_id' => fetch_gce_metadata(
@@ -806,7 +807,7 @@ module Fluent
 
       # GCE.
       when COMPUTE_CONSTANTS[:resource_type]
-        labels = {
+        return {
           'instance_id' => @vm_id,
           'zone' => @zone
         }
@@ -815,7 +816,7 @@ module Fluent
       when CONTAINER_CONSTANTS[:resource_type]
         raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
         kube_env = YAML.load(raw_kube_env)
-        labels = {
+        return {
           'instance_id' => @vm_id,
           'zone' => @zone,
           'cluster_name' => cluster_name_from_kube_env(kube_env)
@@ -823,7 +824,7 @@ module Fluent
 
       # Cloud Dataproc.
       when DATAPROC_CONSTANTS[:resource_type]
-        labels = {
+        return {
           'cluster_uuid' =>
             fetch_gce_metadata('instance/attributes/dataproc-cluster-uuid'),
           'cluster_name' =>
@@ -840,13 +841,14 @@ module Fluent
         }
         labels['aws_account'] = ec2_metadata['accountId'] if
           ec2_metadata.key?('accountId')
+        return labels
       end
 
-      labels ||= {}
-      return labels
+      return {}
     rescue StandardError => e
       @log.error "Failed to set monitored resource labels for #{type}: ",
                  error: e
+      return {}
     end
 
     # Determine the common labels that should be added to all log entries
@@ -915,9 +917,9 @@ module Fluent
     # only apply to some resource types. Return nil if not applicable or if
     # there is no match.
     def determine_group_level_monitored_resource_type(tag)
-      @tag_regexp_list.each do |rule_pair|
-        matched_regex_group = rule_pair[:tag_regexp].match(tag)
-        return [rule_pair[:derived_type], matched_regex_group] if
+      @tag_regexp_list.each do |derived_type, tag_regexp|
+        matched_regex_group = tag_regexp.match(tag)
+        return [derived_type, matched_regex_group] if
           matched_regex_group
       end
       [@resource.type, nil]
@@ -950,9 +952,10 @@ module Fluent
 
       # GKE container.
       when CONTAINER_CONSTANTS[:resource_type]
-        unless matched_regex_group.nil?
-          matched_regex_group_hash = Hash[
-            matched_regex_group.names.zip(matched_regex_group.captures)]
+        if matched_regex_group
+          # We only expect one occurrence of each key in the match group.
+          matched_regex_group_hash =
+            matched_regex_group.names.zip(matched_regex_group.captures).to_h
           group_resource_labels.merge!(
             delete_and_extract_labels(
               matched_regex_group_hash, {
