@@ -324,15 +324,15 @@ module BaseTest
       log_index += 1
       if log_index % 3 == 1
         assert entry.key?('textPayload'),
-          "Entry ##{log_index} #{entry} did not have textPayload"
+               "Entry ##{log_index} #{entry} did not have textPayload"
       else
         assert entry.key?('jsonPayload'),
-          "Entry ##{log_index} #{entry} did not have jsonPayload"
+               "Entry ##{log_index} #{entry} did not have jsonPayload"
         fields = get_fields(entry['jsonPayload'])
-        assert !fields.key?('tag2'), "Did not expect tag2"
-        assert !fields.key?('data'), "Did not expect data"
+        assert !fields.key?('tag2'), 'Did not expect tag2'
+        assert !fields.key?('data'), 'Did not expect data'
         assert !fields.key?('some_null_field'),
-          "Did not expect some_null_field"
+               'Did not expect some_null_field'
       end
     end
   end
@@ -359,18 +359,18 @@ module BaseTest
       log_index += 1
       if log_index == 1
         assert entry.key?('textPayload'),
-          "Entry ##{log_index} #{entry} did not have textPayload"
+               "Entry ##{log_index} #{entry} did not have textPayload"
       elsif log_index < 4
         assert entry.key?('jsonPayload'),
-          "Entry ##{log_index} #{entry} did not have jsonPayload"
+               "Entry ##{log_index} #{entry} did not have jsonPayload"
         fields = get_fields(entry['jsonPayload'])
-        assert !fields.key?('tag2'), "Did not expect tag2"
-        assert !fields.key?('data'), "Did not expect data"
+        assert !fields.key?('tag2'), 'Did not expect tag2'
+        assert !fields.key?('data'), 'Did not expect data'
         assert !fields.key?('some_null_field'),
-          "Did not expect some_null_field"
+               'Did not expect some_null_field'
       else
         assert entry.key?('jsonPayload'),
-          "Entry ##{log_index} #{entry} did not have jsonPayload"
+               "Entry ##{log_index} #{entry} did not have jsonPayload"
         fields = get_fields(entry['jsonPayload'])
         assert_equal 4, fields.size, entry
         assert_equal 'test log entry 0', get_string(fields['msg']), entry
@@ -397,7 +397,7 @@ module BaseTest
     verify_log_entries(3, CONTAINER_FROM_METADATA_PARAMS, '') do |entry|
       log_index += 1
       assert entry.key?('textPayload'),
-        "Entry ##{log_index} #{entry} did not have textPayload"
+             "Entry ##{log_index} #{entry} did not have textPayload"
     end
   end
 
@@ -418,10 +418,10 @@ module BaseTest
       log_index += 1
       if log_index == 1
         assert entry.key?('textPayload'),
-          "Entry ##{log_index} #{entry} did not have textPayload"
+               "Entry ##{log_index} #{entry} did not have textPayload"
       else
         assert entry.key?('jsonPayload'),
-          "Entry ##{log_index} #{entry} did not have jsonPayload"
+               "Entry ##{log_index} #{entry} did not have jsonPayload"
         fields = get_fields(entry['jsonPayload'])
         assert_equal 4, fields.size, entry
         assert_equal 'test log entry 0', get_string(fields['msg']), entry

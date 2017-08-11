@@ -456,8 +456,8 @@ module Fluent
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
             record_json = nil
-            if record.length == 1 then
-              ['log', 'message', 'msg'].each do |field|
+            if record.length == 1
+              %w(log message msg).each do |field|
                 if record.key?(field)
                   record_json = parse_json_or_nil(record[field])
                 end
