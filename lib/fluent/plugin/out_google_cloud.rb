@@ -78,21 +78,23 @@ module Fluent
       }
 
       # The map between a subservice name and a resource type.
-      SUBSERVICE_NAME_MAP = [DATAFLOW_CONSTANTS, ML_CONSTANTS].map \
-        { |constants| [constants[:service], constants[:resource_type]] }.to_h
+      SUBSERVICE_MAP = [
+        APPENGINE_CONSTANTS, CONTAINER_CONSTANTS, DATAFLOW_CONSTANTS,
+        DATAPROC_CONSTANTS, ML_CONSTANTS
+      ].map { |consts| [consts[:service], consts[:resource_type]] }.to_h
       # Default back to GCE if invalid value is detected.
-      SUBSERVICE_NAME_MAP.default = COMPUTE_CONSTANTS[:resource_type]
+      SUBSERVICE_MAP.default = COMPUTE_CONSTANTS[:resource_type]
 
       # The map between a resource type and expected subservice attributes.
-      SUBSERVICE_ATTRIBUTE_MAP = {
+      SUBSERVICE_METADATA_ATTRIBUTES = {
         # GAE.
         APPENGINE_CONSTANTS[:resource_type] =>
-          %w(gae_backend_name gae_backend_version),
+          %w(gae_backend_name gae_backend_version).to_set,
         # GKE.
-        CONTAINER_CONSTANTS[:resource_type] => %w(kube-env),
+        CONTAINER_CONSTANTS[:resource_type] => %w(kube-env).to_set,
         # Cloud Dataproc.
         DATAPROC_CONSTANTS[:resource_type] =>
-          %w(dataproc-cluster-uuid dataproc-cluster-name)
+          %w(dataproc-cluster-uuid dataproc-cluster-name).to_set
       }
 
       # Default value for trace_key config param to set "trace" LogEntry field.
@@ -319,7 +321,8 @@ module Fluent
           # metadata server calls.
           @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
           @tag_regexp_list << [
-            CLOUDFUNCTIONS_CONSTANTS[:resource_type], @cloudfunctions_tag_regexp
+            CLOUDFUNCTIONS_CONSTANTS[:resource_type],
+            @compiled_cloudfunctions_tag_regexp
           ]
         end
         @tag_regexp_list << [
@@ -679,15 +682,16 @@ module Fluent
       @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp) if
         @kubernetes_tag_regexp
 
-      @cloudfunctions_tag_regexp =
+      @compiled_cloudfunctions_tag_regexp =
         /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
-      @cloudfunctions_log_regexp = /^
+      @compiled_cloudfunctions_log_regexp = /^
         (?:\[(?<severity>.)\])?
         \[(?<timestamp>.{24})\]
         (?:\[(?<execution_id>[^\]]+)\])?
         [ ](?<text>.*)$/x
 
-      @http_latency_regexp = /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
+      @compiled_http_latency_regexp =
+        /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
     end
 
     # Set required variables like @project_id, @vm_id, @vm_name and @zone.
@@ -777,10 +781,9 @@ module Fluent
         # Resource types determined by @detect_subservice config.
         if @detect_subservice
           begin
-            attributes = fetch_gce_metadata('instance/attributes/').split
-            SUBSERVICE_ATTRIBUTE_MAP.map do |resource_type, expected_attributes|
-              return resource_type if
-                expected_attributes.all? { |attr| attributes.include?(attr) }
+            attributes = fetch_gce_metadata('instance/attributes/').split.to_set
+            SUBSERVICE_METADATA_ATTRIBUTES.each do |resource_type, expected|
+              return resource_type if attributes.superset?(expected)
             end
           rescue StandardError => e
             @log.error 'Failed to detect subservice: ', error: e
@@ -799,10 +802,10 @@ module Fluent
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]
         return {
-          'module_id' => fetch_gce_metadata(
-            'instance/attributes/gae_backend_name'),
-          'version_id' => fetch_gce_metadata(
-            'instance/attributes/gae_backend_version')
+          'module_id' =>
+            fetch_gce_metadata('instance/attributes/gae_backend_name'),
+          'version_id' =>
+            fetch_gce_metadata('instance/attributes/gae_backend_version')
         }
 
       # GCE.
@@ -844,7 +847,7 @@ module Fluent
         return labels
       end
 
-      return {}
+      {}
     rescue StandardError => e
       @log.error "Failed to set monitored resource labels for #{type}: ",
                  error: e
@@ -954,24 +957,26 @@ module Fluent
       when CONTAINER_CONSTANTS[:resource_type]
         if matched_regex_group
           # We only expect one occurrence of each key in the match group.
-          matched_regex_group_hash =
+          resource_labels_candidates =
             matched_regex_group.names.zip(matched_regex_group.captures).to_h
+          common_labels_candidates =
+            resource_labels_candidates.dup
           group_resource_labels.merge!(
             delete_and_extract_labels(
-              matched_regex_group_hash, {
-                # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
-                # in fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
-                'container_name' => 'container_name',
-                'namespace_name' => 'namespace_id',
-                'pod_name' => 'pod_id'
-              }, false))
+              resource_labels_candidates,
+              # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
+              # in fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
+              # TODO(qingling128): Figure out how to put this map into
+              # constants like CONTAINER_CONSTANTS[:extra_resource_labels].
+              'container_name' => 'container_name',
+              'namespace_name' => 'namespace_id',
+              'pod_name' => 'pod_id'))
 
           group_common_labels.merge!(
             delete_and_extract_labels(
-              matched_regex_group_hash,
+              common_labels_candidates,
               CONTAINER_CONSTANTS[:extra_common_labels]
-                .map { |l| [l, "#{CONTAINER_CONSTANTS[:service]}/#{l}"] }.to_h,
-              false))
+                .map { |l| [l, "#{CONTAINER_CONSTANTS[:service]}/#{l}"] }.to_h))
         end
       end
 
@@ -988,7 +993,7 @@ module Fluent
       if group_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
          record.key?('log')
         @cloudfunctions_log_match =
-          @cloudfunctions_log_regexp.match(record['log'])
+          @compiled_cloudfunctions_log_regexp.match(record['log'])
         common_labels['execution_id'] =
           @cloudfunctions_log_match['execution_id'] if \
             @cloudfunctions_log_match &&
@@ -1212,7 +1217,7 @@ module Fluent
         # Format: whitespace (optional) + integer + point & decimal (optional)
         #       + whitespace (optional) + "s" + whitespace (optional)
         # e.g.: "1.42 s"
-        match = @http_latency_regexp.match(latency)
+        match = @compiled_http_latency_regexp.match(latency)
         if match
           # Split the integer and decimal parts in order to calculate seconds
           # and nanos.
@@ -1357,18 +1362,14 @@ module Fluent
     # For every original_label => new_label pair in the label_map, delete the
     # original_label from the hash map if it exists, and extract the value to
     # form a map with the new_label as the key.
-    def delete_and_extract_labels(hash, label_map, should_delete = true)
+    def delete_and_extract_labels(hash, label_map)
       return {} if label_map.nil? || !label_map.is_a?(Hash) ||
                    hash.nil? || !hash.is_a?(Hash)
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
-        next unless hash.key?(original_label)
-        value = if should_delete
-                  hash.delete(original_label)
-                else
-                  hash[original_label]
-                end
-        extracted_labels[new_label] = convert_to_utf8(value.to_s)
+        extracted_labels[new_label] =
+          convert_to_utf8(hash.delete(original_label).to_s) if
+            hash.key?(original_label)
       end
     end
 
