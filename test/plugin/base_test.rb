@@ -1020,7 +1020,7 @@ module BaseTest
     end
   end
 
-  def test_trace_field_assignment
+  def test_log_entry_trace_field
     setup_gce_metadata_stubs
     message = log_entry(0)
     trace = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
@@ -1029,24 +1029,28 @@ module BaseTest
         # It leaves trace entry field nil if no trace value sent.
         driver_config: APPLICATION_DEFAULT_CONFIG,
         emitted_log: { 'msg' => message },
+        expected_fields: { 'msg' => message },
         expected_trace_value: nil
       },
       {
         # By default, it sets trace via Google-specific key.
         driver_config: APPLICATION_DEFAULT_CONFIG,
         emitted_log: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
+        expected_fields: { 'msg' => message },
         expected_trace_value: trace
       },
       {
         # It allows setting the trace via a custom configured key.
         driver_config: CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
         emitted_log: { 'msg' => message, 'custom_trace_key' => trace },
+        expected_fields: { 'msg' => message },
         expected_trace_value: trace
       },
       {
         # It no longer sets trace by the default key if custom key specified.
         driver_config: CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
         emitted_log: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
+        expected_fields: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
         expected_trace_value: nil
       }
     ].each do |input|
@@ -1058,26 +1062,13 @@ module BaseTest
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
         assert_equal input[:expected_trace_value], entry['trace'], input
+
+        fields = get_fields(entry['jsonPayload'])
+        assert_equal input[:expected_fields].size, fields.size, input
+        fields.each do |key, value|
+          assert_equal input[:expected_fields][key], get_string(value), input
+        end
       end
-    end
-  end
-
-  def test_trace_removal_from_json_payload
-    setup_gce_metadata_stubs
-    message = log_entry(0)
-    trace = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
-
-    setup_logging_stubs do
-      @logs_sent = []
-      d = create_driver(APPLICATION_DEFAULT_CONFIG)
-      d.emit('msg' => message, DEFAULT_TRACE_KEY => trace)
-      d.run
-    end
-
-    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
-      assert_equal 1, fields.size
-      assert_equal message, get_string(fields['msg'])
     end
   end
 
