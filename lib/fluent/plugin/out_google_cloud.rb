@@ -776,7 +776,7 @@ module Fluent
 
       when Platform::GCE
         # Resource types determined by @subservice_name config.
-        return SUBSERVICE_NAME_MAP[@subservice_name] if @subservice_name
+        return SUBSERVICE_MAP[@subservice_name] if @subservice_name
 
         # Resource types determined by @detect_subservice config.
         if @detect_subservice
