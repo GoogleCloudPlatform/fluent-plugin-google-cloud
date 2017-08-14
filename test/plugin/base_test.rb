@@ -1066,34 +1066,18 @@ module BaseTest
     setup_gce_metadata_stubs
     message = log_entry(0)
     trace = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
-    [
-      {
-        # By default, it removes trace value from jsonPayload.
-        driver_config: APPLICATION_DEFAULT_CONFIG,
-        emitted_log: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
-        expected_json_payload: { 'msg' => message }
-      },
-      {
-        # It keeps the trace value in jsonPayload if keep_trace_key set to true.
-        driver_config: CONFIG_KEEP_TRACE_KEY_TRUE,
-        emitted_log: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
-        expected_json_payload: { 'msg' => message, DEFAULT_TRACE_KEY => trace }
-      }
-    ].each do |input|
-      setup_logging_stubs do
-        @logs_sent = []
-        d = create_driver(input[:driver_config])
-        d.emit(input[:emitted_log])
-        d.run
-      end
-      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-        fields = get_fields(entry['jsonPayload'])
-        assert_equal input[:expected_json_payload].size, fields.size, input
-        fields.each do |key, value|
-          assert_equal(input[:expected_json_payload][key],
-                       get_string(value), input)
-        end
-      end
+
+    setup_logging_stubs do
+      @logs_sent = []
+      d = create_driver(APPLICATION_DEFAULT_CONFIG)
+      d.emit('msg' => message, DEFAULT_TRACE_KEY => trace)
+      d.run
+    end
+
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert_equal 1, fields.size
+      assert_equal message, get_string(fields['msg'])
     end
   end
 

@@ -114,8 +114,6 @@ module Fluent
 
     # Set values from JSON payload with this key to the "trace" LogEntry field.
     config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
-    # Whether to also keep the trace key/value in the payload.
-    config_param :keep_trace_key, :bool, :default => false
 
     # Whether to try to detect if the VM is owned by a "subservice" such as App
     # Engine of Kubernetes, rather than just associating the logs with the
@@ -630,11 +628,7 @@ module Fluent
             entry_resource.type, record, entry_common_labels)
 
           # Get fully-qualified trace id for LogEntry "trace" field per config.
-          fq_trace_id = if @keep_trace_key
-                          record[@trace_key]
-                        else
-                          record.delete(@trace_key)
-                        end
+          fq_trace_id = record.delete(@trace_key)
 
           ts_secs = begin
                       Integer ts_secs
