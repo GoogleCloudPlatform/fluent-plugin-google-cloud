@@ -100,7 +100,7 @@ module BaseTest
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
     assert_equal VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
+    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_managed_vm_metadata_loading
@@ -111,9 +111,11 @@ module BaseTest
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
     assert_equal VM_ID, d.instance.vm_id
-    assert_equal true, d.instance.running_on_managed_vm
-    assert_equal MANAGED_VM_BACKEND_NAME, d.instance.gae_backend_name
-    assert_equal MANAGED_VM_BACKEND_VERSION, d.instance.gae_backend_version
+    assert_equal APPENGINE_CONSTANTS[:resource_type], d.instance.resource.type
+    assert_equal MANAGED_VM_BACKEND_NAME,
+                 d.instance.resource.labels['module_id']
+    assert_equal MANAGED_VM_BACKEND_VERSION,
+                 d.instance.resource.labels['version_id']
   end
 
   def test_gce_metadata_does_not_load_when_use_metadata_service_is_false
@@ -123,7 +125,7 @@ module BaseTest
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
-    assert_equal false, d.instance.running_on_managed_vm
+    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_gce_used_when_detect_subservice_is_false
@@ -157,8 +159,6 @@ module BaseTest
       assert_equal parts[1], d.instance.project_id, "Index #{index} failed."
       assert_equal parts[2], d.instance.zone, "Index #{index} failed."
       assert_equal parts[3], d.instance.vm_id, "Index #{index} failed."
-      assert_equal false, d.instance.running_on_managed_vm,
-                   "Index #{index} failed."
     end
   end
 
@@ -707,78 +707,17 @@ module BaseTest
     end
   end
 
-  def test_one_container_log_metadata_from_plugin
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry_with_metadata(log_entry(0)))
-      d.run
-    end
-    verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS) do |entry|
-      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-      assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-    end
+  # Test container logs when metadata is extracted from the 'kubernetes' field
+  # in the log record.
+  def test_container_logs_metadata_from_record
+    verify_container_logs(method(:container_log_entry_with_metadata),
+                          CONTAINER_FROM_METADATA_PARAMS)
   end
 
-  def test_multiple_container_logs_metadata_from_plugin
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    [2, 3, 5, 11, 50].each do |n|
-      @logs_sent = []
-      setup_logging_stubs do
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-        # The test driver doesn't clear its buffer of entries after running, so
-        # do it manually here.
-        d.instance_variable_get('@entries').clear
-        n.times { |i| d.emit(container_log_entry_with_metadata(log_entry(i))) }
-        d.run
-      end
-      verify_log_entries(n, CONTAINER_FROM_METADATA_PARAMS) do |entry|
-        assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
-                     entry
-        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-      end
-    end
-  end
-
-  def test_multiple_container_logs_metadata_from_tag
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    [2, 3, 5, 11, 50].each do |n|
-      @logs_sent = []
-      setup_logging_stubs do
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-        # The test driver doesn't clear its buffer of entries after running, so
-        # do it manually here.
-        d.instance_variable_get('@entries').clear
-        n.times { |i| d.emit(container_log_entry(log_entry(i))) }
-        d.run
-      end
-      verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS) do |entry|
-        assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
-                     entry
-        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-      end
-    end
-  end
-
-  def test_one_container_log_metadata_from_tag
-    setup_gce_metadata_stubs
-    setup_container_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry(log_entry(0)))
-      d.run
-    end
-    verify_log_entries(1, CONTAINER_FROM_TAG_PARAMS) do |entry|
-      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
-      assert_equal CONTAINER_SEVERITY, entry['severity'], entry
-    end
+  # Test container logs when metadata is extracted from the tag.
+  def test_container_logs_metadata_from_tag
+    verify_container_logs(method(:container_log_entry),
+                          CONTAINER_FROM_TAG_PARAMS)
   end
 
   def test_one_container_log_from_tag_stderr
@@ -1307,6 +1246,25 @@ module BaseTest
       end
     end
     assert i == n, "Number of entries #{i} does not match expected number #{n}"
+  end
+
+  def verify_container_logs(log_entry_factory, expected_params)
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    [1, 2, 3, 5, 11, 50].each do |n|
+      @logs_sent = []
+      setup_logging_stubs do
+        d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
+        n.times { |i| d.emit(log_entry_factory.call(log_entry(i))) }
+        d.run
+      end
+      verify_log_entries(n, expected_params) do |entry|
+        assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
+                     entry
+        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+        assert_equal CONTAINER_SEVERITY, entry['severity'], entry
+      end
+    end
   end
 
   # Replace the 'referer' field with nil.
