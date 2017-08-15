@@ -42,7 +42,8 @@ module Fluent
     module Constants
       APPENGINE_CONSTANTS = {
         service: 'appengine.googleapis.com',
-        resource_type: 'gae_app'
+        resource_type: 'gae_app',
+        metadata_attributes: %w(gae_backend_name gae_backend_version).to_set
       }
       CLOUDFUNCTIONS_CONSTANTS = {
         service: 'cloudfunctions.googleapis.com',
@@ -56,7 +57,8 @@ module Fluent
         service: 'container.googleapis.com',
         resource_type: 'container',
         extra_resource_labels: %w(namespace_id pod_id container_name),
-        extra_common_labels: %w(namespace_name pod_name)
+        extra_common_labels: %w(namespace_name pod_name),
+        metadata_attributes: %w(kube-env).to_set
       }
       DATAFLOW_CONSTANTS = {
         service: 'dataflow.googleapis.com',
@@ -65,7 +67,9 @@ module Fluent
       }
       DATAPROC_CONSTANTS = {
         service: 'cluster.dataproc.googleapis.com',
-        resource_type: 'cloud_dataproc_cluster'
+        resource_type: 'cloud_dataproc_cluster',
+        metadata_attributes:
+          %w(dataproc-cluster-uuid dataproc-cluster-name).to_set
       }
       EC2_CONSTANTS = {
         service: 'ec2.amazonaws.com',
@@ -78,24 +82,18 @@ module Fluent
       }
 
       # The map between a subservice name and a resource type.
-      SUBSERVICE_MAP = [
-        APPENGINE_CONSTANTS, CONTAINER_CONSTANTS, DATAFLOW_CONSTANTS,
-        DATAPROC_CONSTANTS, ML_CONSTANTS
-      ].map { |consts| [consts[:service], consts[:resource_type]] }.to_h
+      SUBSERVICE_MAP = \
+        [APPENGINE_CONSTANTS, CONTAINER_CONSTANTS, DATAFLOW_CONSTANTS,
+         DATAPROC_CONSTANTS, ML_CONSTANTS]
+        .map { |consts| [consts[:service], consts[:resource_type]] }.to_h
       # Default back to GCE if invalid value is detected.
       SUBSERVICE_MAP.default = COMPUTE_CONSTANTS[:resource_type]
 
       # The map between a resource type and expected subservice attributes.
-      SUBSERVICE_METADATA_ATTRIBUTES = {
-        # GAE.
-        APPENGINE_CONSTANTS[:resource_type] =>
-          %w(gae_backend_name gae_backend_version).to_set,
-        # GKE.
-        CONTAINER_CONSTANTS[:resource_type] => %w(kube-env).to_set,
-        # Cloud Dataproc.
-        DATAPROC_CONSTANTS[:resource_type] =>
-          %w(dataproc-cluster-uuid dataproc-cluster-name).to_set
-      }
+      SUBSERVICE_METADATA_ATTRIBUTES = \
+        [APPENGINE_CONSTANTS, CONTAINER_CONSTANTS, DATAPROC_CONSTANTS]
+        .map { |consts| [consts[:resource_type], consts[:metadata_attributes]] }
+        .to_h
 
       # Default value for trace_key config param to set "trace" LogEntry field.
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
@@ -678,7 +676,6 @@ module Fluent
 
     # Set regexp patterns to parse tags and logs.
     def set_regexp_patterns
-      @compiled_kubernetes_tag_regexp = nil
       @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp) if
         @kubernetes_tag_regexp
 
