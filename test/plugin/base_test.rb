@@ -859,46 +859,55 @@ module BaseTest
     verify_log_entries(1, DATAPROC_PARAMS, 'jsonPayload')
   end
 
-  def test_http_request_from_record
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => HTTP_REQUEST_MESSAGE)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
-      assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
-    end
-  end
-
-  def test_http_request_partial_from_record
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge(
-        'otherKey' => 'value'))
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-      assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
-      fields = get_fields(entry['jsonPayload'])
-      request = get_fields(get_struct(fields['httpRequest']))
-      assert_equal 'value', get_string(request['otherKey']), entry
+  def test_subfields_from_record
+    SUBFIELDS.each do |payload_key, destination_key, payload_value|
+      @logs_sent = []
+      setup_gce_metadata_stubs
+      setup_logging_stubs do
+        d = create_driver
+        d.emit(payload_key => payload_value)
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, destination_key) do |entry|
+        assert_equal payload_value, entry[destination_key], entry
+        fields = get_fields(entry['jsonPayload'])
+        assert_nil fields[payload_key], entry
+      end
     end
   end
 
-  def test_http_request_when_not_hash
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit('httpRequest' => 'a_string')
-      d.run
+  def test_subfields_partial_from_record
+    SUBFIELDS.each do |payload_key, destination_key, payload_value|
+      @logs_sent = []
+      setup_gce_metadata_stubs
+      setup_logging_stubs do
+        d = create_driver
+        d.emit(payload_key => payload_value.merge('otherKey' => 'value'))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, destination_key) do |entry|
+        assert_equal payload_value, entry[destination_key], entry
+        fields = get_fields(entry['jsonPayload'])
+        request = get_fields(get_struct(fields[payload_key]))
+        assert_equal 'value', get_string(request['otherKey']), entry
+      end
     end
-    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
-      assert_equal 'a_string', get_string(fields['httpRequest']), entry
-      assert_nil entry['httpRequest'], entry
+  end
+
+  def test_subfields_when_not_hash
+    SUBFIELDS.each do |payload_key, destination_key, _|
+      @logs_sent = []
+      setup_gce_metadata_stubs
+      setup_logging_stubs do
+        d = create_driver
+        d.emit(payload_key => 'a_string')
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+        field = get_fields(entry['jsonPayload'])[payload_key]
+        assert_equal 'a_string', get_string(field), entry
+        assert_nil entry[destination_key], entry
+      end
     end
   end
 
@@ -917,7 +926,6 @@ module BaseTest
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
         assert_equal http_request_message_with_absent_referer,
                      entry['httpRequest'], entry
-        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
       end
     end
   end
@@ -954,95 +962,10 @@ module BaseTest
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
         assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
-        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
+        fields = get_fields(entry['jsonPayload'])
+        request = get_fields(get_struct(fields['httpRequest']))
+        assert_equal input, get_string(request['latency']), entry
       end
-    end
-  end
-
-  def test_source_location_from_record
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit(DEFAULT_SOURCE_LOCATION_KEY => SOURCE_LOCATION_MESSAGE)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'sourceLocation') do |entry|
-      assert_equal SOURCE_LOCATION_MESSAGE, entry['sourceLocation'], entry
-      fields = get_fields(entry['jsonPayload'])
-      assert_nil fields[DEFAULT_SOURCE_LOCATION_KEY], entry
-    end
-  end
-
-  def test_source_location_partial_from_record
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      sl = SOURCE_LOCATION_MESSAGE.merge('otherKey' => 'value')
-      d.emit(DEFAULT_SOURCE_LOCATION_KEY => sl)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'sourceLocation') do |entry|
-      assert_equal SOURCE_LOCATION_MESSAGE, entry['sourceLocation'], entry
-      fields = get_fields(entry['jsonPayload'])
-      request = get_fields(get_struct(fields[DEFAULT_SOURCE_LOCATION_KEY]))
-      assert_equal 'value', get_string(request['otherKey']), entry
-    end
-  end
-
-  def test_source_location_when_not_hash
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit(DEFAULT_SOURCE_LOCATION_KEY => 'a_string')
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      field = get_fields(entry['jsonPayload'])[DEFAULT_SOURCE_LOCATION_KEY]
-      assert_equal 'a_string', get_string(field), entry
-      assert_nil entry['sourceLocation'], entry
-    end
-  end
-
-  def test_operation_from_record
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit(DEFAULT_OPERATION_KEY => OPERATION_MESSAGE)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'operation') do |entry|
-      assert_equal OPERATION_MESSAGE, entry['operation'], entry
-      assert_nil get_fields(entry['jsonPayload'])[DEFAULT_OPERATION_KEY], entry
-    end
-  end
-
-  def test_operation_partial_from_record
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      msg = OPERATION_MESSAGE.merge('otherKey' => 'value')
-      d.emit(DEFAULT_OPERATION_KEY => msg)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'operation') do |entry|
-      assert_equal OPERATION_MESSAGE, entry['operation'], entry
-      fields = get_fields(entry['jsonPayload'])
-      request = get_fields(get_struct(fields[DEFAULT_OPERATION_KEY]))
-      assert_equal 'value', get_string(request['otherKey']), entry
-    end
-  end
-
-  def test_operation_when_not_hash
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver
-      d.emit(DEFAULT_OPERATION_KEY => 'a_string')
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
-      assert_equal 'a_string', get_string(fields[DEFAULT_OPERATION_KEY]), entry
-      assert_nil entry['operation'], entry
     end
   end
 

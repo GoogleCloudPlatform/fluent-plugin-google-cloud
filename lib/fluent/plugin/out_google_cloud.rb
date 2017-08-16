@@ -95,12 +95,91 @@ module Fluent
         .map { |consts| [consts[:resource_type], consts[:metadata_attributes]] }
         .to_h
 
-      # Default value for trace_key config param to set the "trace",
+      # Default values for JSON payload keys to set the "trace "trace",
       # "sourceLocation", "operation" and "labels" fields in the LogEntry.
       DEFAULT_LABELS_KEY = 'logging.googleapis.com/labels'
+      DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'
       DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'
       DEFAULT_SOURCE_LOCATION_KEY = 'logging.googleapis.com/sourceLocation'
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
+
+      # Map from each field name under LogEntry to corresponding variables
+      # required to perform field value extraction from the log record.
+      LOG_ENTRY_FIELDS_MAP = {
+        'http_request': {
+          # The config to specify label name for field extraction from record.
+          payload_key: '@http_request_key',
+          # Map from subfields' names to their types.
+          fields: [
+            # subfield key in the payload, destination key, cast lambda (opt)
+            %w(requestMethod request_method),
+            %w(requestUrl request_url),
+            %w(requestSize request_size),
+            ['status', 'status', -> (v, _) { return v.to_i }],
+            ['responseSize', 'response_size', -> (v, _) { return v.to_i }],
+            %w(userAgent user_agent),
+            %w(remoteIp remote_ip),
+            %w(referer referer),
+            %w(cacheHit cache_hit),
+            %w(cacheValidatedWithOriginServer
+               cache_validated_with_origin_server),
+            ['latency', 'latency', lambda do |latency, binding|
+              # Parse latency.
+              # If no valid format is detected, skip setting latency.
+              # Format: whitespace (opt.) + integer + point & decimal (opt.)
+              #       + whitespace (opt.) + "s" + whitespace (opt.)
+              # e.g.: "1.42 s"
+              rx = binding.eval('@compiled_http_latency_regexp')
+              match = rx.match(latency)
+              if match
+                # Split the integer and decimal parts in order to calculate
+                # seconds and nanos.
+                seconds = match['seconds'].to_i
+                nanos = (match['decimal'].to_f * 1000 * 1000 * 1000).round
+                if binding.eval('@use_grpc')
+                  return Google::Protobuf::Duration.new(
+                    seconds: seconds,
+                    nanos: nanos
+                  )
+                else
+                  return {
+                    seconds: seconds,
+                    nanos: nanos
+                  }.delete_if { |_, v| v == 0 }
+                end
+              end
+            end]
+          ],
+          # The grpc version class name.
+          grpc_class: 'Google::Logging::Type::HttpRequest',
+          # The non-grpc version class name.
+          nongrpc_class: 'Google::Apis::LoggingV2beta1::HttpRequest'
+        },
+        'source_location': {
+          payload_key: '@source_location_key',
+          fields: [
+            %w(file file),
+            %w(function function),
+            ['line', 'line', -> (v, _) { return v.to_i }]
+          ],
+          grpc_class: 'Google::Logging::V2::LogEntrySourceLocation',
+          nongrpc_class: 'Google::Apis::LoggingV2beta1::LogEntrySourceLocation'
+        },
+        'operation': {
+          payload_key: '@operation_key',
+          fields: [
+            %w(id id),
+            %w(producer producer),
+            ['first', 'first',
+             -> (v, _) { return [true, 'true', 1].include?(v) }],
+            ['last', 'last',
+             -> (v, _) { return [true, 'true', 1].include?(v) }]
+          ],
+          grpc_class: 'Google::Logging::V2::LogEntryOperation',
+          # The non-rpc version class name.
+          nongrpc_class: 'Google::Apis::LoggingV2beta1::LogEntryOperation'
+        }
+      }
     end
 
     include self::Constants
@@ -140,6 +219,8 @@ module Fluent
 
     # Map keys from a JSON payload to corresponding LogEntry fields.
     config_param :labels_key, :string, :default => DEFAULT_LABELS_KEY
+    config_param :http_request_key, :string, :default =>
+      DEFAULT_HTTP_REQUEST_KEY
     config_param :operation_key, :string, :default => DEFAULT_OPERATION_KEY
     config_param :source_location_key, :string, :default =>
       DEFAULT_SOURCE_LOCATION_KEY
@@ -419,9 +500,6 @@ module Fluent
           severity = compute_severity(
             entry_resource.type, record, entry_common_labels)
 
-          # Get fully-qualified trace id for LogEntry "trace" field per config.
-          fq_trace_id = record.delete(@trace_key)
-
           ts_secs = begin
                       Integer ts_secs
                     rescue ArgumentError, TypeError
@@ -441,7 +519,6 @@ module Fluent
               ),
               severity: grpc_severity(severity)
             )
-            entry.trace = fq_trace_id if fq_trace_id
             # If "seconds" is null or not an integer, we will omit the timestamp
             # field and defer the decision on how to handle it to the downstream
             # Logging API. If "nanos" is null or not an integer, it will be set
@@ -453,11 +530,6 @@ module Fluent
                 nanos: ts_nanos
               )
             end
-            set_http_request(record, entry)
-            set_source_location(record, entry)
-            set_operation(record, entry)
-            set_labels(record, entry)
-            set_payload_grpc(entry_resource.type, record, entry, is_json)
           else
             # Remove the labels if we didn't populate them with anything.
             entry_resource.labels = nil if entry_resource.labels.empty?
@@ -470,11 +542,20 @@ module Fluent
                 nanos: ts_nanos
               }
             )
-            entry.trace = fq_trace_id if fq_trace_id
-            set_http_request(record, entry)
-            set_source_location(record, entry)
-            set_operation(record, entry)
-            set_labels(record, entry)
+          end
+
+          # Get fully-qualified trace id for LogEntry "trace" field per config.
+          fq_trace_id = record.delete(@trace_key)
+          entry.trace = fq_trace_id if fq_trace_id
+
+          LOG_ENTRY_FIELDS_MAP.each do |field_name, cfg|
+            set_log_entry_field(record, entry, field_name, cfg)
+          end
+          set_labels(record, entry)
+
+          if @use_grpc
+            set_payload_grpc(entry_resource.type, record, entry, is_json)
+          else
             set_payload(entry_resource.type, record, entry, is_json)
           end
 
@@ -1189,114 +1270,42 @@ module Fluent
       end
     end
 
-    NANOS_IN_A_SECOND = 1000 * 1000 * 1000
-
-    def set_http_request(record, entry)
-      return nil unless record['httpRequest'].is_a?(Hash)
-      input = record['httpRequest']
-      if @use_grpc
-        output = Google::Logging::Type::HttpRequest.new
-      else
-        output = Google::Apis::LoggingV2beta1::HttpRequest.new
-      end
-      # We need to delete each field from 'httpRequest' even if its value is
-      # nil. However we do not want to assign this nil value to the constructed
-      # json or proto.
-      request_method = input.delete('requestMethod')
-      output.request_method = request_method unless request_method.nil?
-      request_url = input.delete('requestUrl')
-      output.request_url = request_url unless request_url.nil?
-      request_size = input.delete('requestSize')
-      output.request_size = request_size.to_i unless request_size.nil?
-      status = input.delete('status')
-      output.status = status.to_i unless status.nil?
-      response_size = input.delete('responseSize')
-      output.response_size = response_size.to_i unless response_size.nil?
-      user_agent = input.delete('userAgent')
-      output.user_agent = user_agent unless user_agent.nil?
-      remote_ip = input.delete('remoteIp')
-      output.remote_ip = remote_ip unless remote_ip.nil?
-      referer = input.delete('referer')
-      output.referer = referer unless referer.nil?
-      cache_hit = input.delete('cacheHit')
-      output.cache_hit = cache_hit unless cache_hit.nil?
-      cache_validated_with_origin_server = \
-        input.delete('cacheValidatedWithOriginServer')
-      output.cache_validated_with_origin_server = \
-        cache_validated_with_origin_server \
-        unless cache_validated_with_origin_server.nil?
-
-      latency = input.delete('latency')
-      unless latency.nil?
-        # Parse latency. If no valid format is detected, skip setting latency.
-        # Format: whitespace (optional) + integer + point & decimal (optional)
-        #       + whitespace (optional) + "s" + whitespace (optional)
-        # e.g.: "1.42 s"
-        match = @compiled_http_latency_regexp.match(latency)
-        if match
-          # Split the integer and decimal parts in order to calculate seconds
-          # and nanos.
-          latency_seconds = match['seconds'].to_i
-          latency_nanos = (match['decimal'].to_f * NANOS_IN_A_SECOND).round
-          if @use_grpc
-            output.latency = Google::Protobuf::Duration.new(
-              seconds: latency_seconds,
-              nanos: latency_nanos
-            )
-          else
-            output.latency = {
-              seconds: latency_seconds,
-              nanos: latency_nanos
-            }.delete_if { |_, v| v == 0 }
+    def set_log_entry_field(record, entry, field_name, cfg)
+      payload_key = instance_variable_get(cfg[:payload_key])
+      return unless record[payload_key].is_a?(Hash)
+      subfields = {}
+      cfg[:fields].each do |key, destination_key, cast_fn|
+        value = record[payload_key][key]
+        next if value.nil?
+        unless cast_fn.nil?
+          begin
+            value = cast_fn.call(value, binding)
+          rescue TypeError
+            record[payload_key][key] = value
+            next
           end
         end
+        next if value.nil?
+        record[payload_key].delete(key)
+        subfields[destination_key] = value
       end
 
-      record.delete('httpRequest') if input.empty?
-      entry.http_request = output
-    end
+      return unless subfields
 
-    def set_source_location(record, entry)
-      return nil unless record[@source_location_key].is_a?(Hash)
-      input = record[@source_location_key]
       if @use_grpc
-        output = Google::Logging::V2::LogEntrySourceLocation.new
+        output = Object.const_get(cfg[:grpc_class]).new
       else
-        output = Google::Apis::LoggingV2beta1::LogEntrySourceLocation.new
+        output = Object.const_get(cfg[:nongrpc_class]).new
+      end
+      subfields.each do |k, v|
+        output.send("#{k}=", v)
       end
 
-      file = input.delete('file')
-      output.file = file unless file.nil?
-      function = input.delete('function')
-      output.function = function unless function.nil?
-      line = input.delete('line')
-      output.line = line unless line.nil?
+      record.delete(payload_key) if record[payload_key].empty?
 
-      record.delete(@source_location_key) if input.empty?
-      entry.source_location = output
-    end
-
-    def set_operation(record, entry)
-      return nil unless record[@operation_key].is_a?(Hash)
-
-      input = record[@operation_key]
-      if @use_grpc
-        output = Google::Logging::V2::LogEntryOperation.new
-      else
-        output = Google::Apis::LoggingV2beta1::LogEntryOperation.new
-      end
-
-      id = input.delete('id')
-      output.id = id unless id.nil?
-      producer = input.delete('producer')
-      output.producer = producer unless producer.nil?
-      first = input.delete('first')
-      output.first = first unless first.nil?
-      last = input.delete('last')
-      output.last = last unless last.nil?
-
-      record.delete(@operation_key) if input.empty?
-      entry.operation = output
+      entry.send("#{field_name}=", output)
+    rescue StandardError => err
+      @log.error "Failed to set log entry field for #{field_name}.", err
     end
 
     def set_labels(record, entry)
