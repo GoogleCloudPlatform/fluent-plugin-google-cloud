@@ -115,40 +115,15 @@ module Fluent
             %w(requestMethod request_method),
             %w(requestUrl request_url),
             %w(requestSize request_size),
-            ['status', 'status', -> (v, _) { return v.to_i }],
-            ['responseSize', 'response_size', -> (v, _) { return v.to_i }],
+            %w(status status parse_int),
+            %w(responseSize response_size parse_int),
             %w(userAgent user_agent),
             %w(remoteIp remote_ip),
             %w(referer referer),
             %w(cacheHit cache_hit),
             %w(cacheValidatedWithOriginServer
                cache_validated_with_origin_server),
-            ['latency', 'latency', lambda do |latency, binding|
-              # Parse latency.
-              # If no valid format is detected, skip setting latency.
-              # Format: whitespace (opt.) + integer + point & decimal (opt.)
-              #       + whitespace (opt.) + "s" + whitespace (opt.)
-              # e.g.: "1.42 s"
-              rx = binding.eval('@compiled_http_latency_regexp')
-              match = rx.match(latency)
-              if match
-                # Split the integer and decimal parts in order to calculate
-                # seconds and nanos.
-                seconds = match['seconds'].to_i
-                nanos = (match['decimal'].to_f * 1000 * 1000 * 1000).round
-                if binding.eval('@use_grpc')
-                  return Google::Protobuf::Duration.new(
-                    seconds: seconds,
-                    nanos: nanos
-                  )
-                else
-                  return {
-                    seconds: seconds,
-                    nanos: nanos
-                  }.delete_if { |_, v| v == 0 }
-                end
-              end
-            end]
+            %w(latency latency parse_latency)
           ],
           # The grpc version class name.
           grpc_class: 'Google::Logging::Type::HttpRequest',
@@ -160,7 +135,7 @@ module Fluent
           fields: [
             %w(file file),
             %w(function function),
-            ['line', 'line', -> (v, _) { return v.to_i }]
+            %w(line line parse_int)
           ],
           grpc_class: 'Google::Logging::V2::LogEntrySourceLocation',
           nongrpc_class: 'Google::Apis::LoggingV2beta1::LogEntrySourceLocation'
@@ -170,10 +145,8 @@ module Fluent
           fields: [
             %w(id id),
             %w(producer producer),
-            ['first', 'first',
-             -> (v, _) { return [true, 'true', 1].include?(v) }],
-            ['last', 'last',
-             -> (v, _) { return [true, 'true', 1].include?(v) }]
+            %w(first first parse_bool),
+            %w(last last parse_bool)
           ],
           grpc_class: 'Google::Logging::V2::LogEntryOperation',
           # The non-rpc version class name.
@@ -1279,7 +1252,7 @@ module Fluent
         next if value.nil?
         unless cast_fn.nil?
           begin
-            value = cast_fn.call(value, binding)
+            value = send(cast_fn, value)
           rescue TypeError
             record[payload_key][key] = value
             next
@@ -1414,6 +1387,40 @@ module Fluent
         return GRPC_SEVERITY_MAPPING[severity]
       end
       severity
+    end
+
+    def parse_int(v)
+      v.to_i
+    end
+
+    def parse_bool(v)
+      [true, 'true', 1].include?(v)
+    end
+
+    def parse_latency(latency)
+      # Parse latency.
+      # If no valid format is detected, skip setting latency.
+      # Format: whitespace (opt.) + integer + point & decimal (opt.)
+      #       + whitespace (opt.) + "s" + whitespace (opt.)
+      # e.g.: "1.42 s"
+      match = @compiled_http_latency_regexp.match(latency)
+      return unless match
+
+      # Split the integer and decimal parts in order to calculate
+      # seconds and nanos.
+      seconds = match['seconds'].to_i
+      nanos = (match['decimal'].to_f * 1000 * 1000 * 1000).round
+      if @use_grpc
+        return Google::Protobuf::Duration.new(
+          seconds: seconds,
+          nanos: nanos
+        )
+      else
+        return {
+          seconds: seconds,
+          nanos: nanos
+        }.delete_if { |_, v| v == 0 }
+      end
     end
 
     def decode_cloudfunctions_function_name(function_name)
