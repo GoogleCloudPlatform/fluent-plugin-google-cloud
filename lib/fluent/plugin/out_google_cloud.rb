@@ -106,7 +106,7 @@ module Fluent
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
       LOG_ENTRY_FIELDS_MAP = {
-        'http_request': {
+        'http_request' => {
           # The config to specify label name for field extraction from record.
           payload_key: '@http_request_key',
           # Map from subfields' names to their types.
@@ -130,7 +130,7 @@ module Fluent
           # The non-grpc version class name.
           nongrpc_class: 'Google::Apis::LoggingV2beta1::HttpRequest'
         },
-        'source_location': {
+        'source_location' => {
           payload_key: '@source_location_key',
           fields: [
             %w(file file),
@@ -140,7 +140,7 @@ module Fluent
           grpc_class: 'Google::Logging::V2::LogEntrySourceLocation',
           nongrpc_class: 'Google::Apis::LoggingV2beta1::LogEntrySourceLocation'
         },
-        'operation': {
+        'operation' => {
           payload_key: '@operation_key',
           fields: [
             %w(id id),
