@@ -97,61 +97,62 @@ module Fluent
 
       # Default values for JSON payload keys to set the "trace "trace",
       # "sourceLocation", "operation" and "labels" fields in the LogEntry.
-      DEFAULT_LABELS_KEY = 'logging.googleapis.com/labels'
+      DEFAULT_PAYLOAD_KEY_PREFIX = 'logging.googleapis.com'
+      DEFAULT_LABELS_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/labels"
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'
-      DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'
-      DEFAULT_SOURCE_LOCATION_KEY = 'logging.googleapis.com/sourceLocation'
-      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
+      DEFAULT_OPERATION_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/operation"
+      DEFAULT_SOURCE_LOCATION_KEY =
+        "#{DEFAULT_PAYLOAD_KEY_PREFIX}/sourceLocation"
+      DEFAULT_TRACE_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/trace"
 
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
       LOG_ENTRY_FIELDS_MAP = {
-        'http_request' => {
+        'http_request' => [
           # The config to specify label name for field extraction from record.
-          payload_key: '@http_request_key',
+          '@http_request_key',
           # Map from subfields' names to their types.
-          fields: [
+          [
             # subfield key in the payload, destination key, cast lambda (opt)
-            %w(requestMethod request_method),
-            %w(requestUrl request_url),
-            %w(requestSize request_size),
+            %w(requestMethod request_method parse_string),
+            %w(requestUrl request_url parse_string),
+            %w(requestSize request_size parse_int),
             %w(status status parse_int),
             %w(responseSize response_size parse_int),
-            %w(userAgent user_agent),
-            %w(remoteIp remote_ip),
-            %w(referer referer),
-            %w(cacheHit cache_hit),
+            %w(userAgent user_agent parse_string),
+            %w(remoteIp remote_ip parse_string),
+            %w(referer referer parse_string),
+            %w(cacheHit cache_hit parse_bool),
             %w(cacheValidatedWithOriginServer
-               cache_validated_with_origin_server),
+               cache_validated_with_origin_server parse_bool),
             %w(latency latency parse_latency)
           ],
           # The grpc version class name.
-          grpc_class: 'Google::Logging::Type::HttpRequest',
+          'Google::Logging::Type::HttpRequest',
           # The non-grpc version class name.
-          nongrpc_class: 'Google::Apis::LoggingV2beta1::HttpRequest'
-        },
-        'source_location' => {
-          payload_key: '@source_location_key',
-          fields: [
-            %w(file file),
-            %w(function function),
+          'Google::Apis::LoggingV2beta1::HttpRequest'
+        ],
+        'source_location' => [
+          '@source_location_key',
+          [
+            %w(file file parse_string),
+            %w(function function parse_string),
             %w(line line parse_int)
           ],
-          grpc_class: 'Google::Logging::V2::LogEntrySourceLocation',
-          nongrpc_class: 'Google::Apis::LoggingV2beta1::LogEntrySourceLocation'
-        },
-        'operation' => {
-          payload_key: '@operation_key',
-          fields: [
-            %w(id id),
-            %w(producer producer),
+          'Google::Logging::V2::LogEntrySourceLocation',
+          'Google::Apis::LoggingV2beta1::LogEntrySourceLocation'
+        ],
+        'operation' => [
+          '@operation_key',
+          [
+            %w(id id parse_string),
+            %w(producer producer parse_string),
             %w(first first parse_bool),
             %w(last last parse_bool)
           ],
-          grpc_class: 'Google::Logging::V2::LogEntryOperation',
-          # The non-rpc version class name.
-          nongrpc_class: 'Google::Apis::LoggingV2beta1::LogEntryOperation'
-        }
+          'Google::Logging::V2::LogEntryOperation',
+          'Google::Apis::LoggingV2beta1::LogEntryOperation'
+        ]
       }
     end
 
@@ -521,9 +522,7 @@ module Fluent
           fq_trace_id = record.delete(@trace_key)
           entry.trace = fq_trace_id if fq_trace_id
 
-          LOG_ENTRY_FIELDS_MAP.each do |field_name, cfg|
-            set_log_entry_field(record, entry, field_name, cfg)
-          end
+          set_log_entry_field(record, entry)
           set_labels(record, entry)
 
           if @use_grpc
@@ -1243,42 +1242,45 @@ module Fluent
       end
     end
 
-    def set_log_entry_field(record, entry, field_name, cfg)
-      payload_key = instance_variable_get(cfg[:payload_key])
-      return unless record[payload_key].is_a?(Hash)
-      subfields = {}
-      cfg[:fields].each do |key, destination_key, cast_fn|
-        value = record[payload_key][key]
-        next if value.nil?
-        unless cast_fn.nil?
-          begin
-            value = send(cast_fn, value)
-          rescue TypeError
-            record[payload_key][key] = value
-            next
+    def set_log_entry_field(record, entry)
+      LOG_ENTRY_FIELDS_MAP.each do |field_name, config|
+        payload_key, subfields, grpc_class, non_grpc_class = config
+        begin
+          payload_key = instance_variable_get(payload_key)
+          fields = record[payload_key]
+          next unless fields.is_a?(Hash)
+
+          extracted_subfields = subfields.each_with_object({}) \
+            do |(original_key, destination_key, cast_fn), extracted_fields|
+            value = fields.delete(original_key)
+            next if value.nil?
+            begin
+              casted_value = send(cast_fn, value)
+            rescue TypeError
+              next
+            end
+            next if casted_value.nil?
+            extracted_fields[destination_key] = casted_value
           end
+
+          next unless extracted_subfields
+
+          if @use_grpc
+            output = Object.const_get(grpc_class).new
+          else
+            output = Object.const_get(non_grpc_class).new
+          end
+          extracted_subfields.each do |key, value|
+            output.send("#{key}=", value)
+          end
+
+          record.delete(payload_key) if record[payload_key].empty?
+
+          entry.send("#{field_name}=", output)
+        rescue StandardError => err
+          @log.error "Failed to set log entry field for #{field_name}.", err
         end
-        next if value.nil?
-        record[payload_key].delete(key)
-        subfields[destination_key] = value
       end
-
-      return unless subfields
-
-      if @use_grpc
-        output = Object.const_get(cfg[:grpc_class]).new
-      else
-        output = Object.const_get(cfg[:nongrpc_class]).new
-      end
-      subfields.each do |k, v|
-        output.send("#{k}=", v)
-      end
-
-      record.delete(payload_key) if record[payload_key].empty?
-
-      entry.send("#{field_name}=", output)
-    rescue StandardError => err
-      @log.error "Failed to set log entry field for #{field_name}.", err
     end
 
     def set_labels(record, entry)
@@ -1389,22 +1391,27 @@ module Fluent
       severity
     end
 
-    def parse_int(v)
-      v.to_i
+    def parse_string(value)
+      value.to_s
     end
 
-    def parse_bool(v)
-      [true, 'true', 1].include?(v)
+    def parse_int(value)
+      value.to_i
+    end
+
+    def parse_bool(value)
+      [true, 'true', 1].include?(value)
     end
 
     def parse_latency(latency)
       # Parse latency.
-      # If no valid format is detected, skip setting latency.
+      # If no valid format is detected, return nil so we can later skip
+      # setting latency.
       # Format: whitespace (opt.) + integer + point & decimal (opt.)
       #       + whitespace (opt.) + "s" + whitespace (opt.)
       # e.g.: "1.42 s"
       match = @compiled_http_latency_regexp.match(latency)
-      return unless match
+      return nil unless match
 
       # Split the integer and decimal parts in order to calculate
       # seconds and nanos.

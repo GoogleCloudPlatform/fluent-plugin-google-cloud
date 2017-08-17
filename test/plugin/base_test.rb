@@ -860,7 +860,8 @@ module BaseTest
   end
 
   def test_subfields_from_record
-    SUBFIELDS.each do |payload_key, destination_key, payload_value|
+    LOG_ENTRY_SUBFIELDS_PARAMS.each do |args|
+      payload_key, destination_key, payload_value = args
       @logs_sent = []
       setup_gce_metadata_stubs
       setup_logging_stubs do
@@ -877,7 +878,8 @@ module BaseTest
   end
 
   def test_subfields_partial_from_record
-    SUBFIELDS.each do |payload_key, destination_key, payload_value|
+    LOG_ENTRY_SUBFIELDS_PARAMS.each do |args|
+      payload_key, destination_key, payload_value = args
       @logs_sent = []
       setup_gce_metadata_stubs
       setup_logging_stubs do
@@ -895,7 +897,7 @@ module BaseTest
   end
 
   def test_subfields_when_not_hash
-    SUBFIELDS.each do |payload_key, destination_key, _|
+    LOG_ENTRY_SUBFIELDS_PARAMS.each do |payload_key, destination_key, _|
       @logs_sent = []
       setup_gce_metadata_stubs
       setup_logging_stubs do
@@ -926,6 +928,7 @@ module BaseTest
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
         assert_equal http_request_message_with_absent_referer,
                      entry['httpRequest'], entry
+        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
       end
     end
   end
@@ -962,9 +965,7 @@ module BaseTest
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
         assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
-        fields = get_fields(entry['jsonPayload'])
-        request = get_fields(get_struct(fields['httpRequest']))
-        assert_equal input, get_string(request['latency']), entry
+        assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
       end
     end
   end

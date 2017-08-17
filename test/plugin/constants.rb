@@ -430,19 +430,23 @@ module Constants
     'cacheValidatedWithOriginServer' => true
   }
 
-  SUBFIELDS = [
+  SOURCE_LOCATION_MESSAGE = {
+    'file' => 'source/file',
+    'function' => 'my_function',
+    'line' => 18
+  }
+
+  OPERATION_MESSAGE = {
+    'id' => 'op_id',
+    'producer' => 'my/app',
+    'last' => true
+  }
+
+  LOG_ENTRY_SUBFIELDS_PARAMS = [
     # payload key, destination key, payload value
     [DEFAULT_HTTP_REQUEST_KEY, 'httpRequest', HTTP_REQUEST_MESSAGE],
-    [DEFAULT_SOURCE_LOCATION_KEY, 'sourceLocation', {
-      'file' => 'source/file',
-      'function' => 'my_function',
-      'line' => 18
-    }],
-    [DEFAULT_OPERATION_KEY, 'operation', {
-      'id' => 'op_id',
-      'producer' => 'my/app',
-      'last' => true
-    }]
+    [DEFAULT_SOURCE_LOCATION_KEY, 'sourceLocation', SOURCE_LOCATION_MESSAGE],
+    [DEFAULT_OPERATION_KEY, 'operation', OPERATION_MESSAGE]
   ]
 
   CUSTOM_LABELS_MESSAGE = {
