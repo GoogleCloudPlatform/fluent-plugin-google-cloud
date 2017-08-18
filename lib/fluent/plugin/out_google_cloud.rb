@@ -522,7 +522,7 @@ module Fluent
           fq_trace_id = record.delete(@trace_key)
           entry.trace = fq_trace_id if fq_trace_id
 
-          set_log_entry_field(record, entry)
+          set_log_entry_fields(record, entry)
           set_labels(record, entry)
 
           if @use_grpc
@@ -1242,7 +1242,7 @@ module Fluent
       end
     end
 
-    def set_log_entry_field(record, entry)
+    def set_log_entry_fields(record, entry)
       LOG_ENTRY_FIELDS_MAP.each do |field_name, config|
         payload_key, subfields, grpc_class, non_grpc_class = config
         begin
@@ -1257,6 +1257,11 @@ module Fluent
             begin
               casted_value = send(cast_fn, value)
             rescue TypeError
+              log = <<-eos
+                Failed to #{cast_fn} for {#field_name}.#{original_key}
+                with value #{value.inspect}.
+              eos
+              @log.error log, err
               next
             end
             next if casted_value.nil?
@@ -1274,7 +1279,7 @@ module Fluent
             output.send("#{key}=", value)
           end
 
-          record.delete(payload_key) if record[payload_key].empty?
+          record.delete(payload_key) if fields.empty?
 
           entry.send("#{field_name}=", output)
         rescue StandardError => err
@@ -1284,16 +1289,17 @@ module Fluent
     end
 
     def set_labels(record, entry)
-      return nil unless record[@labels_key].is_a?(Hash)
+      record_labels = record[@labels_key]
+      return nil unless record_labels.is_a?(Hash)
 
-      record[@labels_key].each do |key, value|
+      record_labels.each do |key, value|
         unless entry.labels.key?(key)
-          record[@labels_key].delete(key)
+          record_labels.delete(key)
           entry.labels[key] = value
         end
       end
 
-      record.delete(@labels_key) if record[@labels_key].empty?
+      record.delete(@labels_key) if record_labels.empty?
     end
 
     # Values permitted by the API for 'severity' (which is an enum).

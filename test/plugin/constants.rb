@@ -442,12 +442,12 @@ module Constants
     'last' => true
   }
 
-  LOG_ENTRY_SUBFIELDS_PARAMS = [
+  LOG_ENTRY_SUBFIELDS_PARAMS = {
     # payload key, destination key, payload value
-    [DEFAULT_HTTP_REQUEST_KEY, 'httpRequest', HTTP_REQUEST_MESSAGE],
-    [DEFAULT_SOURCE_LOCATION_KEY, 'sourceLocation', SOURCE_LOCATION_MESSAGE],
-    [DEFAULT_OPERATION_KEY, 'operation', OPERATION_MESSAGE]
-  ]
+    DEFAULT_HTTP_REQUEST_KEY => ['httpRequest', HTTP_REQUEST_MESSAGE],
+    DEFAULT_SOURCE_LOCATION_KEY => ['sourceLocation', SOURCE_LOCATION_MESSAGE],
+    DEFAULT_OPERATION_KEY => ['operation', OPERATION_MESSAGE]
+  }
 
   CUSTOM_LABELS_MESSAGE = {
     'customKey' => 'value'
