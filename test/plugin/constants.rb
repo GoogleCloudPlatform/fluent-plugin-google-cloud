@@ -242,7 +242,7 @@ module Constants
 
   CONTAINER_FROM_METADATA_PARAMS = {
     resource: {
-      type: CONTAINER_CONSTANTS[:resource_type],
+      type: GKE_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_ID,
@@ -255,10 +255,10 @@ module Constants
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_CONSTANTS[:service]}/namespace_name" =>
+      "#{GKE_CONSTANTS[:service]}/namespace_name" =>
         CONTAINER_NAMESPACE_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
+      "#{GKE_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
+      "#{GKE_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
       "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
@@ -268,7 +268,7 @@ module Constants
   # namespace and pod names.
   CONTAINER_FROM_TAG_PARAMS = {
     resource: {
-      type: CONTAINER_CONSTANTS[:resource_type],
+      type: GKE_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_NAME,
@@ -281,10 +281,10 @@ module Constants
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_CONSTANTS[:service]}/namespace_name" =>
+      "#{GKE_CONSTANTS[:service]}/namespace_name" =>
         CONTAINER_NAMESPACE_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
+      "#{GKE_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
+      "#{GKE_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }
@@ -305,8 +305,8 @@ module Constants
     project_id: PROJECT_ID,
     labels: {
       'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
-      "#{CONTAINER_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
+      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
         CLOUDFUNCTIONS_CLUSTER_NAME,
       "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
@@ -325,8 +325,8 @@ module Constants
     log_name: 'cloud-functions',
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
+      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
         CLOUDFUNCTIONS_CLUSTER_NAME,
       "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,

@@ -53,7 +53,7 @@ module Fluent
         service: 'compute.googleapis.com',
         resource_type: 'gce_instance'
       }
-      CONTAINER_CONSTANTS = {
+      GKE_CONSTANTS = {
         service: 'container.googleapis.com',
         resource_type: 'container',
         extra_resource_labels: %w(namespace_id pod_id container_name),
@@ -83,7 +83,7 @@ module Fluent
 
       # The map between a subservice name and a resource type.
       SUBSERVICE_MAP = \
-        [APPENGINE_CONSTANTS, CONTAINER_CONSTANTS, DATAFLOW_CONSTANTS,
+        [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAFLOW_CONSTANTS,
          DATAPROC_CONSTANTS, ML_CONSTANTS]
         .map { |consts| [consts[:service], consts[:resource_type]] }.to_h
       # Default back to GCE if invalid value is detected.
@@ -91,7 +91,7 @@ module Fluent
 
       # The map between a resource type and expected subservice attributes.
       SUBSERVICE_METADATA_ATTRIBUTES = \
-        [APPENGINE_CONSTANTS, CONTAINER_CONSTANTS, DATAPROC_CONSTANTS]
+        [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAPROC_CONSTANTS]
         .map { |consts| [consts[:resource_type], consts[:metadata_attributes]] }
         .to_h
 
@@ -375,7 +375,7 @@ module Fluent
       # instead of a map to ensure order. For example, tags will be matched
       # against Cloud Functions first, then GKE.
       @tag_regexp_list = []
-      if @resource.type == CONTAINER_CONSTANTS[:resource_type]
+      if @resource.type == GKE_CONSTANTS[:resource_type]
         # We only support Cloud Functions logs for GKE right now.
         if fetch_gce_metadata('instance/attributes/'
                              ).split.include?('gcf_region')
@@ -388,7 +388,7 @@ module Fluent
           ]
         end
         @tag_regexp_list << [
-          CONTAINER_CONSTANTS[:resource_type], @compiled_kubernetes_tag_regexp
+          GKE_CONSTANTS[:resource_type], @compiled_kubernetes_tag_regexp
         ]
       end
 
@@ -883,7 +883,7 @@ module Fluent
         }
 
       # GKE container.
-      when CONTAINER_CONSTANTS[:resource_type]
+      when GKE_CONSTANTS[:resource_type]
         raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
         kube_env = YAML.load(raw_kube_env)
         return {
@@ -942,7 +942,7 @@ module Fluent
 
       # GCE instance and GKE container.
       when COMPUTE_CONSTANTS[:resource_type],
-           CONTAINER_CONSTANTS[:resource_type]
+           GKE_CONSTANTS[:resource_type]
         labels.merge!(
           "#{COMPUTE_CONSTANTS[:service]}/resource_name" => @vm_name)
 
@@ -1012,16 +1012,16 @@ module Fluent
 
         instance_id = group_resource_labels.delete('instance_id')
         group_common_labels.merge!(
-          "#{CONTAINER_CONSTANTS[:service]}/instance_id" => instance_id,
+          "#{GKE_CONSTANTS[:service]}/instance_id" => instance_id,
           "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
-          "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+          "#{GKE_CONSTANTS[:service]}/cluster_name" =>
             group_resource_labels.delete('cluster_name'),
           "#{COMPUTE_CONSTANTS[:service]}/zone" =>
             group_resource_labels.delete('zone')
         )
 
       # GKE container.
-      when CONTAINER_CONSTANTS[:resource_type]
+      when GKE_CONSTANTS[:resource_type]
         if matched_regex_group
           # We only expect one occurrence of each key in the match group.
           resource_labels_candidates =
@@ -1034,7 +1034,7 @@ module Fluent
               # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
               # in fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
               # TODO(qingling128): Figure out how to put this map into
-              # constants like CONTAINER_CONSTANTS[:extra_resource_labels].
+              # constants like GKE_CONSTANTS[:extra_resource_labels].
               'container_name' => 'container_name',
               'namespace_name' => 'namespace_id',
               'pod_name' => 'pod_id'))
@@ -1042,8 +1042,8 @@ module Fluent
           group_common_labels.merge!(
             delete_and_extract_labels(
               common_labels_candidates,
-              CONTAINER_CONSTANTS[:extra_common_labels]
-                .map { |l| [l, "#{CONTAINER_CONSTANTS[:service]}/#{l}"] }.to_h))
+              GKE_CONSTANTS[:extra_common_labels]
+                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
         end
       end
 
@@ -1068,11 +1068,11 @@ module Fluent
       end
 
       # GKE containers.
-      if group_resource.type == CONTAINER_CONSTANTS[:resource_type]
+      if group_resource.type == GKE_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
           delete_and_extract_labels(
-            record, 'stream' => "#{CONTAINER_CONSTANTS[:service]}/stream"))
+            record, 'stream' => "#{GKE_CONSTANTS[:service]}/stream"))
 
         # If the record has been annotated by the kubernetes_metadata_filter
         # plugin, then use that metadata. Otherwise, rely on commonLabels
@@ -1080,12 +1080,12 @@ module Fluent
         if record.key?('kubernetes')
           resource_labels.merge!(
             delete_and_extract_labels(
-              record['kubernetes'], CONTAINER_CONSTANTS[:extra_resource_labels]
+              record['kubernetes'], GKE_CONSTANTS[:extra_resource_labels]
                 .map { |l| [l, l] }.to_h))
           common_labels.merge!(
             delete_and_extract_labels(
-              record['kubernetes'], CONTAINER_CONSTANTS[:extra_common_labels]
-                .map { |l| [l, "#{CONTAINER_CONSTANTS[:service]}/#{l}"] }.to_h))
+              record['kubernetes'], GKE_CONSTANTS[:extra_common_labels]
+                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
           # Prepend label/ to all user-defined labels' keys.
           if record['kubernetes'].key?('labels')
             common_labels.merge!(
@@ -1226,9 +1226,9 @@ module Fluent
         end
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
-      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
-            entry_common_labels.key?("#{CONTAINER_CONSTANTS[:service]}/stream")
-        stream = entry_common_labels["#{CONTAINER_CONSTANTS[:service]}/stream"]
+      elsif resource_type == GKE_CONSTANTS[:resource_type] &&
+            entry_common_labels.key?("#{GKE_CONSTANTS[:service]}/stream")
+        stream = entry_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
         if stream == 'stdout'
           return 'INFO'
         elsif stream == 'stderr'
@@ -1520,7 +1520,7 @@ module Fluent
         text_payload = record['log']
       elsif is_json
         json_payload = record
-      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
+      elsif resource_type == GKE_CONSTANTS[:resource_type] &&
             record.key?('log')
         text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
@@ -1550,7 +1550,7 @@ module Fluent
       elsif resource.type == APPENGINE_CONSTANTS[:resource_type]
         # Add a prefix to Managed VM logs to prevent namespace collisions.
         tag = "#{APPENGINE_CONSTANTS[:service]}/#{tag}"
-      elsif resource.type == CONTAINER_CONSTANTS[:resource_type]
+      elsif resource.type == GKE_CONSTANTS[:resource_type]
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
         if resource.labels && resource.labels.key?('container_name')

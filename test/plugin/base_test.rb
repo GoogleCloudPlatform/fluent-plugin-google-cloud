@@ -503,7 +503,7 @@ module BaseTest
       end
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
-          "#{CONTAINER_CONSTANTS[:service]}/container_name" =>
+          "#{GKE_CONSTANTS[:service]}/container_name" =>
             URI.decode(encoded_name)),
         log_name: encoded_name)
       verify_log_entries(0, params, 'textPayload')
@@ -830,7 +830,7 @@ module BaseTest
       d.run
     end
     expected_params = CONTAINER_FROM_TAG_PARAMS.merge(
-      labels: { "#{CONTAINER_CONSTANTS[:service]}/stream" => 'stderr' }
+      labels: { "#{GKE_CONSTANTS[:service]}/stream" => 'stderr' }
     ) { |_, oldval, newval| oldval.merge(newval) }
     verify_log_entries(1, expected_params) do |entry, i|
       verify_default_log_entry_text(entry['textPayload'], i, entry)
