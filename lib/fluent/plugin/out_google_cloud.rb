@@ -95,7 +95,7 @@ module Fluent
         .map { |consts| [consts[:resource_type], consts[:metadata_attributes]] }
         .to_h
 
-      # Default values for JSON payload keys to set the "trace "trace",
+      # Default values for JSON payload keys to set the "trace",
       # "sourceLocation", "operation" and "labels" fields in the LogEntry.
       DEFAULT_PAYLOAD_KEY_PREFIX = 'logging.googleapis.com'
       DEFAULT_LABELS_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/labels"
@@ -1257,11 +1257,8 @@ module Fluent
             begin
               casted_value = send(cast_fn, value)
             rescue TypeError
-              log = <<-eos
-                Failed to #{cast_fn} for {#field_name}.#{original_key}
-                with value #{value.inspect}.
-              eos
-              @log.error log, err
+              @log.error "Failed to #{cast_fn} for #{field_name}." \
+                         "#{original_key} with value #{value.inspect}.", err
               next
             end
             next if casted_value.nil?
