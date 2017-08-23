@@ -430,6 +430,30 @@ module Constants
     'cacheValidatedWithOriginServer' => true
   }
 
+  SOURCE_LOCATION_MESSAGE = {
+    'file' => 'source/file',
+    'function' => 'my_function',
+    'line' => 18
+  }
+
+  OPERATION_MESSAGE = {
+    'id' => 'op_id',
+    'producer' => 'my/app',
+    'last' => true
+  }
+
+  LOG_ENTRY_SUBFIELDS_PARAMS = {
+    # payload key, destination key, payload value
+    DEFAULT_HTTP_REQUEST_KEY => ['httpRequest', HTTP_REQUEST_MESSAGE],
+    DEFAULT_SOURCE_LOCATION_KEY => ['sourceLocation', SOURCE_LOCATION_MESSAGE],
+    DEFAULT_OPERATION_KEY => ['operation', OPERATION_MESSAGE]
+  }
+
+  CUSTOM_LABELS_MESSAGE = {
+    'customKey' => 'value'
+  }
+  CONFLICTING_LABEL_KEY = "#{COMPUTE_CONSTANTS[:service]}/resource_name"
+
   # Tags and their sanitized and encoded version.
   VALID_TAGS = {
     'test' => 'test',
