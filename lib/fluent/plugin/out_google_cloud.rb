@@ -98,7 +98,6 @@ module Fluent
       # Default values for JSON payload keys to set the "trace",
       # "sourceLocation", "operation" and "labels" fields in the LogEntry.
       DEFAULT_PAYLOAD_KEY_PREFIX = 'logging.googleapis.com'
-      DEFAULT_LABELS_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/labels"
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'
       DEFAULT_OPERATION_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/operation"
       DEFAULT_SOURCE_LOCATION_KEY =
@@ -192,7 +191,6 @@ module Fluent
     config_param :vm_name, :string, :default => nil
 
     # Map keys from a JSON payload to corresponding LogEntry fields.
-    config_param :labels_key, :string, :default => DEFAULT_LABELS_KEY
     config_param :http_request_key, :string, :default =>
       DEFAULT_HTTP_REQUEST_KEY
     config_param :operation_key, :string, :default => DEFAULT_OPERATION_KEY
@@ -523,7 +521,6 @@ module Fluent
           entry.trace = fq_trace_id if fq_trace_id
 
           set_log_entry_fields(record, entry)
-          set_labels(record, entry)
 
           if @use_grpc
             set_payload_grpc(entry_resource.type, record, entry, is_json)
@@ -1283,20 +1280,6 @@ module Fluent
           @log.error "Failed to set log entry field for #{field_name}.", err
         end
       end
-    end
-
-    def set_labels(record, entry)
-      record_labels = record[@labels_key]
-      return nil unless record_labels.is_a?(Hash)
-
-      record_labels.each do |key, value|
-        unless entry.labels.key?(key)
-          record_labels.delete(key)
-          entry.labels[key] = value
-        end
-      end
-
-      record.delete(@labels_key) if record_labels.empty?
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
