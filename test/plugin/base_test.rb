@@ -256,10 +256,10 @@ module BaseTest
              'some_null_field' => nil)
       d.run
     end
-    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry, i|
       fields = get_fields(entry['jsonPayload'])
       assert_equal 4, fields.size, entry
-      assert_equal 'test log entry 0', get_string(fields['msg']), entry
+      verify_default_log_entry_text(get_string(fields['msg']), i, entry)
       assert_equal 'test', get_string(fields['tag2']), entry
       assert_equal 5000, get_number(fields['data']), entry
       assert_equal null_value, fields['some_null_field'], entry
@@ -302,126 +302,143 @@ module BaseTest
     end
   end
 
-  def test_structured_payload_json_log
+  def test_structured_payload_json_log_default_not_parsed_text
     setup_gce_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG)
-      json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
-                    '"data": 5000, "some_null_field": null}'
       d.emit('message' => 'notJSON ' + json_string)
-      d.emit('log' => 'notJSON ' + json_string)
-      d.emit('msg' => 'notJSON ' + json_string)
       d.emit('message' => json_string)
-      d.emit('log' => json_string)
-      d.emit('msg' => json_string)
       d.emit('message' => "  \r\n \t" + json_string)
-      d.emit('log' => "  \r\n \t" + json_string)
-      d.emit('msg' => "  \r\n \t" + json_string)
       d.run
     end
-    log_index = 0
-    verify_log_entries(9, COMPUTE_PARAMS, '') do |entry|
-      log_index += 1
-      if log_index % 3 == 1
-        assert entry.key?('textPayload'),
-               "Entry ##{log_index} #{entry} did not have textPayload"
-      else
-        assert entry.key?('jsonPayload'),
-               "Entry ##{log_index} #{entry} did not have jsonPayload"
-        fields = get_fields(entry['jsonPayload'])
-        assert !fields.key?('tag2'), 'Did not expect tag2'
-        assert !fields.key?('data'), 'Did not expect data'
-        assert !fields.key?('some_null_field'),
-               'Did not expect some_null_field'
-      end
+    verify_log_entries(3, COMPUTE_PARAMS, 'textPayload') do
+      # Only check for the existence of textPayload.
     end
   end
 
-  def test_structured_payload_json_log_detect_json
+  def test_structured_payload_json_log_default_not_parsed_json
     setup_gce_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
+    setup_logging_stubs do
+      d = create_driver(APPLICATION_DEFAULT_CONFIG)
+      %w(log msg).each do |field|
+        d.emit(field => 'notJSON ' + json_string)
+        d.emit(field => json_string)
+        d.emit(field => "  \r\n \t" + json_string)
+      end
+      d.run
+    end
+    verify_log_entries(6, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert !fields.key?('tag2'), 'Did not expect tag2'
+      assert !fields.key?('data'), 'Did not expect data'
+      assert !fields.key?('some_null_field'), 'Did not expect some_null_field'
+    end
+  end
+
+  def test_structured_payload_json_log_detect_json_not_parsed_text
+    setup_gce_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
-      json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
-                    '"data": 5000, "some_null_field": null}'
       d.emit('message' => 'notJSON ' + json_string)
-      d.emit('log' => 'notJSON ' + json_string)
-      d.emit('msg' => 'notJSON ' + json_string)
-      d.emit('message' => json_string)
-      d.emit('log' => json_string)
-      d.emit('msg' => json_string)
-      d.emit('message' => "  \r\n \t" + json_string)
-      d.emit('log' => "  \r\n \t" + json_string)
-      d.emit('msg' => "  \r\n \t" + json_string)
       d.run
     end
-    log_index = 0
-    verify_log_entries(9, COMPUTE_PARAMS, '') do |entry|
-      log_index += 1
-      if log_index == 1
-        assert entry.key?('textPayload'),
-               "Entry ##{log_index} #{entry} did not have textPayload"
-      elsif log_index < 4
-        assert entry.key?('jsonPayload'),
-               "Entry ##{log_index} #{entry} did not have jsonPayload"
-        fields = get_fields(entry['jsonPayload'])
-        assert !fields.key?('tag2'), 'Did not expect tag2'
-        assert !fields.key?('data'), 'Did not expect data'
-        assert !fields.key?('some_null_field'),
-               'Did not expect some_null_field'
-      else
-        assert entry.key?('jsonPayload'),
-               "Entry ##{log_index} #{entry} did not have jsonPayload"
-        fields = get_fields(entry['jsonPayload'])
-        assert_equal 4, fields.size, entry
-        assert_equal 'test log entry 0', get_string(fields['msg']), entry
-        assert_equal 'test', get_string(fields['tag2']), entry
-        assert_equal 5000, get_number(fields['data']), entry
-        assert_equal null_value, fields['some_null_field'], entry
-      end
+    verify_log_entries(1, COMPUTE_PARAMS, 'textPayload') do
+      # Only check for the existence of textPayload.
     end
   end
 
-  def test_structured_payload_json_log_container
+  def test_structured_payload_json_log_detect_json_not_parsed_json
+    setup_gce_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
+    setup_logging_stubs do
+      d = create_driver(DETECT_JSON_CONFIG)
+      %w(log msg).each do |field|
+        d.emit(field => 'notJSON ' + json_string)
+      end
+      d.run
+    end
+    verify_log_entries(2, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert !fields.key?('tag2'), 'Did not expect tag2'
+      assert !fields.key?('data'), 'Did not expect data'
+      assert !fields.key?('some_null_field'), 'Did not expect some_null_field'
+    end
+  end
+
+  def test_structured_payload_json_log_detect_json_parsed
+    setup_gce_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
+    setup_logging_stubs do
+      d = create_driver(DETECT_JSON_CONFIG)
+      %w(message log msg).each do |field|
+        d.emit(field => json_string)
+        d.emit(field => "  \r\n \t" + json_string)
+      end
+      d.run
+    end
+    verify_log_entries(6, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert_equal 4, fields.size, entry
+      assert_equal 'test log entry 0', get_string(fields['msg']), entry
+      assert_equal 'test', get_string(fields['tag2']), entry
+      assert_equal 5000, get_number(fields['data']), entry
+      assert_equal null_value, fields['some_null_field'], entry
+    end
+  end
+
+  def test_structured_payload_json_log_default_container_not_parsed
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
-                    '"data": 5000, "some_null_field": null}'
       d.emit(container_log_entry_with_metadata('notJSON' + json_string))
       d.emit(container_log_entry_with_metadata(json_string))
       d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
       d.run
     end
-    log_index = 0
-    verify_log_entries(3, CONTAINER_FROM_METADATA_PARAMS, '') do |entry|
-      log_index += 1
-      assert entry.key?('textPayload'),
-             "Entry ##{log_index} #{entry} did not have textPayload"
+    verify_log_entries(3, CONTAINER_FROM_METADATA_PARAMS, 'textPayload') do
+      # Only check for the existence of textPayload.
     end
   end
 
-  def test_structured_payload_json_log_detect_json_container
+  def test_structured_payload_json_log_detect_json_container_not_parsed
     setup_gce_metadata_stubs
     setup_container_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
-      json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
-                    '"data": 5000, "some_null_field": null}'
       d.emit(container_log_entry_with_metadata('notJSON' + json_string))
+      d.run
+    end
+    verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS, 'textPayload') do
+      # Only check for the existence of textPayload.
+    end
+  end
+
+  def test_structured_payload_json_log_detect_json_container_parsed
+    setup_gce_metadata_stubs
+    setup_container_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
+    setup_logging_stubs do
+      d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
       d.emit(container_log_entry_with_metadata(json_string))
       d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
       d.run
     end
-    log_index = 0
-    verify_log_entries(3, CONTAINER_FROM_METADATA_PARAMS, '') do |entry|
-      log_index += 1
-      if log_index == 1
-        assert entry.key?('textPayload'),
-               "Entry ##{log_index} #{entry} did not have textPayload"
-      else
-        assert entry.key?('jsonPayload'),
-               "Entry ##{log_index} #{entry} did not have jsonPayload"
+    verify_log_entries(2, CONTAINER_FROM_METADATA_PARAMS, 'jsonPayload') \
+      do |entry|
         fields = get_fields(entry['jsonPayload'])
         assert_equal 4, fields.size, entry
         assert_equal 'test log entry 0', get_string(fields['msg']), entry
@@ -429,7 +446,6 @@ module BaseTest
         assert_equal 5000, get_number(fields['data']), entry
         assert_equal null_value, fields['some_null_field'], entry
       end
-    end
   end
 
   # Verify that we drop the log entries when 'require_valid_tags' is true and
@@ -609,7 +625,8 @@ module BaseTest
       end
     end
     verify_index = 0
-    verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry|
+    verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
+      verify_default_log_entry_text(entry['textPayload'], i, entry)
       assert_equal_with_default entry['timestamp']['seconds'],
                                 expected_ts[verify_index].tv_sec, 0, entry
       assert_equal_with_default entry['timestamp']['nanos'],
@@ -727,10 +744,10 @@ module BaseTest
     params[:labels]['sent_label_1'] = 'value1'
     params[:labels]['foo.googleapis.com/bar'] = 'value2'
     params[:labels]['label3'] = 'value3'
-    verify_log_entries(1, params, 'jsonPayload') do |entry|
+    verify_log_entries(1, params, 'jsonPayload') do |entry, i|
       fields = get_fields(entry['jsonPayload'])
       assert_equal 2, fields.size, entry
-      assert_equal 'test log entry 0', get_string(fields['message']), entry
+      verify_default_log_entry_text(get_string(fields['message']), i, entry)
       assert_equal 'value4', get_string(fields['not_a_label']), entry
     end
   end
@@ -815,7 +832,8 @@ module BaseTest
     expected_params = CONTAINER_FROM_TAG_PARAMS.merge(
       labels: { "#{CONTAINER_CONSTANTS[:service]}/stream" => 'stderr' }
     ) { |_, oldval, newval| oldval.merge(newval) }
-    verify_log_entries(1, expected_params) do |entry|
+    verify_log_entries(1, expected_params) do |entry, i|
+      verify_default_log_entry_text(entry['textPayload'], i, entry)
       assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
       assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
       assert_equal 'ERROR', entry['severity'], entry
@@ -881,7 +899,8 @@ module BaseTest
         n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
         d.run
       end
-      verify_log_entries(n, CLOUDFUNCTIONS_PARAMS) do |entry|
+      verify_log_entries(n, CLOUDFUNCTIONS_PARAMS) do |entry, i|
+        verify_default_log_entry_text(entry['textPayload'], i, entry)
         assert_equal 'DEBUG', entry['severity'],
                      "Test with #{n} logs failed. \n#{entry}"
       end
@@ -922,13 +941,12 @@ module BaseTest
         n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
         d.run
       end
-      i = 0
-      verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS, '') do |entry|
-        assert_equal '[D][2015-09-25T12:34:56.789Z][123-0] test log entry ' \
-                     "#{i}", entry['textPayload'],
-                     "Test with #{n} logs failed. \n#{entry}"
-        i += 1
-      end
+      verify_log_entries(n, CONTAINER_FROM_TAG_PARAMS, 'textPayload') \
+        do |entry, i|
+          assert_equal '[D][2015-09-25T12:34:56.789Z][123-0] test log entry ' \
+                       "#{i}", entry['textPayload'],
+                       "Test with #{n} logs failed. \n#{entry}"
+        end
     end
   end
 
@@ -1273,7 +1291,7 @@ module BaseTest
   end
 
   def log_entry(i)
-    'test log entry ' + i.to_s
+    "test log entry #{i}"
   end
 
   def check_labels(labels, expected_labels)
@@ -1289,18 +1307,19 @@ module BaseTest
       "#{labels.length} labels: #{labels}"
   end
 
+  def verify_default_log_entry_text(text, i, entry)
+    assert_equal "test log entry #{i}", text,
+                 "Entry ##{i} had unexpected text: #{entry}"
+  end
+
   # The caller can optionally provide a block which is called for each entry.
   def verify_json_log_entries(n, params, payload_type = 'textPayload')
     i = 0
     @logs_sent.each do |request|
       request['entries'].each do |entry|
         unless payload_type.empty?
-          assert entry.key?(payload_type), 'Entry did not contain expected ' \
-            "#{payload_type} key: " + entry.to_s
-          # Check the payload for textPayload, otherwise it's up to the caller.
-          if payload_type == 'textPayload'
-            assert_equal "test log entry #{i}", entry['textPayload'], request
-          end
+          assert entry.key?(payload_type), "Entry ##{i} did not contain " \
+            "expected #{payload_type} key: #{entry}"
         end
 
         # per-entry resource or log_name overrides the corresponding field
@@ -1317,7 +1336,12 @@ module BaseTest
         assert_equal params[:resource][:type], resource['type']
         check_labels resource['labels'], params[:resource][:labels]
         check_labels labels, params[:labels]
-        yield(entry) if block_given?
+        if block_given?
+          yield(entry, i)
+        elsif payload_type == 'textPayload'
+          # Check the payload for textPayload, otherwise it's up to the caller.
+          verify_default_log_entry_text(entry['textPayload'], i, entry)
+        end
         i += 1
         assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
       end
@@ -1335,7 +1359,8 @@ module BaseTest
         n.times { |i| d.emit(log_entry_factory.call(log_entry(i))) }
         d.run
       end
-      verify_log_entries(n, expected_params) do |entry|
+      verify_log_entries(n, expected_params) do |entry, i|
+        verify_default_log_entry_text(entry['textPayload'], i, entry)
         assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
                      entry
         assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
