@@ -952,6 +952,47 @@ module BaseTest
     end
   end
 
+  def test_labels_from_record
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(DEFAULT_LABELS_KEY => CUSTOM_LABELS_MESSAGE)
+      d.run
+    end
+    labels = COMPUTE_PARAMS[:labels].merge(CUSTOM_LABELS_MESSAGE)
+    params = COMPUTE_PARAMS.merge(labels: labels)
+    verify_log_entries(1, params, 'labels') do |entry|
+      assert_nil get_fields(entry['jsonPayload'])[DEFAULT_LABELS_KEY], entry
+    end
+  end
+
+  def test_labels_from_record_conflict
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(DEFAULT_LABELS_KEY => { CONFLICTING_LABEL_KEY => 'a_string' })
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      labels = get_fields(get_struct(fields[DEFAULT_LABELS_KEY]))
+      assert_equal('a_string', get_string(labels[CONFLICTING_LABEL_KEY]), entry)
+    end
+  end
+
+  def test_labels_from_record_when_not_hash
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(DEFAULT_LABELS_KEY => 'a_string')
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert_equal 'a_string', get_string(fields[DEFAULT_LABELS_KEY]), entry
+    end
+  end
+
   def test_log_entry_trace_field
     setup_gce_metadata_stubs
     message = log_entry(0)
