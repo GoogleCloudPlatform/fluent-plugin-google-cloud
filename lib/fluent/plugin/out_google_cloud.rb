@@ -522,11 +522,7 @@ module Fluent
 
           set_log_entry_fields(record, entry)
 
-          if @use_grpc
-            set_payload_grpc(entry_resource.type, record, entry, is_json)
-          else
-            set_payload(entry_resource.type, record, entry, is_json)
-          end
+          set_payload(entry_resource.type, record, entry, is_json)
 
           entries.push(entry)
         end
@@ -1453,31 +1449,6 @@ module Fluent
       end
     end
 
-    def set_payload(resource_type, record, entry, is_json)
-      # If this is a Cloud Functions log that matched the expected regexp,
-      # use text payload. Otherwise, use JSON if we found valid JSON, or text
-      # payload in the following cases:
-      # 1. This is a Cloud Functions log and the 'log' key is available
-      # 2. This is an unstructured Container log and the 'log' key is available
-      # 3. The only remaining key is 'message'
-      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-         @cloudfunctions_log_match
-        entry.text_payload = @cloudfunctions_log_match['text']
-      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-            record.key?('log')
-        entry.text_payload = record['log']
-      elsif is_json
-        entry.json_payload = record
-      elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
-            record.key?('log')
-        entry.text_payload = record['log']
-      elsif record.size == 1 && record.key?('message')
-        entry.text_payload = record['message']
-      else
-        entry.json_payload = record
-      end
-    end
-
     def value_from_ruby(value)
       ret = Google::Protobuf::Value.new
       case value
@@ -1522,7 +1493,10 @@ module Fluent
       ret
     end
 
-    def set_payload_grpc(resource_type, record, entry, is_json)
+    def set_payload(resource_type, record, entry, is_json)
+      # Only one of {text_payload, json_payload} will be set.
+      text_payload = nil
+      json_payload = nil
       # If this is a Cloud Functions log that matched the expected regexp,
       # use text payload. Otherwise, use JSON if we found valid JSON, or text
       # payload in the following cases:
@@ -1531,20 +1505,33 @@ module Fluent
       # 3. The only remaining key is 'message'
       if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
          @cloudfunctions_log_match
-        entry.text_payload = convert_to_utf8(
-          @cloudfunctions_log_match['text'])
+        text_payload = @cloudfunctions_log_match['text']
       elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
             record.key?('log')
-        entry.text_payload = convert_to_utf8(record['log'])
+        text_payload = record['log']
       elsif is_json
-        entry.json_payload = struct_from_ruby(record)
+        json_payload = record
       elsif resource_type == CONTAINER_CONSTANTS[:resource_type] &&
             record.key?('log')
-        entry.text_payload = convert_to_utf8(record['log'])
+        text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
-        entry.text_payload = convert_to_utf8(record['message'])
+        text_payload = record['message']
       else
-        entry.json_payload = struct_from_ruby(record)
+        json_payload = record
+      end
+
+      if json_payload
+        entry.json_payload = if @use_grpc
+                               struct_from_ruby(json_payload)
+                             else
+                               json_payload
+                             end
+      elsif text_payload
+        entry.text_payload = if @use_grpc
+                               convert_to_utf8(text_payload)
+                             else
+                               text_payload
+                             end
       end
     end
 
