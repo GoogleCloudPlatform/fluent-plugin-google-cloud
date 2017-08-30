@@ -185,6 +185,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
     # synonyms for existing log levels
     assert_equal('ERROR', test_obj.parse_severity('ERR'))
+    assert_equal('ERROR', test_obj.parse_severity('SEVERE'))
     assert_equal('WARNING', test_obj.parse_severity('WARN'))
     assert_equal('CRITICAL', test_obj.parse_severity('FATAL'))
     assert_equal('DEBUG', test_obj.parse_severity('TRACE'))
