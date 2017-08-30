@@ -120,6 +120,10 @@ module Constants
   APPLICATION_DEFAULT_CONFIG = %(
   )
 
+  DETECT_JSON_CONFIG = %(
+    detect_json true
+  )
+
   # rubocop:disable Metrics/LineLength
   PRIVATE_KEY_CONFIG = %(
      auth_method private_key
