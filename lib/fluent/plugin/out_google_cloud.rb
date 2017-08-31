@@ -1298,6 +1298,9 @@ module Fluent
       'FINE' => 'DEBUG',
       'FINER' => 'DEBUG',
       'FINEST' => 'DEBUG',
+      # java.util.logging levels (only missing ones from above listed).
+      'SEVERE' => 'ERROR',
+      'CONFIG' => 'DEBUG',
       # nginx levels (only missing ones from above listed).
       'CRIT' => 'CRITICAL',
       'EMERG' => 'EMERGENCY',
