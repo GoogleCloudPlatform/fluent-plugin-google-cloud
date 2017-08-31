@@ -1285,7 +1285,6 @@ module Fluent
     # Translates other severity strings to one of the valid values above.
     SEVERITY_TRANSLATIONS = {
       # log4j levels (both current and obsolete).
-      'SEVERE' => 'ERROR',
       'WARN' => 'WARNING',
       'FATAL' => 'CRITICAL',
       'TRACE' => 'DEBUG',
@@ -1293,6 +1292,9 @@ module Fluent
       'FINE' => 'DEBUG',
       'FINER' => 'DEBUG',
       'FINEST' => 'DEBUG',
+      # java.util.logging levels (only missing ones from above listed).
+      'SEVERE' => 'ERROR',
+      'CONFIG' => 'DEBUG',
       # nginx levels (only missing ones from above listed).
       'CRIT' => 'CRITICAL',
       'EMERG' => 'EMERGENCY',

@@ -193,6 +193,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('DEBUG', test_obj.parse_severity('FINE'))
     assert_equal('DEBUG', test_obj.parse_severity('FINER'))
     assert_equal('DEBUG', test_obj.parse_severity('FINEST'))
+    assert_equal('DEBUG', test_obj.parse_severity('CONFIG'))
 
     # single letters.
     assert_equal('DEBUG', test_obj.parse_severity('D'))
