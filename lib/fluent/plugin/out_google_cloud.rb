@@ -459,12 +459,9 @@ module Fluent
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
-          extracted_resource_labels, extracted_common_labels = \
-            determine_entry_level_labels(group_level_resource, record)
-          entry_level_resource = group_level_resource.dup
-          entry_level_resource.labels.merge!(extracted_resource_labels)
-          entry_level_common_labels = \
-            group_level_common_labels.merge(extracted_common_labels)
+          entry_level_resource, entry_level_common_labels =
+            determine_entry_level_monitored_resource_and_labels(
+              group_level_resource, group_level_common_labels, record)
 
           is_json = false
           if @detect_json
@@ -976,81 +973,49 @@ module Fluent
     # Determine the group level monitored resource and common labels shared by a
     # collection of entries.
     def determine_group_level_monitored_resource_and_labels(tag)
-      # Determine group level monitored resource type. For certain types,
-      # extract useful info from the tag and store those in
-      # matched_regex_group.
-      group_level_resource_type, matched_regex_group =
-        determine_group_level_monitored_resource_type(tag)
+      resource = @resource.dup
+      resource.labels = @resource.labels.dup
+      common_labels = @common_labels.dup
 
-      # Determine group level monitored resource labels and common labels.
-      group_level_resource_labels, group_level_common_labels =
-        determine_group_level_labels(group_level_resource_type,
-                                     matched_regex_group)
-
-      group_level_resource = Google::Apis::LoggingV2beta1::MonitoredResource \
-                             .new(
-                               type: group_level_resource_type,
-                               labels: group_level_resource_labels.to_h
-                             )
-
-      # Freeze the per-request state. Any further changes must be made on a
-      # per-entry basis.
-      group_level_resource.freeze
-      group_level_resource.labels.freeze
-      group_level_common_labels.freeze
-
-      [group_level_resource, group_level_common_labels]
-    end
-
-    # Determine group level monitored resource type shared by a collection of
-    # entries.
-    # Return the resource type and tag regexp matched groups. The matched groups
-    # only apply to some resource types. Return nil if not applicable or if
-    # there is no match.
-    def determine_group_level_monitored_resource_type(tag)
+      # Change the resource type and set matched_regexp_group if the tag matches
+      # certain regexp.
+      matched_regexp_group = nil # @tag_regexp_list can be an empty list.
       @tag_regexp_list.each do |derived_type, tag_regexp|
-        matched_regex_group = tag_regexp.match(tag)
-        return [derived_type, matched_regex_group] if
-          matched_regex_group
+        matched_regexp_group = tag_regexp.match(tag)
+        if matched_regexp_group
+          resource.type = derived_type
+          break
+        end
       end
-      [@resource.type, nil]
-    end
 
-    # Determine group level monitored resource labels and common labels. These
-    # labels will be shared by a collection of entries.
-    def determine_group_level_labels(group_level_resource_type,
-                                     matched_regex_group)
-      group_level_resource_labels = @resource.labels.dup
-      group_level_common_labels = @common_labels.dup
-
-      case group_level_resource_type
+      # Once the resource type is settled down, determine the labels.
+      case resource.type
       # Cloud Functions.
       when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        group_level_resource_labels.merge!(
+        resource.labels.merge!(
           'region' => @gcf_region,
           'function_name' => decode_cloudfunctions_function_name(
-            matched_regex_group['encoded_function_name'])
+            matched_regexp_group['encoded_function_name'])
         )
-
-        instance_id = group_level_resource_labels.delete('instance_id')
-        group_level_common_labels.merge!(
+        instance_id = resource.labels.delete('instance_id')
+        common_labels.merge!(
           "#{GKE_CONSTANTS[:service]}/instance_id" => instance_id,
           "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
           "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-            group_level_resource_labels.delete('cluster_name'),
+            resource.labels.delete('cluster_name'),
           "#{COMPUTE_CONSTANTS[:service]}/zone" =>
-            group_level_resource_labels.delete('zone')
+            resource.labels.delete('zone')
         )
 
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
-        if matched_regex_group
+        if matched_regexp_group
           # We only expect one occurrence of each key in the match group.
           resource_labels_candidates =
-            matched_regex_group.names.zip(matched_regex_group.captures).to_h
+            matched_regexp_group.names.zip(matched_regexp_group.captures).to_h
           common_labels_candidates =
             resource_labels_candidates.dup
-          group_level_resource_labels.merge!(
+          resource.labels.merge!(
             delete_and_extract_labels(
               resource_labels_candidates,
               # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
@@ -1061,7 +1026,7 @@ module Fluent
               'namespace_name' => 'namespace_id',
               'pod_name' => 'pod_id'))
 
-          group_level_common_labels.merge!(
+          common_labels.merge!(
             delete_and_extract_labels(
               common_labels_candidates,
               GKE_CONSTANTS[:extra_common_labels]
@@ -1069,28 +1034,35 @@ module Fluent
         end
       end
 
-      [group_level_resource_labels, group_level_common_labels]
+      resource.freeze
+      resource.labels.freeze
+      common_labels.freeze
+
+      [resource, common_labels]
     end
 
-    # Extract entry resource and common labels that should be applied to
-    # individual entries from the group resource.
-    def determine_entry_level_labels(group_level_resource, record)
-      resource_labels = {}
-      common_labels = {}
+    # Extract entry level monitored resource and common labels that should be
+    # applied to individual entries.
+    def determine_entry_level_monitored_resource_and_labels(
+      group_level_resource, group_level_common_labels, record)
+      resource = group_level_resource.dup
+      resource.labels = group_level_resource.labels.dup
+      common_labels = group_level_common_labels.dup
 
+      case resource.type
       # Cloud Functions.
-      if group_level_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] \
-         && record.key?('log')
-        @cloudfunctions_log_match =
-          @compiled_cloudfunctions_log_regexp.match(record['log'])
-        common_labels['execution_id'] =
-          @cloudfunctions_log_match['execution_id'] if \
-            @cloudfunctions_log_match &&
-            @cloudfunctions_log_match['execution_id']
-      end
+      when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
+        if record.key?('log')
+          @cloudfunctions_log_match =
+            @compiled_cloudfunctions_log_regexp.match(record['log'])
+          common_labels['execution_id'] =
+            @cloudfunctions_log_match['execution_id'] if
+              @cloudfunctions_log_match &&
+              @cloudfunctions_log_match['execution_id']
+        end
 
       # GKE containers.
-      if group_level_resource.type == GKE_CONSTANTS[:resource_type]
+      when GKE_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
           delete_and_extract_labels(
@@ -1100,7 +1072,7 @@ module Fluent
         # plugin, then use that metadata. Otherwise, rely on commonLabels
         # populated at the grouped_entries level from the group's tag.
         if record.key?('kubernetes')
-          resource_labels.merge!(
+          resource.labels.merge!(
             delete_and_extract_labels(
               record['kubernetes'], GKE_CONSTANTS[:extra_resource_labels]
                 .map { |l| [l, l] }.to_h))
@@ -1133,15 +1105,14 @@ module Fluent
       # Report them as monitored resource labels instead of common labels.
       # e.g. "dataflow.googleapis.com/job_id" => "job_id"
       [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
-        next unless
-          group_level_resource.type == service_constants[:resource_type]
-        resource_labels.merge!(
+        next unless resource.type == service_constants[:resource_type]
+        resource.labels.merge!(
           delete_and_extract_labels(
             common_labels, service_constants[:extra_common_labels]
               .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h))
       end
 
-      [resource_labels, common_labels]
+      [resource, common_labels]
     end
 
     # TODO: This functionality should eventually be available in another
