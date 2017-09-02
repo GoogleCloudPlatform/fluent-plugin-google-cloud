@@ -1272,6 +1272,31 @@ module BaseTest
     end
   end
 
+  # Test GKE container logs. These logs have the label
+  # "logging.googleapis.com/local_resource_id" set in the format of
+  # "gke_containerName.<namespace_id>.<pod_name>.<container_name>".
+  def test_gke_container_logs
+    [1, 2, 3, 5, 11, 50].each do |n|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_container_metadata_stubs
+        setup_metadata_agent_stubs
+        setup_logging_stubs do
+          d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
+          n.times do |i|
+            d.emit(gke_container_log_entry(log_entry(i)))
+          end
+          d.run
+        end
+        verify_log_entries(n, CONTAINER_FROM_APPLICATION_PARAMS)
+        assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+        assert_requested_metadata_agent_stub(
+          "gke_containerName.#{CONTAINER_NAMESPACE_ID}.#{CONTAINER_POD_NAME}." \
+          "#{CONTAINER_CONTAINER_NAME}")
+      end
+    end
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1443,6 +1468,15 @@ module BaseTest
       log: log,
       stream: stream,
       time: CONTAINER_TIMESTAMP
+    }
+  end
+
+  def gke_container_log_entry(log)
+    {
+      log: log,
+      LOCAL_RESOURCE_ID_KEY =>
+        "gke_containerName.#{CONTAINER_NAMESPACE_ID}" \
+        ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}"
     }
   end
 

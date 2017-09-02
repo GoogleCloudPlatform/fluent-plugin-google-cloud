@@ -433,7 +433,7 @@ module Fluent
 
       # Log an informational message containing the Logs viewer URL
       @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
-                "viewer?project=#{@project_id}&resource=#{@resource_type}/",
+                "viewer?project=#{@project_id}&resource=#{@resource.type}/",
                 "instance_id/#{@vm_id}"
     end
 
@@ -461,6 +461,7 @@ module Fluent
           entry_level_resource, entry_level_common_labels =
             determine_entry_level_monitored_resource_and_labels(
               group_level_resource, group_level_common_labels, record)
+
           is_json = false
           if @detect_json
             # Save the timestamp and severity if available, then clear it out to
@@ -468,6 +469,7 @@ module Fluent
             # field.
             timestamp = record.delete('time')
             severity = record.delete('severity')
+
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
             record_json = nil
@@ -540,7 +542,7 @@ module Fluent
             )
           end
 
-          # Get fully-qualified trace id for LogEntry "trace" field per config.
+          # Get fully-qualified trace id for LogEntry "trace" field.
           fq_trace_id = record.delete(@trace_key)
           entry.trace = fq_trace_id if fq_trace_id
 
@@ -1035,7 +1037,13 @@ module Fluent
           local_resource_id)
         @log.debug 'Retrieved monitored resource from metadata agent: ' \
                   "#{retrieved_resource.inspect}."
-        resource = retrieved_resource unless retrieved_resource.nil?
+        unless retrieved_resource.nil?
+          # TODO(qingling128): Fix this temporary renaming from 'gke_container'
+          # to 'container'.
+          retrieved_resource.type = 'container' if
+            retrieved_resource.type == 'gke_container'
+          resource = retrieved_resource
+        end
       end
 
       # Once the resource type is settled down, determine the labels.
@@ -1317,8 +1325,7 @@ module Fluent
         end
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
-      elsif resource_type == GKE_CONSTANTS[:resource_type] &&
-            entry_level_common_labels.key?("#{GKE_CONSTANTS[:service]}/stream")
+      elsif resource_type == GKE_CONSTANTS[:resource_type]
         stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
         if stream == 'stdout'
           return 'INFO'

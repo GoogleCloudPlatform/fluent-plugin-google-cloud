@@ -331,6 +331,25 @@ module Constants
     }
   }
 
+  CONTAINER_FROM_APPLICATION_PARAMS = {
+    resource: {
+      type: GKE_CONSTANTS[:resource_type],
+      labels: {
+        'cluster_name' => CONTAINER_CLUSTER_NAME,
+        'namespace_id' => CONTAINER_NAMESPACE_ID,
+        'instance_id' => VM_ID,
+        'pod_id' => CONTAINER_POD_ID,
+        'container_name' => CONTAINER_CONTAINER_NAME,
+        'zone' => ZONE
+      }
+    },
+    log_name: 'redis',
+    project_id: PROJECT_ID,
+    labels: {
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
+    }
+  }
+
   # Docker Container.
   DOCKER_CONTAINER_PARAMS = {
     resource: {
@@ -580,6 +599,20 @@ module Constants
         'labels' => {
           'location' => ZONE,
           'container_id' => DOCKER_CONTAINER_ID
+        }
+      }.to_json,
+    # GKE container logs.
+    "gke_containerName.#{CONTAINER_NAMESPACE_ID}.#{CONTAINER_POD_NAME}." \
+    "#{CONTAINER_CONTAINER_NAME}" =>
+      {
+        'type' => GKE_CONSTANTS[:resource_type],
+        'labels' => {
+          'cluster_name' => CONTAINER_CLUSTER_NAME,
+          'container_name' => CONTAINER_CONTAINER_NAME,
+          'instance_id' => VM_ID,
+          'namespace_id' => CONTAINER_NAMESPACE_ID,
+          'pod_id' => CONTAINER_POD_ID,
+          'zone' => ZONE
         }
       }.to_json
   }
