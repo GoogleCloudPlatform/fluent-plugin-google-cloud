@@ -453,18 +453,18 @@ module Fluent
 
       grouped_entries.each do |tag, arr|
         entries = []
-        group_resource, group_common_labels =
+        group_level_resource, group_level_common_labels =
           determine_group_level_monitored_resource_and_labels(tag)
 
         arr.each do |time, record|
           next unless record.is_a?(Hash)
 
           extracted_resource_labels, extracted_common_labels = \
-            determine_entry_level_labels(group_resource, record)
-          entry_resource = group_resource.dup
-          entry_resource.labels.merge!(extracted_resource_labels)
-          entry_common_labels = \
-            group_common_labels.merge(extracted_common_labels)
+            determine_entry_level_labels(group_level_resource, record)
+          entry_level_resource = group_level_resource.dup
+          entry_level_resource.labels.merge!(extracted_resource_labels)
+          entry_level_common_labels = \
+            group_level_common_labels.merge(extracted_common_labels)
 
           is_json = false
           if @detect_json
@@ -492,9 +492,9 @@ module Fluent
           end
 
           ts_secs, ts_nanos = compute_timestamp(
-            entry_resource.type, record, time)
+            entry_level_resource.type, record, time)
           severity = compute_severity(
-            entry_resource.type, record, entry_common_labels)
+            entry_level_resource.type, record, entry_level_common_labels)
 
           ts_secs = begin
                       Integer ts_secs
@@ -508,10 +508,10 @@ module Fluent
                      end
           if @use_grpc
             entry = Google::Logging::V2::LogEntry.new(
-              labels: entry_common_labels,
+              labels: entry_level_common_labels,
               resource: Google::Api::MonitoredResource.new(
-                type: entry_resource.type,
-                labels: entry_resource.labels.to_h
+                type: entry_level_resource.type,
+                labels: entry_level_resource.labels.to_h
               ),
               severity: grpc_severity(severity)
             )
@@ -528,10 +528,11 @@ module Fluent
             end
           else
             # Remove the labels if we didn't populate them with anything.
-            entry_resource.labels = nil if entry_resource.labels.empty?
+            entry_level_resource.labels = nil if
+              entry_level_resource.labels.empty?
             entry = Google::Apis::LoggingV2beta1::LogEntry.new(
-              labels: entry_common_labels,
-              resource: entry_resource,
+              labels: entry_level_common_labels,
+              resource: entry_level_resource,
               severity: severity,
               timestamp: {
                 seconds: ts_secs,
@@ -546,7 +547,7 @@ module Fluent
 
           set_log_entry_fields(record, entry)
 
-          set_payload(entry_resource.type, record, entry, is_json)
+          set_payload(entry_level_resource.type, record, entry, is_json)
 
           entries.push(entry)
         end
@@ -554,21 +555,21 @@ module Fluent
         next if entries.empty?
 
         log_name = "projects/#{@project_id}/logs/#{log_name(
-          tag, group_resource)}"
+          tag, group_level_resource)}"
 
         # Does the actual write to the cloud logging api.
         client = api_client
         if @use_grpc
           begin
-            labels_utf8_pairs = group_common_labels.map do |k, v|
+            labels_utf8_pairs = group_level_common_labels.map do |k, v|
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
 
             write_request = Google::Logging::V2::WriteLogEntriesRequest.new(
               log_name: log_name,
               resource: Google::Api::MonitoredResource.new(
-                type: group_resource.type,
-                labels: group_resource.labels.to_h
+                type: group_level_resource.type,
+                labels: group_level_resource.labels.to_h
               ),
               labels: labels_utf8_pairs.to_h,
               entries: entries
@@ -632,8 +633,8 @@ module Fluent
             write_request = \
               Google::Apis::LoggingV2beta1::WriteLogEntriesRequest.new(
                 log_name: log_name,
-                resource: group_resource,
-                labels: group_common_labels,
+                resource: group_level_resource,
+                labels: group_level_common_labels,
                 entries: entries)
 
             # TODO: RequestOptions
@@ -978,25 +979,27 @@ module Fluent
       # Determine group level monitored resource type. For certain types,
       # extract useful info from the tag and store those in
       # matched_regex_group.
-      group_resource_type, matched_regex_group =
+      group_level_resource_type, matched_regex_group =
         determine_group_level_monitored_resource_type(tag)
 
       # Determine group level monitored resource labels and common labels.
-      group_resource_labels, group_common_labels =
-        determine_group_level_labels(group_resource_type, matched_regex_group)
+      group_level_resource_labels, group_level_common_labels =
+        determine_group_level_labels(group_level_resource_type,
+                                     matched_regex_group)
 
-      group_resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
-        type: group_resource_type,
-        labels: group_resource_labels.to_h
-      )
+      group_level_resource = Google::Apis::LoggingV2beta1::MonitoredResource \
+                             .new(
+                               type: group_level_resource_type,
+                               labels: group_level_resource_labels.to_h
+                             )
 
       # Freeze the per-request state. Any further changes must be made on a
       # per-entry basis.
-      group_resource.freeze
-      group_resource.labels.freeze
-      group_common_labels.freeze
+      group_level_resource.freeze
+      group_level_resource.labels.freeze
+      group_level_common_labels.freeze
 
-      [group_resource, group_common_labels]
+      [group_level_resource, group_level_common_labels]
     end
 
     # Determine group level monitored resource type shared by a collection of
@@ -1015,27 +1018,28 @@ module Fluent
 
     # Determine group level monitored resource labels and common labels. These
     # labels will be shared by a collection of entries.
-    def determine_group_level_labels(group_resource_type, matched_regex_group)
-      group_resource_labels = @resource.labels.dup
-      group_common_labels = @common_labels.dup
+    def determine_group_level_labels(group_level_resource_type,
+                                     matched_regex_group)
+      group_level_resource_labels = @resource.labels.dup
+      group_level_common_labels = @common_labels.dup
 
-      case group_resource_type
+      case group_level_resource_type
       # Cloud Functions.
       when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        group_resource_labels.merge!(
+        group_level_resource_labels.merge!(
           'region' => @gcf_region,
           'function_name' => decode_cloudfunctions_function_name(
             matched_regex_group['encoded_function_name'])
         )
 
-        instance_id = group_resource_labels.delete('instance_id')
-        group_common_labels.merge!(
+        instance_id = group_level_resource_labels.delete('instance_id')
+        group_level_common_labels.merge!(
           "#{GKE_CONSTANTS[:service]}/instance_id" => instance_id,
           "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
           "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-            group_resource_labels.delete('cluster_name'),
+            group_level_resource_labels.delete('cluster_name'),
           "#{COMPUTE_CONSTANTS[:service]}/zone" =>
-            group_resource_labels.delete('zone')
+            group_level_resource_labels.delete('zone')
         )
 
       # GKE container.
@@ -1046,7 +1050,7 @@ module Fluent
             matched_regex_group.names.zip(matched_regex_group.captures).to_h
           common_labels_candidates =
             resource_labels_candidates.dup
-          group_resource_labels.merge!(
+          group_level_resource_labels.merge!(
             delete_and_extract_labels(
               resource_labels_candidates,
               # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
@@ -1057,7 +1061,7 @@ module Fluent
               'namespace_name' => 'namespace_id',
               'pod_name' => 'pod_id'))
 
-          group_common_labels.merge!(
+          group_level_common_labels.merge!(
             delete_and_extract_labels(
               common_labels_candidates,
               GKE_CONSTANTS[:extra_common_labels]
@@ -1065,18 +1069,18 @@ module Fluent
         end
       end
 
-      [group_resource_labels, group_common_labels]
+      [group_level_resource_labels, group_level_common_labels]
     end
 
     # Extract entry resource and common labels that should be applied to
     # individual entries from the group resource.
-    def determine_entry_level_labels(group_resource, record)
+    def determine_entry_level_labels(group_level_resource, record)
       resource_labels = {}
       common_labels = {}
 
       # Cloud Functions.
-      if group_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-         record.key?('log')
+      if group_level_resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] \
+         && record.key?('log')
         @cloudfunctions_log_match =
           @compiled_cloudfunctions_log_regexp.match(record['log'])
         common_labels['execution_id'] =
@@ -1086,7 +1090,7 @@ module Fluent
       end
 
       # GKE containers.
-      if group_resource.type == GKE_CONSTANTS[:resource_type]
+      if group_level_resource.type == GKE_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
           delete_and_extract_labels(
@@ -1129,7 +1133,8 @@ module Fluent
       # Report them as monitored resource labels instead of common labels.
       # e.g. "dataflow.googleapis.com/job_id" => "job_id"
       [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
-        next unless group_resource.type == service_constants[:resource_type]
+        next unless
+          group_level_resource.type == service_constants[:resource_type]
         resource_labels.merge!(
           delete_and_extract_labels(
             common_labels, service_constants[:extra_common_labels]
@@ -1229,7 +1234,7 @@ module Fluent
       [ts_secs, ts_nanos]
     end
 
-    def compute_severity(resource_type, record, entry_common_labels)
+    def compute_severity(resource_type, record, entry_level_common_labels)
       if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
           return parse_severity(@cloudfunctions_log_match['severity'])
@@ -1245,8 +1250,8 @@ module Fluent
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
       elsif resource_type == GKE_CONSTANTS[:resource_type] &&
-            entry_common_labels.key?("#{GKE_CONSTANTS[:service]}/stream")
-        stream = entry_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
+            entry_level_common_labels.key?("#{GKE_CONSTANTS[:service]}/stream")
+        stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
         if stream == 'stdout'
           return 'INFO'
         elsif stream == 'stderr'
