@@ -60,6 +60,10 @@ module Fluent
         extra_common_labels: %w(namespace_name pod_name),
         metadata_attributes: %w(kube-env)
       }
+      DOCKER_CONSTANTS = {
+        service: 'docker.googleapis.com',
+        resource_type: 'docker_container'
+      }
       DATAFLOW_CONSTANTS = {
         service: 'dataflow.googleapis.com',
         resource_type: 'dataflow_step',
@@ -313,6 +317,11 @@ module Fluent
     config_param :monitoring_type, :string,
                  :default => Monitoring::PrometheusMonitoringRegistry.name
 
+    # Whether to call metadata agent to retrieve monitored resource.
+    config_param :enable_metadata_agent, :bool, :default => false
+    config_param :metadata_agent_url, :string,
+                 :default => DEFAULT_METADATA_AGENT_URL
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -372,22 +381,24 @@ module Fluent
 
       @platform = detect_platform
 
-      # Set required variables: @project_id, @vm_id, @vm_name and @zone by
-      # making some requests to metadata server.
-      #
-      # Note: Once we support metadata injection at Logging API side, we might
-      # no longer need to require all these metadata in logging agent. But for
-      # now, they are still required.
-      #
-      # TODO(qingling128): After Metadata Agent support is added, try extracting
-      # these info from responses from Metadata Agent first.
+      # Set agent-level monitored resource. This monitored resource is initiated
+      # as the logging agent starts up. It will be inherited by all log entries
+      # processed by this agent. First try to retrieve it via Metadata Agent.
+      if @enable_metadata_agent
+        # The local_resource_id for this should be the instance id. Since this
+        # can be implicitly inferred by Metadata Agent, we do not need to
+        # explicitly send the key.
+        @resource = call_metadata_agent_for_monitored_resource(
+          IMPLICIT_LOCAL_RESOURCE_ID)
+      end
+
+      # Set required variables: @project_id, @vm_id, @vm_name and @zone.
       set_required_metadata_variables
 
       # Retrieve monitored resource.
-      #
-      # TODO(qingling128): After Metadata Agent support is added, try retrieving
-      # the monitored resource from Metadata Agent first.
-      @resource = determine_agent_level_monitored_resource_via_legacy
+      # Fail over to retrieve monitored resource via the legacy path if we fail
+      # to get it from Metadata Agent.
+      @resource ||= determine_agent_level_monitored_resource_via_legacy
 
       # Set regexp that we should match tags against later on. Using a list
       # instead of a map to ensure order. For example, tags will be matched
@@ -438,36 +449,25 @@ module Fluent
     end
 
     def write(chunk)
-      # Group the entries since we have to make one call per tag.
-      grouped_entries = {}
-      chunk.msgpack_each do |tag, *arr|
-        sanitized_tag = sanitize_tag(tag)
-        if sanitized_tag.nil?
-          @log.warn "Dropping log entries with invalid tag: '#{tag}'. " \
-                    'A tag should be a string with utf8 characters.'
-          next
-        end
-        grouped_entries[sanitized_tag] ||= []
-        grouped_entries[sanitized_tag].push(arr)
-      end
+      grouped_entries = group_log_entries_by_tag_and_local_resource_id(chunk)
 
-      grouped_entries.each do |tag, arr|
+      grouped_entries.each do |(tag, local_resource_id), arr|
         entries = []
         group_level_resource, group_level_common_labels =
-          determine_group_level_monitored_resource_and_labels(tag)
+          determine_group_level_monitored_resource_and_labels(
+            tag, local_resource_id)
 
         arr.each do |time, record|
-          next unless record.is_a?(Hash)
-
           entry_level_resource, entry_level_common_labels =
             determine_entry_level_monitored_resource_and_labels(
               group_level_resource, group_level_common_labels, record)
-
           is_json = false
           if @detect_json
-            # Save the timestamp if available, then clear it out to allow for
-            # determining whether we should parse the log or message field.
+            # Save the timestamp and severity if available, then clear it out to
+            # allow for determining whether we should parse the log or message
+            # field.
             timestamp = record.delete('time')
+            severity = record.delete('severity')
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
             record_json = nil
@@ -482,10 +482,11 @@ module Fluent
               record = record_json
               is_json = true
             end
-            # Restore timestamp if necessary.
-            unless record.key?('time') || timestamp.nil?
-              record['time'] = timestamp
-            end
+            # Restore timestamp and severity if necessary. Note that the nested
+            # json might also has 'time' and 'severity' fields. If that is the
+            # case, we do not want to override the value.
+            record['time'] ||= timestamp if timestamp
+            record['severity'] ||= severity if severity
           end
 
           ts_secs, ts_nanos = compute_timestamp(
@@ -503,6 +504,7 @@ module Fluent
                      rescue ArgumentError, TypeError
                        ts_nanos
                      end
+
           if @use_grpc
             entry = Google::Logging::V2::LogEntry.new(
               labels: entry_level_common_labels,
@@ -543,7 +545,6 @@ module Fluent
           entry.trace = fq_trace_id if fq_trace_id
 
           set_log_entry_fields(record, entry)
-
           set_payload(entry_level_resource.type, record, entry, is_json)
 
           entries.push(entry)
@@ -576,8 +577,8 @@ module Fluent
             increment_successful_requests_count
             increment_ingested_entries_count(entries.length)
 
-            # Let the user explicitly know when the first call succeeded,
-            # to aid with verification and troubleshooting.
+            # Let the user explicitly know when the first call succeeded, to aid
+            # with verification and troubleshooting.
             unless @successful_call
               @successful_call = true
               @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
@@ -616,8 +617,8 @@ module Fluent
               @log.warn "Dropping #{dropped} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
-              # Assume this is a problem with the request itself
-              # and don't retry.
+              # Assume this is a problem with the request itself and don't
+              # retry.
               dropped = entries.length
               increment_dropped_entries_count(dropped)
               @log.error "Unknown response code #{error.code} from the "\
@@ -644,8 +645,8 @@ module Fluent
             increment_successful_requests_count
             increment_ingested_entries_count(entries.length)
 
-            # Let the user explicitly know when the first call succeeded,
-            # to aid with verification and troubleshooting.
+            # Let the user explicitly know when the first call succeeded, to aid
+            # with verification and troubleshooting.
             unless @successful_call
               @successful_call = true
               @log.info 'Successfully sent to Stackdriver Logging API.'
@@ -836,8 +837,9 @@ module Fluent
 
     # Retrieve monitored resource via the legacy way.
     #
-    # TODO(qingling128): Use this as only a fallback plan after Metadata Agent
-    # support is added.
+    # Note: This is just a failover plan if we fail to get metadata from
+    # Metadata Agent. Thus it should be equivalent to what Metadata Agent
+    # returns.
     def determine_agent_level_monitored_resource_via_legacy
       resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
         labels: {})
@@ -934,7 +936,7 @@ module Fluent
     rescue StandardError => e
       @log.error "Failed to set monitored resource labels for #{type}: ",
                  error: e
-      return {}
+      {}
     end
 
     # Determine the common labels that should be added to all log entries
@@ -970,9 +972,35 @@ module Fluent
       labels
     end
 
+    # Group the log entries by tag and local_resource_id pairs.
+    def group_log_entries_by_tag_and_local_resource_id(chunk)
+      groups = {}
+      chunk.msgpack_each do |tag, time, record|
+        unless record.is_a?(Hash)
+          @log.warn 'Dropping log entries with malformed record: ' \
+                    "'#{record.inspect}'. " \
+                    'A log record should be in JSON format.'
+          next
+        end
+        sanitized_tag = sanitize_tag(tag)
+        if sanitized_tag.nil?
+          @log.warn "Dropping log entries with invalid tag: '#{tag.inspect}'." \
+                    ' A tag should be a string with utf8 characters.'
+          next
+        end
+        local_resource_id = record.delete(LOCAL_RESOURCE_ID_KEY)
+        # A nil local_resource_id means "fall back to legacy".
+        hash_key = [sanitized_tag, local_resource_id].freeze
+        groups[hash_key] ||= []
+        groups[hash_key].push([time, record])
+      end
+      groups
+    end
+
     # Determine the group level monitored resource and common labels shared by a
     # collection of entries.
-    def determine_group_level_monitored_resource_and_labels(tag)
+    def determine_group_level_monitored_resource_and_labels(tag,
+                                                            local_resource_id)
       resource = @resource.dup
       resource.labels = @resource.labels.dup
       common_labels = @common_labels.dup
@@ -986,6 +1014,28 @@ module Fluent
           resource.type = derived_type
           break
         end
+      end
+
+      # Determine the monitored resource based on the local_resource_id.
+      # Different monitored resource types have unique ids in different format.
+      # We will query Metadata Agent for the monitored resource. Return the
+      # legacy monitored resource (either the instance resource or the resource
+      # inferred from the tag) if failed to get a monitored resource from
+      # Metadata Agent with this key.
+      #
+      # Docker container:
+      #   "container.<container_id>"
+      #   "containerName.<container_name>"
+      # GKE container:
+      #   "gke_containerName.<namespace_id>.<pod_name>.<container_name>"
+      if @enable_metadata_agent && local_resource_id
+        @log.debug 'Calling metadata agent with local_resource_id: ' \
+                  "#{local_resource_id}."
+        retrieved_resource = call_metadata_agent_for_monitored_resource(
+          local_resource_id)
+        @log.debug 'Retrieved monitored resource from metadata agent: ' \
+                  "#{retrieved_resource.inspect}."
+        resource = retrieved_resource unless retrieved_resource.nil?
       end
 
       # Once the resource type is settled down, determine the labels.
@@ -1013,8 +1063,7 @@ module Fluent
           # We only expect one occurrence of each key in the match group.
           resource_labels_candidates =
             matched_regexp_group.names.zip(matched_regexp_group.captures).to_h
-          common_labels_candidates =
-            resource_labels_candidates.dup
+          common_labels_candidates = resource_labels_candidates.dup
           resource.labels.merge!(
             delete_and_extract_labels(
               resource_labels_candidates,
@@ -1032,6 +1081,12 @@ module Fluent
               GKE_CONSTANTS[:extra_common_labels]
                 .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
         end
+
+      # Docker container.
+      # TODO(qingling128): Remove this logic once the resource is retrieved at a
+      # proper time (b/65175256).
+      when DOCKER_CONSTANTS[:resource_type]
+        common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
       end
 
       resource.freeze
@@ -1061,7 +1116,7 @@ module Fluent
               @cloudfunctions_log_match['execution_id']
         end
 
-      # GKE containers.
+      # GKE container.
       when GKE_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
@@ -1070,7 +1125,7 @@ module Fluent
 
         # If the record has been annotated by the kubernetes_metadata_filter
         # plugin, then use that metadata. Otherwise, rely on commonLabels
-        # populated at the grouped_entries level from the group's tag.
+        # populated from the group's tag.
         if record.key?('kubernetes')
           resource.labels.merge!(
             delete_and_extract_labels(
@@ -1113,6 +1168,48 @@ module Fluent
       end
 
       [resource, common_labels]
+    end
+
+    # Call Metadata Agent to get monitored resource information and parse
+    # response to Google::Api::MonitoredResource.
+    def call_metadata_agent_for_monitored_resource(local_resource_id)
+      response = query_metadata_agent("monitoredResource/#{local_resource_id}")
+      return nil if response.nil?
+      begin
+        resource = Google::Api::MonitoredResource.decode_json(response.to_json)
+      rescue Google::Protobuf::ParseError, ArgumentError => e
+        @log.error 'Error paring monitored resource from Metadata Agent. ' \
+                   "response: #{response.inspect}", error: e
+        return nil
+      end
+
+      # TODO(qingling128): Use Google::Api::MonitoredResource directly after we
+      # upgrade gRPC version to include the fix for the protobuf map
+      # corruption issue.
+      Google::Apis::LoggingV2beta1::MonitoredResource.new(
+        type: resource.type,
+        labels: resource.labels.to_h
+      )
+    end
+
+    # Issue a request to the Metadata Agent's local API and parse the response
+    # to JSON. Return nil in case of failure.
+    def query_metadata_agent(path)
+      url = "#{@metadata_agent_url}/#{path}"
+      @log.debug("Calling Metadata Agent: #{url}")
+      open(url) do |f|
+        response = f.read
+        parsed_hash = parse_json_or_nil(response)
+        if parsed_hash.nil?
+          @log.error 'Response from Metadata Agent is not in valid json ' \
+                     "format: '#{response.inspect}'."
+          return nil
+        end
+        @log.debug "Response from Metadata Agent: #{parsed_hash}"
+        return parsed_hash
+      end
+    rescue StandardError => e
+      @log.error 'Error calling Metadata Agent.', error: e
     end
 
     # TODO: This functionality should eventually be available in another
@@ -1446,9 +1543,8 @@ module Fluent
                    hash.nil? || !hash.is_a?(Hash)
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
-        extracted_labels[new_label] =
-          convert_to_utf8(hash.delete(original_label).to_s) if
-            hash.key?(original_label)
+        value = hash.delete(original_label)
+        extracted_labels[new_label] = convert_to_utf8(value.to_s) if value
       end
     end
 
@@ -1514,7 +1610,8 @@ module Fluent
         text_payload = record['log']
       elsif is_json
         json_payload = record
-      elsif resource_type == GKE_CONSTANTS[:resource_type] &&
+      elsif [GKE_CONSTANTS[:resource_type],
+             DOCKER_CONSTANTS[:resource_type]].include?(resource_type) &&
             record.key?('log')
         text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
