@@ -14,7 +14,9 @@
 
 # Constants used by unit tests for Google Cloud Logging plugin.
 module Constants
-  include Fluent::GoogleCloudOutput::Constants
+  include Fluent::GoogleCloudOutput::ServiceConstants
+  include Fluent::GoogleCloudOutput::ConfigConstants
+  include Fluent::GoogleCloudOutput::InternalConstants
 
   # Generic attributes.
   HOSTNAME = Socket.gethostname

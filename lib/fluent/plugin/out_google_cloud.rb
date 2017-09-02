@@ -38,12 +38,12 @@ end
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
-    # Constants for service names and resource types.
-    module Constants
+    # Constants for service names, resource types and etc.
+    module ServiceConstants
       APPENGINE_CONSTANTS = {
         service: 'appengine.googleapis.com',
         resource_type: 'gae_app',
-        metadata_attributes: %w(gae_backend_name gae_backend_version).to_set
+        metadata_attributes: %w(gae_backend_name gae_backend_version)
       }
       CLOUDFUNCTIONS_CONSTANTS = {
         service: 'cloudfunctions.googleapis.com',
@@ -58,7 +58,7 @@ module Fluent
         resource_type: 'container',
         extra_resource_labels: %w(namespace_id pod_id container_name),
         extra_common_labels: %w(namespace_name pod_name),
-        metadata_attributes: %w(kube-env).to_set
+        metadata_attributes: %w(kube-env)
       }
       DATAFLOW_CONSTANTS = {
         service: 'dataflow.googleapis.com',
@@ -68,8 +68,7 @@ module Fluent
       DATAPROC_CONSTANTS = {
         service: 'cluster.dataproc.googleapis.com',
         resource_type: 'cloud_dataproc_cluster',
-        metadata_attributes:
-          %w(dataproc-cluster-uuid dataproc-cluster-name).to_set
+        metadata_attributes: %w(dataproc-cluster-uuid dataproc-cluster-name)
       }
       EC2_CONSTANTS = {
         service: 'ec2.amazonaws.com',
@@ -92,17 +91,34 @@ module Fluent
       # The map between a resource type and expected subservice attributes.
       SUBSERVICE_METADATA_ATTRIBUTES = \
         [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAPROC_CONSTANTS]
-        .map { |consts| [consts[:resource_type], consts[:metadata_attributes]] }
-        .to_h
+        .map do |consts|
+          [consts[:resource_type], consts[:metadata_attributes].to_set]
+        end.to_h
+    end
 
-      # Default values for JSON payload keys to set the "trace",
-      # "sourceLocation", "operation" and "labels" fields in the LogEntry.
-      DEFAULT_PAYLOAD_KEY_PREFIX = 'logging.googleapis.com'
+    # Constants for configuration.
+    module ConfigConstants
+      # Default values for JSON payload keys to set the "httpRequest",
+      # "operation", "sourceLocation", "trace" fields in the LogEntry.
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'
-      DEFAULT_OPERATION_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/operation"
-      DEFAULT_SOURCE_LOCATION_KEY =
-        "#{DEFAULT_PAYLOAD_KEY_PREFIX}/sourceLocation"
-      DEFAULT_TRACE_KEY = "#{DEFAULT_PAYLOAD_KEY_PREFIX}/trace"
+      DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'
+      DEFAULT_SOURCE_LOCATION_KEY = 'logging.googleapis.com/sourceLocation'
+      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
+
+      DEFAULT_METADATA_AGENT_URL =
+        'http://local-metadata-agent.stackdriver.com:8000'
+    end
+
+    # Constants for log entry field extraction.
+    module InternalConstants
+      # Use empty string as request path when the local_resource_id of monitored
+      # resource can be implicitly inferred by Metadata Agent.
+      IMPLICIT_LOCAL_RESOURCE_ID = ''
+
+      # The label name of local_resource_id in the json payload. When a record
+      # has this field in the payload, we will use the value to retrieve
+      # monitored resource from Stackdriver Metadata agent.
+      LOCAL_RESOURCE_ID_KEY = 'logging.googleapis.com/local_resource_id'
 
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
@@ -155,7 +171,9 @@ module Fluent
       }
     end
 
-    include self::Constants
+    include self::ServiceConstants
+    include self::ConfigConstants
+    include self::InternalConstants
 
     Fluent::Plugin.register_output('google_cloud', self)
 
