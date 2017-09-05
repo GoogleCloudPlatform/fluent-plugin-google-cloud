@@ -1039,11 +1039,10 @@ module Fluent
         @log.debug 'Retrieved monitored resource from metadata agent: ' \
                   "#{retrieved_resource.inspect}."
         if retrieved_resource
+          resource = retrieved_resource
           # TODO(qingling128): Fix this temporary renaming from 'gke_container'
           # to 'container'.
-          retrieved_resource.type = 'container' if
-            retrieved_resource.type == 'gke_container'
-          resource = retrieved_resource
+          resource.type = 'container' if resource.type == 'gke_container'
         end
       end
 
