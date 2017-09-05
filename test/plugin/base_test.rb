@@ -1211,7 +1211,9 @@ module BaseTest
         d.emit(docker_container_application_log_entry(log_entry(0)))
         d.run
       end
-      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_WITH_NO_STREAM)
+      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM) do |entry, i|
+        verify_default_log_entry_text(entry['textPayload'], i, entry)
+      end
       assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
       assert_requested_metadata_agent_stub(
         "containerName.#{DOCKER_CONTAINER_NAME}")
@@ -1229,7 +1231,8 @@ module BaseTest
         d.emit(docker_container_application_log_entry(log_entry(0)))
         d.run
       end
-      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_WITH_NO_STREAM) do |entry|
+      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM) do |entry, i|
+        verify_default_log_entry_text(entry['textPayload'], i, entry)
         # Timestamp in 'time' field from log entry should be set properly.
         assert_equal DOCKER_CONTAINER_SECONDS_EPOCH,
                      entry['timestamp']['seconds'], entry
@@ -1243,21 +1246,20 @@ module BaseTest
   end
 
   # Test that the 'source' field is properly extracted from the record json and
-  # set as a common label 'stream'. Also entry.severity is set accordingly for
-  # Docker container logs.
-  def test_source_and_severity_for_docker_container_logs
+  # set as a common label 'stream'.
+  def test_source_for_docker_container_logs
     {
       docker_container_stdout_stderr_log_entry(
         log_entry(0), DOCKER_CONTAINER_STREAM_STDOUT) =>
         DOCKER_CONTAINER_PARAMS,
       docker_container_stdout_stderr_log_entry(
         log_entry(0), DOCKER_CONTAINER_STREAM_STDERR) =>
-        DOCKER_CONTAINER_PARAMS_WITH_STREAM_STDERR,
+        DOCKER_CONTAINER_PARAMS_STREAM_STDERR,
       docker_container_application_log_entry(log_entry(0)) =>
-        DOCKER_CONTAINER_PARAMS_WITH_NO_STREAM,
+        DOCKER_CONTAINER_PARAMS_NO_STREAM,
       docker_container_application_log_entry(log_entry(0)) \
         .merge('severity' => 'warning') =>
-        DOCKER_CONTAINER_PARAMS_WITH_NO_STREAM
+        DOCKER_CONTAINER_PARAMS_NO_STREAM
     }.each do |log_entry, expected_params|
       new_stub_context do
         setup_gce_metadata_stubs
@@ -1267,7 +1269,9 @@ module BaseTest
           d.emit(log_entry)
           d.run
         end
-        verify_log_entries(1, expected_params)
+        verify_log_entries(1, expected_params) do |entry, i|
+          verify_default_log_entry_text(entry['textPayload'], i, entry)
+        end
       end
     end
   end

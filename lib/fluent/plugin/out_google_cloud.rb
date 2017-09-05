@@ -94,8 +94,7 @@ module Fluent
 
       # The map between a resource type and expected subservice attributes.
       SUBSERVICE_METADATA_ATTRIBUTES = \
-        [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAPROC_CONSTANTS]
-        .map do |consts|
+        [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAPROC_CONSTANTS].map do |consts|
           [consts[:resource_type], consts[:metadata_attributes].to_set]
         end.to_h
     end
@@ -388,7 +387,9 @@ module Fluent
         # The local_resource_id for this should be the instance id. Since this
         # can be implicitly inferred by Metadata Agent, we do not need to
         # explicitly send the key.
-        @resource = call_metadata_agent_for_monitored_resource(
+        # TODO(qingling128): Remove this logic once the resource is retrieved at
+        # a proper time (b/65175256).
+        @resource = query_metadata_agent_for_monitored_resource(
           IMPLICIT_LOCAL_RESOURCE_ID)
       end
 
@@ -484,9 +485,8 @@ module Fluent
               record = record_json
               is_json = true
             end
-            # Restore timestamp and severity if necessary. Note that the nested
-            # json might also has 'time' and 'severity' fields. If that is the
-            # case, we do not want to override the value.
+            # Restore timestamp and severity if necessary. Note that we don't
+            # want to override these keys in the JSON we've just parsed.
             record['time'] ||= timestamp if timestamp
             record['severity'] ||= severity if severity
           end
@@ -974,7 +974,8 @@ module Fluent
       labels
     end
 
-    # Group the log entries by tag and local_resource_id pairs.
+    # Group the log entries by tag and local_resource_id pairs. Also filter out
+    # invalid non-Hash entries.
     def group_log_entries_by_tag_and_local_resource_id(chunk)
       groups = {}
       chunk.msgpack_each do |tag, time, record|
@@ -1033,11 +1034,11 @@ module Fluent
       if @enable_metadata_agent && local_resource_id
         @log.debug 'Calling metadata agent with local_resource_id: ' \
                   "#{local_resource_id}."
-        retrieved_resource = call_metadata_agent_for_monitored_resource(
+        retrieved_resource = query_metadata_agent_for_monitored_resource(
           local_resource_id)
         @log.debug 'Retrieved monitored resource from metadata agent: ' \
                   "#{retrieved_resource.inspect}."
-        unless retrieved_resource.nil?
+        if retrieved_resource
           # TODO(qingling128): Fix this temporary renaming from 'gke_container'
           # to 'container'.
           retrieved_resource.type = 'container' if
@@ -1180,7 +1181,7 @@ module Fluent
 
     # Call Metadata Agent to get monitored resource information and parse
     # response to Google::Api::MonitoredResource.
-    def call_metadata_agent_for_monitored_resource(local_resource_id)
+    def query_metadata_agent_for_monitored_resource(local_resource_id)
       response = query_metadata_agent("monitoredResource/#{local_resource_id}")
       return nil if response.nil?
       begin
