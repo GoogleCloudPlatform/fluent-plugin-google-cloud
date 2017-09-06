@@ -503,7 +503,7 @@ module BaseTest
       end
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
-          "#{CONTAINER_CONSTANTS[:service]}/container_name" =>
+          "#{GKE_CONSTANTS[:service]}/container_name" =>
             URI.decode(encoded_name)),
         log_name: encoded_name)
       verify_log_entries(0, params, 'textPayload')
@@ -830,7 +830,7 @@ module BaseTest
       d.run
     end
     expected_params = CONTAINER_FROM_TAG_PARAMS.merge(
-      labels: { "#{CONTAINER_CONSTANTS[:service]}/stream" => 'stderr' }
+      labels: { "#{GKE_CONSTANTS[:service]}/stream" => 'stderr' }
     ) { |_, oldval, newval| oldval.merge(newval) }
     verify_log_entries(1, expected_params) do |entry, i|
       verify_default_log_entry_text(entry['textPayload'], i, entry)
@@ -1106,6 +1106,197 @@ module BaseTest
     end
   end
 
+  # Metadata Agent related tests.
+
+  # Test enable_metadata_agent not set or set to false.
+  def test_configure_enable_metadata_agent_default_and_false
+    setup_gce_metadata_stubs
+    [create_driver, create_driver(DISABLE_METADATA_AGENT_CONFIG)].each do |d|
+      assert_false d.instance.instance_variable_get(:@enable_metadata_agent)
+    end
+  end
+
+  # Test enable_metadata_agent set to true.
+  def test_configure_enable_metadata_agent_true
+    new_stub_context do
+      setup_gce_metadata_stubs
+      setup_metadata_agent_stubs
+      d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
+      assert_true d.instance.instance_variable_get(:@enable_metadata_agent)
+      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+    end
+  end
+
+  # Test that an implicit monitored resource can be retrieved from Metadata
+  # Agent with an empty string as the local_resource_id.
+  def test_retrieve_implicit_monitored_resource
+    # GCE metadata stubs has VM_ID and ZONE, while the Metadata Agent stub has
+    # METADATA_VM_ID and METADATA_ZONE.
+    new_stub_context do
+      setup_gce_metadata_stubs
+      setup_metadata_agent_stubs
+      setup_logging_stubs do
+        d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
+        d.emit('message' => log_entry(0))
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS_WITH_METADATA_VM_ID_AND_ZONE)
+      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+    end
+  end
+
+  # Docker Container.
+
+  # Test textPayload logs from Docker container stdout / stderr.
+  def test_docker_container_stdout_stderr_logs_text_payload
+    [1, 2, 3, 5, 11, 50].each do |n|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_metadata_agent_stubs
+        setup_logging_stubs do
+          d = create_driver(DOCKER_CONTAINER_CONFIG)
+          n.times do |i|
+            d.emit(docker_container_stdout_stderr_log_entry(log_entry(i)))
+          end
+          d.run
+        end
+        verify_log_entries(n, DOCKER_CONTAINER_PARAMS)
+        assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+        assert_requested_metadata_agent_stub("container.#{DOCKER_CONTAINER_ID}")
+      end
+    end
+  end
+
+  # Test jsonPayload logs from Docker container stdout / stderr.
+  def test_docker_container_stdout_stderr_logs_json_payload
+    [1, 2, 3, 5, 11, 50].each do |n|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_metadata_agent_stubs
+        setup_logging_stubs do
+          d = create_driver(DOCKER_CONTAINER_CONFIG)
+          n.times do
+            d.emit(docker_container_stdout_stderr_log_entry(
+                     '{"msg": "test log entry ' \
+                     "#{n}" \
+                     '", "tag2": "test", "data": ' \
+                     '5000, "severity": "WARNING"}'))
+          end
+          d.run
+        end
+        verify_log_entries(n, DOCKER_CONTAINER_PARAMS, 'jsonPayload') do |entry|
+          fields = get_fields(entry['jsonPayload'])
+          assert_equal 3, fields.size, entry
+          assert_equal "test log entry #{n}", get_string(fields['msg']), entry
+          assert_equal 'test', get_string(fields['tag2']), entry
+          assert_equal 5000, get_number(fields['data']), entry
+        end
+        assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+        assert_requested_metadata_agent_stub("container.#{DOCKER_CONTAINER_ID}")
+      end
+    end
+  end
+
+  # Test logs from applications running in Docker containers. These logs have
+  # the label "logging.googleapis.com/local_resource_id" set in the format of
+  # "containerName.<container_name>".
+  def test_docker_container_application_logs
+    new_stub_context do
+      setup_gce_metadata_stubs
+      setup_metadata_agent_stubs
+      setup_logging_stubs do
+        # Metadata Agent is not enabled. Will call Docker Remote API for
+        # container info.
+        d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
+        d.emit(docker_container_application_log_entry(log_entry(0)))
+        d.run
+      end
+      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM)
+      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+      assert_requested_metadata_agent_stub(
+        "containerName.#{DOCKER_CONTAINER_NAME}")
+    end
+  end
+
+  # Test that the 'time' field from the json record is extracted and set to
+  # entry.timestamp for Docker container logs.
+  def test_time_field_extraction_for_docker_container_logs
+    new_stub_context do
+      setup_gce_metadata_stubs
+      setup_metadata_agent_stubs
+      setup_logging_stubs do
+        d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
+        d.emit(docker_container_application_log_entry(log_entry(0)))
+        d.run
+      end
+      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM) do |entry, i|
+        verify_default_log_entry_text(entry['textPayload'], i, entry)
+        # Timestamp in 'time' field from log entry should be set properly.
+        assert_equal DOCKER_CONTAINER_SECONDS_EPOCH,
+                     entry['timestamp']['seconds'], entry
+        assert_equal DOCKER_CONTAINER_NANOS,
+                     entry['timestamp']['nanos'], entry
+      end
+      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+      assert_requested_metadata_agent_stub(
+        "containerName.#{DOCKER_CONTAINER_NAME}")
+    end
+  end
+
+  # Test that the 'source' field is properly extracted from the record json and
+  # set as a common label 'stream'.
+  def test_source_for_docker_container_logs
+    {
+      docker_container_stdout_stderr_log_entry(
+        log_entry(0), DOCKER_CONTAINER_STREAM_STDOUT) =>
+        DOCKER_CONTAINER_PARAMS,
+      docker_container_stdout_stderr_log_entry(
+        log_entry(0), DOCKER_CONTAINER_STREAM_STDERR) =>
+        DOCKER_CONTAINER_PARAMS_STREAM_STDERR,
+      docker_container_application_log_entry(log_entry(0)) =>
+        DOCKER_CONTAINER_PARAMS_NO_STREAM,
+      docker_container_application_log_entry(log_entry(0)) \
+        .merge('severity' => 'warning') =>
+        DOCKER_CONTAINER_PARAMS_NO_STREAM
+    }.each do |log_entry, expected_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_metadata_agent_stubs
+        setup_logging_stubs do
+          d = create_driver(DOCKER_CONTAINER_CONFIG)
+          d.emit(log_entry)
+          d.run
+        end
+        verify_log_entries(1, expected_params)
+      end
+    end
+  end
+
+  # Test GKE container logs. These logs have the label
+  # "logging.googleapis.com/local_resource_id" set in the format of
+  # "gke_containerName.<namespace_id>.<pod_name>.<container_name>".
+  def test_gke_container_logs
+    [1, 2, 3, 5, 11, 50].each do |n|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_container_metadata_stubs
+        setup_metadata_agent_stubs
+        setup_logging_stubs do
+          d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
+          n.times do |i|
+            d.emit(gke_container_log_entry(log_entry(i)))
+          end
+          d.run
+        end
+        verify_log_entries(n, CONTAINER_FROM_APPLICATION_PARAMS)
+        assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
+        assert_requested_metadata_agent_stub(
+          "gke_containerName.#{CONTAINER_NAMESPACE_ID}.#{CONTAINER_POD_NAME}." \
+          "#{CONTAINER_CONTAINER_NAME}")
+      end
+    end
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1221,6 +1412,33 @@ module BaseTest
     Prometheus::Client.registry.instance_variable_set('@metrics', {})
   end
 
+  # Metadata Agent.
+
+  def metadata_request_url(local_resource_id)
+    "#{DEFAULT_METADATA_AGENT_URL}/monitoredResource/#{local_resource_id}"
+  end
+
+  # Provide a stub context that initializes @logs_sent, executes the block and
+  # resets WebMock at the end.
+  def new_stub_context
+    @logs_sent = []
+    yield
+    WebMock.reset!
+  end
+
+  def setup_metadata_agent_stubs
+    MONITORED_RESOURCE_STUBS.each do |local_resource_id, resource|
+      stub_request(:get, metadata_request_url(local_resource_id))
+        .to_return(status: 200, body: resource)
+    end
+  end
+
+  def assert_requested_metadata_agent_stub(local_resource_id)
+    assert_requested :get, metadata_request_url(local_resource_id)
+  end
+
+  # GKE Container.
+
   def container_tag_with_container_name(container_name)
     "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
       "#{container_name}"
@@ -1250,6 +1468,40 @@ module BaseTest
       log: log,
       stream: stream,
       time: CONTAINER_TIMESTAMP
+    }
+  end
+
+  def gke_container_log_entry(log)
+    {
+      log: log,
+      LOCAL_RESOURCE_ID_KEY =>
+        "gke_containerName.#{CONTAINER_NAMESPACE_ID}" \
+        ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}"
+    }
+  end
+
+  # Docker Container.
+
+  def docker_container_stdout_stderr_log_entry(
+    log, stream = DOCKER_CONTAINER_STREAM_STDOUT)
+    severity = if stream == DOCKER_CONTAINER_STREAM_STDOUT
+                 'INFO'
+               else
+                 'ERROR'
+               end
+    {
+      log: log,
+      source: stream,
+      severity: severity,
+      LOCAL_RESOURCE_ID_KEY => "container.#{DOCKER_CONTAINER_ID}"
+    }
+  end
+
+  def docker_container_application_log_entry(log)
+    {
+      log: log,
+      time: DOCKER_CONTAINER_TIMESTAMP,
+      LOCAL_RESOURCE_ID_KEY => "containerName.#{DOCKER_CONTAINER_NAME}"
     }
   end
 

@@ -14,7 +14,9 @@
 
 # Constants used by unit tests for Google Cloud Logging plugin.
 module Constants
-  include Fluent::GoogleCloudOutput::Constants
+  include Fluent::GoogleCloudOutput::ServiceConstants
+  include Fluent::GoogleCloudOutput::ConfigConstants
+  include Fluent::GoogleCloudOutput::InternalConstants
 
   # Generic attributes.
   HOSTNAME = Socket.gethostname
@@ -25,6 +27,10 @@ module Constants
   ZONE = 'us-central1-b'
   FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
   VM_ID = '9876543210'
+
+  # Attributes used for the Metadata Agent resources.
+  METADATA_ZONE = 'us-central1-c'
+  METADATA_VM_ID = '0123456789'
 
   # Attributes used for custom (overridden) configs.
   CUSTOM_PROJECT_ID = 'test-custom-project-id'
@@ -50,6 +56,16 @@ module Constants
   # Managed VMs specific labels.
   MANAGED_VM_BACKEND_NAME = 'default'
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'
+
+  # Docker Container labels.
+  DOCKER_CONTAINER_ID = '0d0f03ff8d3c42688692536d1af77a28cd135c0a5c531f25a31'
+  DOCKER_CONTAINER_NAME = 'happy_hippo'
+  DOCKER_CONTAINER_STREAM_STDOUT = 'stdout'
+  DOCKER_CONTAINER_STREAM_STDERR = 'stderr'
+  # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch.
+  DOCKER_CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'
+  DOCKER_CONTAINER_SECONDS_EPOCH = 1_234_567_890
+  DOCKER_CONTAINER_NANOS = 987_654_321
 
   # Container Engine / Kubernetes specific labels.
   CONTAINER_CLUSTER_NAME = 'cluster-1'
@@ -149,6 +165,20 @@ module Constants
     monitoring_type prometheus
   )
 
+  ENABLE_METADATA_AGENT_CONFIG = %(
+    enable_metadata_agent true
+  )
+
+  DISABLE_METADATA_AGENT_CONFIG = %(
+    enable_metadata_agent false
+  )
+
+  DOCKER_CONTAINER_CONFIG = %(
+    enable_metadata_agent true
+    label_map { "source": "#{DOCKER_CONSTANTS[:service]}/stream" }
+    detect_json true
+  )
+
   CUSTOM_METADATA_CONFIG = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
@@ -205,6 +235,8 @@ module Constants
   )
 
   # Service configurations for various services.
+
+  # GCE.
   COMPUTE_PARAMS = {
     resource: {
       type: COMPUTE_CONSTANTS[:resource_type],
@@ -219,7 +251,16 @@ module Constants
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }
+  COMPUTE_PARAMS_WITH_METADATA_VM_ID_AND_ZONE = COMPUTE_PARAMS.merge(
+    resource: COMPUTE_PARAMS[:resource].merge(
+      labels: {
+        'instance_id' => METADATA_VM_ID,
+        'zone' => METADATA_ZONE
+      }
+    )
+  )
 
+  # GAE.
   VMENGINE_PARAMS = {
     resource: {
       type: APPENGINE_CONSTANTS[:resource_type],
@@ -237,12 +278,13 @@ module Constants
     }
   }
 
+  # GKE Container.
   CONTAINER_TAG = "kubernetes.#{CONTAINER_POD_NAME}_" \
                   "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
 
   CONTAINER_FROM_METADATA_PARAMS = {
     resource: {
-      type: CONTAINER_CONSTANTS[:resource_type],
+      type: GKE_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_ID,
@@ -255,10 +297,10 @@ module Constants
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_CONSTANTS[:service]}/namespace_name" =>
+      "#{GKE_CONSTANTS[:service]}/namespace_name" =>
         CONTAINER_NAMESPACE_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
+      "#{GKE_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
+      "#{GKE_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
       "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
@@ -268,7 +310,7 @@ module Constants
   # namespace and pod names.
   CONTAINER_FROM_TAG_PARAMS = {
     resource: {
-      type: CONTAINER_CONSTANTS[:resource_type],
+      type: GKE_CONSTANTS[:resource_type],
       labels: {
         'cluster_name' => CONTAINER_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_NAME,
@@ -281,14 +323,56 @@ module Constants
     log_name: CONTAINER_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_CONSTANTS[:service]}/namespace_name" =>
+      "#{GKE_CONSTANTS[:service]}/namespace_name" =>
         CONTAINER_NAMESPACE_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
-      "#{CONTAINER_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
+      "#{GKE_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
+      "#{GKE_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }
 
+  CONTAINER_FROM_APPLICATION_PARAMS = {
+    resource: {
+      type: GKE_CONSTANTS[:resource_type],
+      labels: {
+        'cluster_name' => CONTAINER_CLUSTER_NAME,
+        'namespace_id' => CONTAINER_NAMESPACE_ID,
+        'instance_id' => VM_ID,
+        'pod_id' => CONTAINER_POD_ID,
+        'container_name' => CONTAINER_CONTAINER_NAME,
+        'zone' => ZONE
+      }
+    },
+    log_name: 'redis',
+    project_id: PROJECT_ID,
+    labels: {
+      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
+    }
+  }
+
+  # Docker Container.
+  DOCKER_CONTAINER_PARAMS = {
+    resource: {
+      type: DOCKER_CONSTANTS[:resource_type],
+      labels: {
+        'container_id' => DOCKER_CONTAINER_ID,
+        'location' => ZONE
+      }
+    },
+    log_name: 'test',
+    project_id: PROJECT_ID,
+    labels: {
+      "#{DOCKER_CONSTANTS[:service]}/stream" => DOCKER_CONTAINER_STREAM_STDOUT
+    }
+  }
+  DOCKER_CONTAINER_PARAMS_STREAM_STDERR = DOCKER_CONTAINER_PARAMS.merge(
+    labels: DOCKER_CONTAINER_PARAMS[:labels].merge(
+      "#{DOCKER_CONSTANTS[:service]}/stream" => DOCKER_CONTAINER_STREAM_STDERR
+    )
+  )
+  DOCKER_CONTAINER_PARAMS_NO_STREAM = DOCKER_CONTAINER_PARAMS.merge(labels: {})
+
+  # Cloud Functions.
   CLOUDFUNCTIONS_TAG = "kubernetes.#{CLOUDFUNCTIONS_POD_NAME}_" \
                         "#{CLOUDFUNCTIONS_NAMESPACE_NAME}_" \
                         "#{CLOUDFUNCTIONS_CONTAINER_NAME}"
@@ -305,8 +389,8 @@ module Constants
     project_id: PROJECT_ID,
     labels: {
       'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
-      "#{CONTAINER_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
+      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
         CLOUDFUNCTIONS_CLUSTER_NAME,
       "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
@@ -325,8 +409,8 @@ module Constants
     log_name: 'cloud-functions',
     project_id: PROJECT_ID,
     labels: {
-      "#{CONTAINER_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{CONTAINER_CONSTANTS[:service]}/cluster_name" =>
+      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
+      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
         CLOUDFUNCTIONS_CLUSTER_NAME,
       "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
@@ -334,6 +418,7 @@ module Constants
     }
   }
 
+  # Cloud Dataflow.
   DATAFLOW_PARAMS = {
     resource: {
       type: DATAFLOW_CONSTANTS[:resource_type],
@@ -353,6 +438,7 @@ module Constants
     }
   }
 
+  # Cloud Dataproc.
   DATAPROC_PARAMS = {
     resource: {
       type: DATAPROC_CONSTANTS[:resource_type],
@@ -371,6 +457,7 @@ module Constants
     }
   }
 
+  # Cloud ML.
   ML_PARAMS = {
     resource: {
       type: ML_CONSTANTS[:resource_type],
@@ -481,4 +568,50 @@ module Constants
     '' => '_'
   }
   ALL_TAGS = VALID_TAGS.merge(INVALID_TAGS)
+
+  # Stub value for Monitored resources from Metadata Agent.
+  # Map from the local_resource_id to the retrieved monitored resource.
+  MONITORED_RESOURCE_STUBS = {
+    # Implicit GCE instance.
+    IMPLICIT_LOCAL_RESOURCE_ID =>
+      {
+        'type' => COMPUTE_CONSTANTS[:resource_type],
+        'labels' => {
+          'zone' => METADATA_ZONE,
+          'instance_id' => METADATA_VM_ID
+        }
+      }.to_json,
+    # Docker container stderr / stdout logs.
+    "container.#{DOCKER_CONTAINER_ID}" =>
+      {
+        'type' => DOCKER_CONSTANTS[:resource_type],
+        'labels' => {
+          'location' => ZONE,
+          'container_id' => DOCKER_CONTAINER_ID
+        }
+      }.to_json,
+    # Docker container application logs.
+    "containerName.#{DOCKER_CONTAINER_NAME}" =>
+      {
+        'type' => DOCKER_CONSTANTS[:resource_type],
+        'labels' => {
+          'location' => ZONE,
+          'container_id' => DOCKER_CONTAINER_ID
+        }
+      }.to_json,
+    # GKE container logs.
+    "gke_containerName.#{CONTAINER_NAMESPACE_ID}.#{CONTAINER_POD_NAME}." \
+    "#{CONTAINER_CONTAINER_NAME}" =>
+      {
+        'type' => GKE_CONSTANTS[:resource_type],
+        'labels' => {
+          'cluster_name' => CONTAINER_CLUSTER_NAME,
+          'container_name' => CONTAINER_CONTAINER_NAME,
+          'instance_id' => VM_ID,
+          'namespace_id' => CONTAINER_NAMESPACE_ID,
+          'pod_id' => CONTAINER_POD_ID,
+          'zone' => ZONE
+        }
+      }.to_json
+  }
 end
