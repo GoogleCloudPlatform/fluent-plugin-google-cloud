@@ -1211,9 +1211,7 @@ module BaseTest
         d.emit(docker_container_application_log_entry(log_entry(0)))
         d.run
       end
-      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM) do |entry, i|
-        verify_default_log_entry_text(entry['textPayload'], i, entry)
-      end
+      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM)
       assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
       assert_requested_metadata_agent_stub(
         "containerName.#{DOCKER_CONTAINER_NAME}")
@@ -1269,9 +1267,7 @@ module BaseTest
           d.emit(log_entry)
           d.run
         end
-        verify_log_entries(1, expected_params) do |entry, i|
-          verify_default_log_entry_text(entry['textPayload'], i, entry)
-        end
+        verify_log_entries(1, expected_params)
       end
     end
   end
