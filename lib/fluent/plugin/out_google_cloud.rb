@@ -580,6 +580,7 @@ module Fluent
               entries: entries
             )
 
+            entries_count = entries.length
             client.write_log_entries(write_request)
             increment_successful_requests_count
             increment_ingested_entries_count(entries.length)
@@ -595,6 +596,8 @@ module Fluent
             increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
             increment_log_entry_retry_count(entries.length, error.code)
             # RPC cancelled, so retry via re-raising the error.
+            @log.debug "Retrying #{entries_count} log message(s) later.",
+                       error: error.to_s, error_code: error.code.to_s
             raise error
 
           rescue GRPC::BadStatus => error
@@ -607,30 +610,29 @@ module Fluent
                  GRPC::Core::StatusCodes::UNKNOWN
               # Server error, so retry via re-raising the error.
               increment_log_entry_retry_count(entries.length, error.code)
+              @log.debug "Retrying #{entries_count} log message(s) later.",
+                         error: error.to_s, error_code: error.code.to_s
               raise error
             when GRPC::Core::StatusCodes::UNIMPLEMENTED,
                  GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED
               # Most client errors indicate a problem with the request itself
               # and should not be retried.
-              dropped = entries.length
-              increment_dropped_entries_count(dropped)
-              @log.warn "Dropping #{dropped} log message(s)",
+              increment_dropped_entries_count(entries_count)
+              @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             when GRPC::Core::StatusCodes::UNAUTHENTICATED
               # Authorization error.
               # These are usually solved via a `gcloud auth` call, or by
               # modifying the permissions on the Google Cloud project.
-              dropped = entries.length
-              increment_dropped_entries_count(dropped)
-              @log.warn "Dropping #{dropped} log message(s)",
+              increment_dropped_entries_count(entries_count)
+              @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
               # Assume this is a problem with the request itself and don't
               # retry.
-              dropped = entries.length
-              increment_dropped_entries_count(dropped)
+              increment_dropped_entries_count(entries_count)
               @log.error "Unknown response code #{error.code} from the "\
-                         "server, dropping #{dropped} log message(s)",
+                         "server, dropping #{entries_count} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
             end
           end
@@ -642,6 +644,7 @@ module Fluent
                 resource: group_level_resource,
                 labels: group_level_common_labels,
                 entries: entries)
+            entries_count = entries.length
 
             # TODO: RequestOptions
             begin
@@ -663,23 +666,23 @@ module Fluent
           rescue Google::Apis::ServerError => error
             # Server error, so retry via re-raising the error.
             increment_log_entry_retry_count(entries.length, error.status_code)
+            @log.debug "Retrying #{entries_count} log message(s) later.",
+                       error: error.to_s, error_code: error.status_code.to_s
             raise error
 
           rescue Google::Apis::AuthorizationError => error
             # Authorization error.
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
-            dropped = entries.length
-            increment_dropped_entries_count(dropped)
-            @log.warn "Dropping #{dropped} log message(s)",
+            increment_dropped_entries_count(entries_count)
+            @log.warn "Dropping #{entries_count} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
 
           rescue Google::Apis::ClientError => error
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
-            dropped = entries.length
-            increment_dropped_entries_count(dropped)
-            @log.warn "Dropping #{dropped} log message(s)",
+            increment_dropped_entries_count(entries_count)
+            @log.warn "Dropping #{entries_count} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
           end
         end
