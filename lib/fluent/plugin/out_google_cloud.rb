@@ -590,8 +590,8 @@ module Fluent
           rescue GRPC::Cancelled => error
             increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
             # RPC cancelled, so retry via re-raising the error.
-            @log.info "Retrying #{entries_count} log message(s) later.",
-                      error: error.to_s, error_code: error.code.to_s
+            @log.debug "Retrying #{entries_count} log message(s) later.",
+                       error: error.to_s, error_code: error.code.to_s
             raise error
 
           rescue GRPC::BadStatus => error
@@ -603,8 +603,8 @@ module Fluent
                  GRPC::Core::StatusCodes::INTERNAL,
                  GRPC::Core::StatusCodes::UNKNOWN
               # Server error, so retry via re-raising the error.
-              @log.info "Retrying #{entries_count} log message(s) later.",
-                        error: error.to_s, error_code: error.code.to_s
+              @log.debug "Retrying #{entries_count} log message(s) later.",
+                         error: error.to_s, error_code: error.code.to_s
               raise error
             when GRPC::Core::StatusCodes::UNIMPLEMENTED,
                  GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED
@@ -658,8 +658,8 @@ module Fluent
 
           rescue Google::Apis::ServerError => error
             # Server error, so retry via re-raising the error.
-            @log.info "Retrying #{entries_count} log message(s) later.",
-                      error: error.to_s, error_code: error.status_code.to_s
+            @log.debug "Retrying #{entries_count} log message(s) later.",
+                       error: error.to_s, error_code: error.status_code.to_s
             raise error
 
           rescue Google::Apis::AuthorizationError => error
