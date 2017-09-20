@@ -359,6 +359,11 @@ module Fluent
         @dropped_entries_count = registry.counter(
           :stackdriver_dropped_entries_count,
           'A number of log entries dropped by the Stackdriver output plugin')
+        @log_entry_retry_count = registry.counter(
+          :stackdriver_log_entry_retry_count,
+          'The number of log entries that failed to be ingested by the'\
+            ' Stackdriver output plugin due to a transient error and were'\
+            ' retried')
       end
 
       # Alert on old authentication configuration.
@@ -588,6 +593,7 @@ module Fluent
 
           rescue GRPC::Cancelled => error
             increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
+            increment_log_entry_retry_count(entries.length, error.code)
             # RPC cancelled, so retry via re-raising the error.
             raise error
 
@@ -599,8 +605,8 @@ module Fluent
                  GRPC::Core::StatusCodes::DEADLINE_EXCEEDED,
                  GRPC::Core::StatusCodes::INTERNAL,
                  GRPC::Core::StatusCodes::UNKNOWN
-              # TODO
               # Server error, so retry via re-raising the error.
+              increment_log_entry_retry_count(entries.length, error.code)
               raise error
             when GRPC::Core::StatusCodes::UNIMPLEMENTED,
                  GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED
@@ -656,6 +662,7 @@ module Fluent
 
           rescue Google::Apis::ServerError => error
             # Server error, so retry via re-raising the error.
+            increment_log_entry_retry_count(entries.length, error.status_code)
             raise error
 
           rescue Google::Apis::AuthorizationError => error
@@ -1742,6 +1749,13 @@ module Fluent
     def increment_dropped_entries_count(count)
       return unless @dropped_entries_count
       @dropped_entries_count.increment({}, count)
+    end
+
+    # Increment the metric for the number of log entries that were dropped
+    # and not ingested by the Stackdriver Logging API.
+    def increment_log_entry_retry_count(count, code)
+      return unless @log_entry_retry_count
+      @log_entry_retry_count.increment({code: code}, count)
     end
   end
 end

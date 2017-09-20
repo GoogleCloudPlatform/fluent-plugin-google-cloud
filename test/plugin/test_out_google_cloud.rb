@@ -77,15 +77,16 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     [
       # Single successful request.
-      [200, 1, 1, [1, 0, 1, 0]],
+      [200, 1, 1, [1, 0, 1, 0, 0]],
       # Several successful requests.
-      [200, 2, 1, [2, 0, 2, 0]],
+      [200, 2, 1, [2, 0, 2, 0, 0]],
       # Single successful request with several entries.
-      [200, 1, 2, [1, 0, 2, 0]],
+      [200, 1, 2, [1, 0, 2, 0, 0]],
       # Single failed request that causes logs to be dropped.
-      [401, 1, 1, [0, 1, 0, 1]],
-      # Single failed request that escalates without logs being dropped.
-      [500, 1, 1, [0, 1, 0, 0]]
+      [401, 1, 1, [0, 1, 0, 1, 0]],
+      # Single failed request that escalates without logs being dropped with
+      # several entries.
+      [500, 1, 2, [0, 1, 0, 0, 2]]
     ].each do |code, request_count, entry_count, metric_values|
       setup_prometheus
       # TODO: Do this as part of setup_logging_stubs.
@@ -105,7 +106,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         # rubocop:enable Lint/HandleExceptions
       end
       successful_requests_count, failed_requests_count,
-        ingested_entries_count, dropped_entries_count = metric_values
+        ingested_entries_count, dropped_entries_count,
+        log_entry_retry_count = metric_values
       assert_prometheus_metric_value(:stackdriver_successful_requests_count,
                                      successful_requests_count, grpc: false)
       assert_prometheus_metric_value(:stackdriver_failed_requests_count,
@@ -115,6 +117,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                                      ingested_entries_count)
       assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
                                      dropped_entries_count)
+      assert_prometheus_metric_value(:stackdriver_log_entry_retry_count,
+                                     log_entry_retry_count, code: code)
     end
   end
 

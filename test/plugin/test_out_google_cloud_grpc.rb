@@ -79,15 +79,16 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_gce_metadata_stubs
     [
       # Single successful request.
-      [false, 0, 1, 1, [1, 0, 1, 0]],
+      [false, 0, 1, 1, [1, 0, 1, 0, 0]],
       # Several successful requests.
-      [false, 0, 2, 1, [2, 0, 2, 0]],
+      [false, 0, 2, 1, [2, 0, 2, 0, 0]],
       # Single successful request with several entries.
-      [false, 0, 1, 2, [1, 0, 2, 0]],
+      [false, 0, 1, 2, [1, 0, 2, 0, 0]],
       # Single failed request that causes logs to be dropped.
-      [true, 16, 1, 1, [0, 1, 0, 1]],
-      # Single failed request that escalates without logs being dropped.
-      [true, 13, 1, 1, [0, 1, 0, 0]]
+      [true, 16, 1, 1, [0, 1, 0, 1, 0]],
+      # Single failed request that escalates without logs being dropped with
+      # several entries.
+      [true, 13, 1, 2, [0, 1, 0, 0, 2]]
     ].each do |should_fail, code, request_count, entry_count, metric_values|
       setup_prometheus
       setup_logging_stubs(should_fail, code, 'SomeMessage') do
@@ -106,7 +107,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         end
       end
       successful_requests_count, failed_requests_count,
-        ingested_entries_count, dropped_entries_count = metric_values
+        ingested_entries_count, dropped_entries_count,
+        log_entry_retry_count = metric_values
       assert_prometheus_metric_value(:stackdriver_successful_requests_count,
                                      successful_requests_count, grpc: true)
       assert_prometheus_metric_value(:stackdriver_failed_requests_count,
@@ -116,6 +118,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
                                      ingested_entries_count)
       assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
                                      dropped_entries_count)
+      assert_prometheus_metric_value(:stackdriver_log_entry_retry_count,
+                                     log_entry_retry_count, code: code)
     end
   end
 
