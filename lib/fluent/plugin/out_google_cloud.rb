@@ -1758,7 +1758,7 @@ module Fluent
     # and not ingested by the Stackdriver Logging API.
     def increment_retried_entries_count(count, code)
       return unless @retried_entries_count
-      @retried_entries_count.increment({code: code}, count)
+      @retried_entries_count.increment({ code: code }, count)
     end
   end
 end
