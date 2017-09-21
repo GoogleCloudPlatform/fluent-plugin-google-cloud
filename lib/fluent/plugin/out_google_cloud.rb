@@ -359,6 +359,11 @@ module Fluent
         @dropped_entries_count = registry.counter(
           :stackdriver_dropped_entries_count,
           'A number of log entries dropped by the Stackdriver output plugin')
+        @retried_entries_count = registry.counter(
+          :stackdriver_retried_entries_count,
+          'The number of log entries that failed to be ingested by the'\
+            ' Stackdriver output plugin due to a transient error and were'\
+            ' retried')
       end
 
       # Alert on old authentication configuration.
@@ -578,7 +583,7 @@ module Fluent
             entries_count = entries.length
             client.write_log_entries(write_request)
             increment_successful_requests_count
-            increment_ingested_entries_count(entries.length)
+            increment_ingested_entries_count(entries_count)
 
             # Let the user explicitly know when the first call succeeded, to aid
             # with verification and troubleshooting.
@@ -589,6 +594,7 @@ module Fluent
 
           rescue GRPC::Cancelled => error
             increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
+            increment_retried_entries_count(entries_count, error.code)
             # RPC cancelled, so retry via re-raising the error.
             @log.debug "Retrying #{entries_count} log message(s) later.",
                        error: error.to_s, error_code: error.code.to_s
@@ -603,6 +609,7 @@ module Fluent
                  GRPC::Core::StatusCodes::INTERNAL,
                  GRPC::Core::StatusCodes::UNKNOWN
               # Server error, so retry via re-raising the error.
+              increment_retried_entries_count(entries.length, error.code)
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
               raise error
@@ -647,7 +654,7 @@ module Fluent
               raise error
             end
             increment_successful_requests_count
-            increment_ingested_entries_count(entries.length)
+            increment_ingested_entries_count(entries_count)
 
             # Let the user explicitly know when the first call succeeded, to aid
             # with verification and troubleshooting.
@@ -658,6 +665,7 @@ module Fluent
 
           rescue Google::Apis::ServerError => error
             # Server error, so retry via re-raising the error.
+            increment_retried_entries_count(entries.length, error.status_code)
             @log.debug "Retrying #{entries_count} log message(s) later.",
                        error: error.to_s, error_code: error.status_code.to_s
             raise error
@@ -1744,6 +1752,13 @@ module Fluent
     def increment_dropped_entries_count(count)
       return unless @dropped_entries_count
       @dropped_entries_count.increment({}, count)
+    end
+
+    # Increment the metric for the number of log entries that were dropped
+    # and not ingested by the Stackdriver Logging API.
+    def increment_retried_entries_count(count, code)
+      return unless @retried_entries_count
+      @retried_entries_count.increment({ code: code }, count)
     end
   end
 end
