@@ -1196,7 +1196,7 @@ module Fluent
       begin
         resource = Google::Api::MonitoredResource.decode_json(response.to_json)
       rescue Google::Protobuf::ParseError, ArgumentError => e
-        @log.error 'Error paring monitored resource from Metadata Agent. ' \
+        @log.error 'Error parsing monitored resource from Metadata Agent. ' \
                    "response: #{response.inspect}", error: e
         return nil
       end
