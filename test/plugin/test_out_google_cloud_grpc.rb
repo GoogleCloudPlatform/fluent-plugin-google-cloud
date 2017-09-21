@@ -108,7 +108,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       end
       successful_requests_count, failed_requests_count,
         ingested_entries_count, dropped_entries_count,
-        log_entry_retry_count = metric_values
+        retried_entries_count = metric_values
       assert_prometheus_metric_value(:stackdriver_successful_requests_count,
                                      successful_requests_count, grpc: true)
       assert_prometheus_metric_value(:stackdriver_failed_requests_count,
@@ -118,8 +118,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
                                      ingested_entries_count)
       assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
                                      dropped_entries_count)
-      assert_prometheus_metric_value(:stackdriver_log_entry_retry_count,
-                                     log_entry_retry_count, code: code)
+      assert_prometheus_metric_value(:stackdriver_retried_entries_count,
+                                     retried_entries_count, code: code)
     end
   end
 
