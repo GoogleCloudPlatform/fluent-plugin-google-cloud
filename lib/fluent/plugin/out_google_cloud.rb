@@ -583,7 +583,7 @@ module Fluent
             entries_count = entries.length
             client.write_log_entries(write_request)
             increment_successful_requests_count
-            increment_ingested_entries_count(entries.length)
+            increment_ingested_entries_count(entries_count)
 
             # Let the user explicitly know when the first call succeeded, to aid
             # with verification and troubleshooting.
@@ -594,7 +594,7 @@ module Fluent
 
           rescue GRPC::Cancelled => error
             increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
-            increment_log_entry_retry_count(entries.length, error.code)
+            increment_log_entry_retry_count(entries_count, error.code)
             # RPC cancelled, so retry via re-raising the error.
             @log.debug "Retrying #{entries_count} log message(s) later.",
                        error: error.to_s, error_code: error.code.to_s
@@ -654,7 +654,7 @@ module Fluent
               raise error
             end
             increment_successful_requests_count
-            increment_ingested_entries_count(entries.length)
+            increment_ingested_entries_count(entries_count)
 
             # Let the user explicitly know when the first call succeeded, to aid
             # with verification and troubleshooting.
