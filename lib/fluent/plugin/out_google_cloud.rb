@@ -114,10 +114,6 @@ module Fluent
 
     # Constants for log entry field extraction.
     module InternalConstants
-      # Use empty string as request path when the local_resource_id of monitored
-      # resource can be implicitly inferred by Metadata Agent.
-      IMPLICIT_LOCAL_RESOURCE_ID = ''
-
       # The label name of local_resource_id in the json payload. When a record
       # has this field in the payload, we will use the value to retrieve
       # monitored resource from Stackdriver Metadata agent.
@@ -384,19 +380,6 @@ module Fluent
       set_regexp_patterns
 
       @platform = detect_platform
-
-      # Set agent-level monitored resource. This monitored resource is initiated
-      # as the logging agent starts up. It will be inherited by all log entries
-      # processed by this agent. First try to retrieve it via Metadata Agent.
-      if @enable_metadata_agent
-        # The local_resource_id for this should be the instance id. Since this
-        # can be implicitly inferred by Metadata Agent, we do not need to
-        # explicitly send the key.
-        # TODO(qingling128): Remove this logic once the resource is retrieved at
-        # a proper time (b/65175256).
-        @resource = query_metadata_agent_for_monitored_resource(
-          IMPLICIT_LOCAL_RESOURCE_ID)
-      end
 
       # Set required variables: @project_id, @vm_id, @vm_name and @zone.
       set_required_metadata_variables

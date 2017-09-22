@@ -572,15 +572,6 @@ module Constants
   # Stub value for Monitored resources from Metadata Agent.
   # Map from the local_resource_id to the retrieved monitored resource.
   MONITORED_RESOURCE_STUBS = {
-    # Implicit GCE instance.
-    IMPLICIT_LOCAL_RESOURCE_ID =>
-      {
-        'type' => COMPUTE_CONSTANTS[:resource_type],
-        'labels' => {
-          'zone' => METADATA_ZONE,
-          'instance_id' => METADATA_VM_ID
-        }
-      }.to_json,
     # Docker container stderr / stdout logs.
     "container.#{DOCKER_CONTAINER_ID}" =>
       {

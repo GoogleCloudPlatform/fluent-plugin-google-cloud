@@ -1123,25 +1123,6 @@ module BaseTest
       setup_metadata_agent_stubs
       d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
       assert_true d.instance.instance_variable_get(:@enable_metadata_agent)
-      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
-    end
-  end
-
-  # Test that an implicit monitored resource can be retrieved from Metadata
-  # Agent with an empty string as the local_resource_id.
-  def test_retrieve_implicit_monitored_resource
-    # GCE metadata stubs has VM_ID and ZONE, while the Metadata Agent stub has
-    # METADATA_VM_ID and METADATA_ZONE.
-    new_stub_context do
-      setup_gce_metadata_stubs
-      setup_metadata_agent_stubs
-      setup_logging_stubs do
-        d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
-        d.emit('message' => log_entry(0))
-        d.run
-      end
-      verify_log_entries(1, COMPUTE_PARAMS_WITH_METADATA_VM_ID_AND_ZONE)
-      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
     end
   end
 
@@ -1161,7 +1142,6 @@ module BaseTest
           d.run
         end
         verify_log_entries(n, DOCKER_CONTAINER_PARAMS)
-        assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
         assert_requested_metadata_agent_stub("container.#{DOCKER_CONTAINER_ID}")
       end
     end
@@ -1191,7 +1171,6 @@ module BaseTest
           assert_equal 'test', get_string(fields['tag2']), entry
           assert_equal 5000, get_number(fields['data']), entry
         end
-        assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
         assert_requested_metadata_agent_stub("container.#{DOCKER_CONTAINER_ID}")
       end
     end
@@ -1212,7 +1191,6 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM)
-      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
       assert_requested_metadata_agent_stub(
         "containerName.#{DOCKER_CONTAINER_NAME}")
     end
@@ -1237,7 +1215,6 @@ module BaseTest
         assert_equal DOCKER_CONTAINER_NANOS,
                      entry['timestamp']['nanos'], entry
       end
-      assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
       assert_requested_metadata_agent_stub(
         "containerName.#{DOCKER_CONTAINER_NAME}")
     end
@@ -1289,7 +1266,6 @@ module BaseTest
           d.run
         end
         verify_log_entries(n, CONTAINER_FROM_APPLICATION_PARAMS)
-        assert_requested_metadata_agent_stub(IMPLICIT_LOCAL_RESOURCE_ID)
         assert_requested_metadata_agent_stub(
           "gke_containerName.#{CONTAINER_NAMESPACE_ID}.#{CONTAINER_POD_NAME}." \
           "#{CONTAINER_CONTAINER_NAME}")
