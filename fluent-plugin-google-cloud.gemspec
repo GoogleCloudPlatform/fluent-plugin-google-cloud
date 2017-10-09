@@ -21,8 +21,8 @@ eos
 
   gem.add_runtime_dependency 'fluentd', '~> 0.10'
   gem.add_runtime_dependency 'googleapis-common-protos', '~> 1.3'
-  gem.add_runtime_dependency 'google-api-client', '~> 0.14.5'
-  gem.add_runtime_dependency 'google-cloud-logging', '~> 1.2.3'
+  gem.add_runtime_dependency 'google-api-client', '~> 0.14'
+  gem.add_runtime_dependency 'google-cloud-logging', '~> 1.2', '>= 1.2.3'
   gem.add_runtime_dependency 'googleauth', '~> 0.4', '< 0.5.2'
   gem.add_runtime_dependency 'grpc', '~> 1.0', '< 1.3'
   gem.add_runtime_dependency 'json', '~> 1.8'
