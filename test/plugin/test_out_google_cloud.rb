@@ -319,10 +319,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # 'responseSize' and 'requestSize' are Integers in the gRPC proto, yet Strings
   # in REST API client.
-  # TODO(qingling128): Address this accordingly once the following  question is
+  # TODO(qingling128): Address this accordingly once the following question is
   # answered: https://github.com/google/google-api-ruby-client/issues/619.
-  # If this discrepency is legit, add some comments to explain the reason.
-  # Otherwise once the discrepency is fixed, we need to upgrade to that version
+  # If this discrepancy is legit, add some comments to explain the reason.
+  # Otherwise once the discrepancy is fixed, we need to upgrade to that version
   # and change our tests accordingly.
   def http_request_message
     HTTP_REQUEST_MESSAGE.merge(
