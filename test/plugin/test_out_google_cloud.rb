@@ -251,7 +251,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
-  WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2beta1/entries:write'
+  WRITE_LOG_ENTRIES_URI = 'https://logging.googleapis.com/v2/entries:write'
 
   def rename_key(hash, old_key, new_key)
     hash.merge(new_key => hash[old_key]).reject { |k, _| k == old_key }
@@ -315,5 +315,21 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # The null value.
   def null_value
     nil
+  end
+
+  # 'responseSize' and 'requestSize' are Integers in the gRPC proto, yet Strings
+  # in REST API client.
+  def http_request_message
+    HTTP_REQUEST_MESSAGE.merge(
+      'responseSize' => HTTP_REQUEST_MESSAGE['responseSize'].to_s,
+      'requestSize' => HTTP_REQUEST_MESSAGE['requestSize'].to_s
+    )
+  end
+
+  # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
+  def source_location_message
+    SOURCE_LOCATION_MESSAGE.merge(
+      'line' => SOURCE_LOCATION_MESSAGE['line'].to_s
+    )
   end
 end
