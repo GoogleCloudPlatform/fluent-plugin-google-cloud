@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'erb'
 require 'grpc'
 require 'json'
 require 'open-uri'
@@ -18,7 +19,7 @@ require 'socket'
 require 'time'
 require 'yaml'
 require 'google/apis'
-require 'google/apis/logging_v2beta1'
+require 'google/apis/logging_v2'
 require 'google/logging/v2/logging_pb'
 require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
@@ -144,7 +145,7 @@ module Fluent
           # The grpc version class name.
           'Google::Logging::Type::HttpRequest',
           # The non-grpc version class name.
-          'Google::Apis::LoggingV2beta1::HttpRequest'
+          'Google::Apis::LoggingV2::HttpRequest'
         ],
         'source_location' => [
           '@source_location_key',
@@ -154,7 +155,7 @@ module Fluent
             %w(line line parse_int)
           ],
           'Google::Logging::V2::LogEntrySourceLocation',
-          'Google::Apis::LoggingV2beta1::LogEntrySourceLocation'
+          'Google::Apis::LoggingV2::LogEntrySourceLocation'
         ],
         'operation' => [
           '@operation_key',
@@ -165,7 +166,7 @@ module Fluent
             %w(last last parse_bool)
           ],
           'Google::Logging::V2::LogEntryOperation',
-          'Google::Apis::LoggingV2beta1::LogEntryOperation'
+          'Google::Apis::LoggingV2::LogEntryOperation'
         ]
       }
     end
@@ -519,7 +520,7 @@ module Fluent
             # Remove the labels if we didn't populate them with anything.
             entry_level_resource.labels = nil if
               entry_level_resource.labels.empty?
-            entry = Google::Apis::LoggingV2beta1::LogEntry.new(
+            entry = Google::Apis::LoggingV2::LogEntry.new(
               labels: entry_level_common_labels,
               resource: entry_level_resource,
               severity: severity,
@@ -622,7 +623,7 @@ module Fluent
         else
           begin
             write_request = \
-              Google::Apis::LoggingV2beta1::WriteLogEntriesRequest.new(
+              Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
                 log_name: log_name,
                 resource: group_level_resource,
                 labels: group_level_common_labels,
@@ -836,7 +837,7 @@ module Fluent
     # Metadata Agent. Thus it should be equivalent to what Metadata Agent
     # returns.
     def determine_agent_level_monitored_resource_via_legacy
-      resource = Google::Apis::LoggingV2beta1::MonitoredResource.new(
+      resource = Google::Apis::LoggingV2::MonitoredResource.new(
         labels: {})
       resource.type = determine_agent_level_monitored_resource_type
       resource.labels = determine_agent_level_monitored_resource_labels(
@@ -1187,7 +1188,7 @@ module Fluent
       # TODO(qingling128): Use Google::Api::MonitoredResource directly after we
       # upgrade gRPC version to include the fix for the protobuf map
       # corruption issue.
-      Google::Apis::LoggingV2beta1::MonitoredResource.new(
+      Google::Apis::LoggingV2::MonitoredResource.new(
         type: resource.type,
         labels: resource.labels.to_h
       )
@@ -1658,7 +1659,7 @@ module Fluent
       # TODO: Use a non-default ClientOptions object.
       Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
       Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
-      @client = Google::Apis::LoggingV2beta1::LoggingService.new
+      @client = Google::Apis::LoggingV2::LoggingService.new
       @client.authorization = Google::Auth.get_application_default(
         LOGGING_SCOPE)
     end
@@ -1748,7 +1749,7 @@ end
 
 module Google
   module Apis
-    module LoggingV2beta1
+    module LoggingV2
       # Override MonitoredResource::dup to make a deep copy.
       class MonitoredResource
         def dup

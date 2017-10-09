@@ -1023,11 +1023,11 @@ module BaseTest
       setup_logging_stubs do
         d = create_driver
         @logs_sent = []
-        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
+        d.emit('httpRequest' => http_request_message.merge('latency' => input))
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-        assert_equal HTTP_REQUEST_MESSAGE.merge('latency' => expected),
+        assert_equal http_request_message.merge('latency' => expected),
                      entry['httpRequest'], entry
         assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
       end
@@ -1044,11 +1044,11 @@ module BaseTest
       setup_logging_stubs do
         d = create_driver
         @logs_sent = []
-        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
+        d.emit('httpRequest' => http_request_message.merge('latency' => input))
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-        assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
+        assert_equal http_request_message, entry['httpRequest'], entry
         assert_nil get_fields(entry['jsonPayload'])['httpRequest'], entry
       end
     end
@@ -1597,8 +1597,22 @@ module BaseTest
     end
   end
 
+  def log_entry_subfields_params
+    {
+      # The keys are the names of fields in the payload that we are extracting
+      # LogEntry info from. The values are lists of two elements: the name of
+      # the subfield in LogEntry object and the expected value of that field.
+      DEFAULT_HTTP_REQUEST_KEY => [
+        'httpRequest', http_request_message],
+      DEFAULT_SOURCE_LOCATION_KEY => [
+        'sourceLocation', source_location_message],
+      DEFAULT_OPERATION_KEY => [
+        'operation', OPERATION_MESSAGE]
+    }
+  end
+
   def verify_subfields_from_record(payload_key)
-    destination_key, payload_value = LOG_ENTRY_SUBFIELDS_PARAMS[payload_key]
+    destination_key, payload_value = log_entry_subfields_params[payload_key]
     @logs_sent = []
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -1614,7 +1628,7 @@ module BaseTest
   end
 
   def verify_subfields_partial_from_record(payload_key)
-    destination_key, payload_value = LOG_ENTRY_SUBFIELDS_PARAMS[payload_key]
+    destination_key, payload_value = log_entry_subfields_params[payload_key]
     @logs_sent = []
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -1631,7 +1645,7 @@ module BaseTest
   end
 
   def verify_subfields_when_not_hash(payload_key)
-    destination_key = LOG_ENTRY_SUBFIELDS_PARAMS[payload_key][0]
+    destination_key = log_entry_subfields_params[payload_key][0]
     @logs_sent = []
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -1646,14 +1660,22 @@ module BaseTest
     end
   end
 
+  def http_request_message
+    HTTP_REQUEST_MESSAGE
+  end
+
+  def source_location_message
+    SOURCE_LOCATION_MESSAGE
+  end
+
   # Replace the 'referer' field with nil.
   def http_request_message_with_nil_referer
-    HTTP_REQUEST_MESSAGE.merge('referer' => nil)
+    http_request_message.merge('referer' => nil)
   end
 
   # Unset the 'referer' field.
   def http_request_message_with_absent_referer
-    HTTP_REQUEST_MESSAGE.reject do |k, _|
+    http_request_message.reject do |k, _|
       k == 'referer'
     end
   end
