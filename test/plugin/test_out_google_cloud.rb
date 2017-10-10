@@ -51,6 +51,28 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
   end
 
+  def test_partial_success
+    setup_gce_metadata_stubs
+    {
+      APPLICATION_DEFAULT_CONFIG => 4.0,
+      PARTIAL_SUCCESS_CONFIG => 3.0
+    }.each do |config, failed_entry_count|
+      setup_prometheus
+      # The API Client should not retry this and the plugin should consume
+      # the exception.
+      stub_request(:post, WRITE_LOG_ENTRIES_URI)
+        .to_return(status: 400, body: PARTIAL_SUCCESS_RESPONSE_BODY)
+      d = create_driver(PROMETHEUS_ENABLE_CONFIG + config)
+      4.times do |i|
+        d.emit('message' => log_entry(i.to_s))
+      end
+      d.run
+      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
+                                     failed_entry_count)
+    end
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
+  end
+
   def test_server_error
     setup_gce_metadata_stubs
     # The API client should retry this once, then throw an exception which

@@ -113,7 +113,7 @@ module Fluent
         'http://local-metadata-agent.stackdriver.com:8000'
     end
 
-    # Constants for log entry field extraction.
+    # Internal constants.
     module InternalConstants
       # The label name of local_resource_id in the json payload. When a record
       # has this field in the payload, we will use the value to retrieve
@@ -169,6 +169,10 @@ module Fluent
           'Google::Apis::LoggingV2::LogEntryOperation'
         ]
       }
+
+      # The name of the WriteLogEntriesPartialErrors field in the error details.
+      PARTIAL_ERROR_KEY = 'type.googleapis.com/' \
+        'google.logging.v2.WriteLogEntriesPartialErrors'
     end
 
     include self::ServiceConstants
@@ -280,6 +284,11 @@ module Fluent
     # Whether to use gRPC instead of REST/JSON to communicate to the
     # Cloud Logging API.
     config_param :use_grpc, :bool, :default => false
+
+    # Whether valid entries should be written even if some other entries fail
+    # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
+    # the Cloud Logging API. This is highly recommended.
+    config_param :partial_success, :bool, :default => false
 
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
     # non-UTF-8 character would be replaced by the string specified by
@@ -627,12 +636,16 @@ module Fluent
                 log_name: log_name,
                 resource: group_level_resource,
                 labels: group_level_common_labels,
+                partial_success: @partial_success,
                 entries: entries)
             entries_count = entries.length
 
             # TODO: RequestOptions
             begin
-              client.write_entry_log_entries(write_request)
+              client.write_entry_log_entries(
+                write_request,
+                options: { api_format_version: '2' }
+              )
             rescue Google::Apis::Error => error
               increment_failed_requests_count(error.status_code)
               raise error
@@ -665,12 +678,138 @@ module Fluent
           rescue Google::Apis::ClientError => error
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
-            increment_dropped_entries_count(entries_count)
-            @log.warn "Dropping #{entries_count} log message(s)",
-                      error_class: error.class.to_s, error: error.to_s
+            error_details_map = {}
+            if @partial_success
+              error_details_map = construct_error_details_map(
+                extract_log_entry_errors(error))
+            end
+            if error_details_map.empty?
+              increment_dropped_entries_count(entries_count)
+              @log.warn "Dropping #{entries_count} log message(s)",
+                        error_class: error.class.to_s, error: error.to_s
+            else
+              error_details_map.each do |(error_code, error_message), indexes|
+                partial_error_count = indexes.length
+                increment_dropped_entries_count(partial_error_count)
+                @log.warn "Dropping #{partial_error_count} log message(s)",
+                          error_code: "google.rpc.Code.#{error_code}",
+                          error: error_message
+              end
+            end
           end
         end
       end
+    end
+
+    # Extract a map of error details from an potentially partially successful
+    # request. The keys in this map are the indexes of the failed log entries in
+    # the original json payload. The values in this map are the error code and
+    # error message.
+    #
+    # A sample error.body looks like:
+    # {
+    #   "error": {
+    #     "code": 403,
+    #     "message": "User not authorized.",
+    #     "status": "PERMISSION_DENIED",
+    #     "details": [
+    #       {
+    #         "@type": "type.googleapis.com/google.logging.v2.WriteLogEntriesPar
+    #           tialErrors",
+    #         "logEntryErrors": {
+    #           "0": {
+    #             "code": 7,
+    #             "message": "User not authorized."
+    #           },
+    #           "1": {
+    #             "code": 3,
+    #             "message": "Log name contains illegal character :"
+    #           }
+    #         }
+    #       },
+    #       {
+    #         "@type": "type.googleapis.com/google.rpc.DebugInfo",
+    #         "detail": "[ORIGINAL ERROR] generic::permission_denied: User not a
+    #           uthorized. [google.rpc.error_details_ext] { message: \"User not
+    #           authorized.\" details { type_url: \"type.googleapis.com/google.l
+    #           ogging.v2.WriteLogEntriesPartialErrors\" value: \"\\n\\034\\010\
+    #           \000\\022\\030\\010\\007\\022\\024User not authorized.\\n-\\010\
+    #           \001\\022)\\010\\003\\022%Log name contains illegal character :\
+    #           " } }"
+    #       }
+    #     ]
+    #   }
+    # }
+    #
+    # In this exxample, the logEntryErrors we are extracting should be:
+    # {
+    #   "0": {
+    #     "code": 7,
+    #     "message": "User not authorized."
+    #   },
+    #   "1": {
+    #     "code": 3,
+    #     "message": "Log name contains illegal character :"
+    #   }
+    # }
+    def extract_log_entry_errors(error)
+      error_details = parse_json_or_nil(error.body)['error']['details']
+      partial_errors = error_details.detect do |error_detail|
+        error_detail['@type'] == PARTIAL_ERROR_KEY
+      end
+      partial_errors['logEntryErrors']
+    rescue => e
+      @log.warn 'Failed to extract log entry errors from the error details' \
+                " json: #{error.body}.", error: e
+      {}
+    end
+
+    # Given the logEntryErrors, constuct a map from errors to a list of indexes
+    # of log entries that failed for this specific error.
+    #
+    # The logEntryErrors should be in the format of:
+    # {
+    #   "0": {
+    #     "code": 7,
+    #     "message": "User not authorized."
+    #   },
+    #   "1": {
+    #     "code": 3,
+    #     "message": "Log name contains illegal character :"
+    #   },
+    #   "2": {
+    #     "code": 3,
+    #     "message": "Log name contains illegal character :"
+    #   }
+    # }
+    #
+    # The constructed map would be:
+    # // Keys are [error_code, error_message]. Values are a list of indexes of
+    # // log entries that failed due to this error.
+    # {
+    #   [
+    #     7,
+    #     'User not authorized.'
+    #   ]: ["0"],
+    #   [
+    #     3,
+    #     'Log name contains illegal character :'
+    #   ]: ["1", "2"]
+    # }
+    def construct_error_details_map(log_entry_errors)
+      error_details_map = {}
+      log_entry_errors.each do |index, error|
+        error_key = [error['code'], error['message']]
+        if error_details_map.key?(error_key)
+          error_details_map[error_key] << index
+        else
+          error_details_map[error_key] = [index]
+        end
+      end
+      error_details_map
+    rescue => e
+      @log.warn 'Failed to parse the log entry errors.', error: e
+      {}
     end
 
     private
