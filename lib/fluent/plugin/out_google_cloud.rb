@@ -288,6 +288,9 @@ module Fluent
     # Whether valid entries should be written even if some other entries fail
     # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
     # the Cloud Logging API. This is highly recommended.
+    # TODO(qingling128): Remove the comment below when the support is added for
+    # gRPC as well.
+    # Right now this only works with the REST path (use_grpc = false).
     config_param :partial_success, :bool, :default => false
 
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
@@ -647,7 +650,6 @@ module Fluent
                 partial_success: @partial_success,
                 entries: entries)
             entries_count = entries.length
-
             begin
               client.write_entry_log_entries(
                 write_request,
@@ -687,6 +689,9 @@ module Fluent
             # should not be retried.
             error_details_map = {}
             if @partial_success
+              @log.debug 'Encountered error when talking to Stackdriver' \
+                         ' Logging API.',
+                         error: error.class, error_body: error.body
               error_details_map = construct_error_details_map(
                 extract_log_entry_errors(error))
             end
@@ -699,7 +704,7 @@ module Fluent
                 partial_error_count = indexes.length
                 increment_dropped_entries_count(partial_error_count)
                 @log.warn "Dropping #{partial_error_count} log message(s)",
-                          error_code: "google.rpc.Code.#{error_code}",
+                          error_code: "google.rpc.Code[#{error_code}]",
                           error: error_message
               end
             end
@@ -731,22 +736,34 @@ module Fluent
     #           "1": {
     #             "code": 3,
     #             "message": "Log name contains illegal character :"
+    #           },
+    #           "3": {
+    #             "code": 3,
+    #             "message": "Log name contains illegal character :"
     #           }
     #         }
     #       },
     #       {
     #         "@type": "type.googleapis.com/google.rpc.DebugInfo",
-    #         "detail": "[ORIGINAL ERROR] generic::permission_denied: User not a
-    #           uthorized. [google.rpc.error_details_ext] { message: \"User not
-    #           authorized.\" details { type_url: \"type.googleapis.com/google.l
-    #           ogging.v2.WriteLogEntriesPartialErrors\" value: \"\\n\\034\\010\
-    #           \000\\022\\030\\010\\007\\022\\024User not authorized.\\n-\\010\
-    #           \001\\022)\\010\\003\\022%Log name contains illegal character :\
-    #           " } }"
+    #         "detail": ......
     #       }
     #     ]
     #   }
     # }
+    #
+    # Note that the root level "code", "message" and "status" simply matches the
+    # root cause of the first failed log entry. For example, if we switch the
+    # order of the log entries, then we will get:
+    # {
+    #    "error" : {
+    #       "code" : 400,
+    #       "message" : "Log name contains illegal character :",
+    #       "status" : "INVALID_ARGUMENT",
+    #       "details": ......
+    #    }
+    # }
+    # We will ignore it anyway and look at the details instead which includes
+    # info for all failed log entries.
     #
     # In this example, the logEntryErrors we are extracting should be:
     # {
@@ -755,6 +772,10 @@ module Fluent
     #     "message": "User not authorized."
     #   },
     #   "1": {
+    #     "code": 3,
+    #     "message": "Log name contains illegal character :"
+    #   },
+    #   "3": {
     #     "code": 3,
     #     "message": "Log name contains illegal character :"
     #   }
@@ -792,7 +813,7 @@ module Fluent
     #   [
     #     3,
     #     'Log name contains illegal character :'
-    #   ]: ["1", "2"]
+    #   ]: ["1", "3"]
     # }
     def construct_error_details_map(log_entry_errors)
       error_details_map = Hash.new { |h, k| h[k] = [] }
