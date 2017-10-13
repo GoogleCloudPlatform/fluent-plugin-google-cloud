@@ -171,8 +171,8 @@ module Fluent
       }
 
       # The name of the WriteLogEntriesPartialErrors field in the error details.
-      PARTIAL_ERROR_KEY = 'type.googleapis.com/' \
-        'google.logging.v2.WriteLogEntriesPartialErrors'
+      PARTIAL_ERROR_FIELD =
+        'type.googleapis.com/google.logging.v2.WriteLogEntriesPartialErrors'
     end
 
     include self::ServiceConstants
@@ -347,6 +347,14 @@ module Fluent
 
     def configure(conf)
       super
+
+      # TODO(qingling128): Remove this warning after the support is added.
+      if @partial_success && @use_grpc
+        @log.warn 'Detected partial_success enabled while use_grpc is also' \
+                  ' enabled. The support for partial success in the gRPC path' \
+                  ' is to be added in the near future. For now the ' \
+                  ' partial_success flag will be ignored.'
+      end
 
       # If monitoring is enabled, register metrics in the default registry
       # and store metric objects for future use.
@@ -640,7 +648,6 @@ module Fluent
                 entries: entries)
             entries_count = entries.length
 
-            # TODO: RequestOptions
             begin
               client.write_entry_log_entries(
                 write_request,
@@ -702,9 +709,9 @@ module Fluent
     end
 
     # Extract a map of error details from an potentially partially successful
-    # request. The keys in this map are the indexes of the failed log entries in
-    # the original json payload. The values in this map are the error code and
-    # error message.
+    # request. The keys in this map are stringified indexes of the failed log
+    # entries in the original json payload. The values in this map are the error
+    # code and error message.
     #
     # A sample error.body looks like:
     # {
@@ -741,7 +748,7 @@ module Fluent
     #   }
     # }
     #
-    # In this exxample, the logEntryErrors we are extracting should be:
+    # In this example, the logEntryErrors we are extracting should be:
     # {
     #   "0": {
     #     "code": 7,
@@ -753,39 +760,30 @@ module Fluent
     #   }
     # }
     def extract_log_entry_errors(error)
-      error_details = parse_json_or_nil(error.body)['error']['details']
+      error_details = JSON.parse(error.body)['error']['details']
       partial_errors = error_details.detect do |error_detail|
-        error_detail['@type'] == PARTIAL_ERROR_KEY
+        error_detail['@type'] == PARTIAL_ERROR_FIELD
       end
       partial_errors['logEntryErrors']
+    rescue JSON::ParserError => e
+      @log.warn 'Failed to extract log entry errors from the error details' \
+                " because of JSON parsing error: #{error.body}.", error: e
+      {}
     rescue => e
       @log.warn 'Failed to extract log entry errors from the error details' \
-                " json: #{error.body}.", error: e
+                " JSON: #{error.body}.", error: e
       {}
     end
 
     # Given the logEntryErrors, constuct a map from errors to a list of indexes
     # of log entries that failed for this specific error.
     #
-    # The logEntryErrors should be in the format of:
-    # {
-    #   "0": {
-    #     "code": 7,
-    #     "message": "User not authorized."
-    #   },
-    #   "1": {
-    #     "code": 3,
-    #     "message": "Log name contains illegal character :"
-    #   },
-    #   "2": {
-    #     "code": 3,
-    #     "message": "Log name contains illegal character :"
-    #   }
-    # }
+    # The keys in this map are an array of [error_code, error_message]. The
+    # values in this map are a list of indexes of log entries that failed due to
+    # this error.
     #
-    # The constructed map would be:
-    # // Keys are [error_code, error_message]. Values are a list of indexes of
-    # // log entries that failed due to this error.
+    # For logEntryErrors as in the example above (in the comment section of the
+    # function extract_log_entry_errors), the constructed map would be:
     # {
     #   [
     #     7,
@@ -797,14 +795,11 @@ module Fluent
     #   ]: ["1", "2"]
     # }
     def construct_error_details_map(log_entry_errors)
-      error_details_map = {}
+      error_details_map = Hash.new { |h, k| h[k] = [] }
       log_entry_errors.each do |index, error|
-        error_key = [error['code'], error['message']]
-        if error_details_map.key?(error_key)
-          error_details_map[error_key] << index
-        else
-          error_details_map[error_key] = [index]
-        end
+        error_key = [error['code'], error['message']].freeze
+        # TODO(qingling128): Convert indexes to integers.
+        error_details_map[error_key] << index
       end
       error_details_map
     rescue => e
