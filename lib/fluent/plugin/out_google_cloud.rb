@@ -287,10 +287,8 @@ module Fluent
 
     # Whether valid entries should be written even if some other entries fail
     # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
-    # the Cloud Logging API. This is highly recommended.
-    # TODO(qingling128): Remove the comment below when the support is added for
-    # gRPC as well.
-    # Right now this only works with the REST path (use_grpc = false).
+    # the Cloud Logging API. This is highly recommended. Right now this only
+    # works with the REST path (use_grpc = false).
     config_param :partial_success, :bool, :default => false
 
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
@@ -351,7 +349,8 @@ module Fluent
     def configure(conf)
       super
 
-      # TODO(qingling128): Remove this warning after the support is added.
+      # TODO(qingling128): Remove this warning after the support is added. Also
+      # remove the comment in the description of this configuration.
       if @partial_success && @use_grpc
         @log.warn 'Detected partial_success enabled while use_grpc is also' \
                   ' enabled. The support for partial success in the gRPC path' \
@@ -650,6 +649,7 @@ module Fluent
                 partial_success: @partial_success,
                 entries: entries)
             entries_count = entries.length
+
             begin
               client.write_entry_log_entries(
                 write_request,
@@ -659,6 +659,7 @@ module Fluent
               increment_failed_requests_count(error.status_code)
               raise error
             end
+
             increment_successful_requests_count
             increment_ingested_entries_count(entries_count)
 
@@ -715,8 +716,8 @@ module Fluent
 
     # Extract a map of error details from an potentially partially successful
     # request. The keys in this map are stringified indexes of the failed log
-    # entries in the original json payload. The values in this map are the error
-    # code and error message.
+    # entries in the original json payload, and the values are the error code
+    # and error message.
     #
     # A sample error.body looks like:
     # {
@@ -745,21 +746,21 @@ module Fluent
     #       },
     #       {
     #         "@type": "type.googleapis.com/google.rpc.DebugInfo",
-    #         "detail": ......
+    #         "detail": ...
     #       }
     #     ]
     #   }
     # }
     #
-    # Note that the root level "code", "message" and "status" simply matches the
-    # root cause of the first failed log entry. For example, if we switch the
-    # order of the log entries, then we will get:
+    # The root level "code", "message", and "status" simply match the root
+    # cause of the first failed log entry. For example, if we switch the order
+    # of the log entries, then we would get:
     # {
     #    "error" : {
     #       "code" : 400,
     #       "message" : "Log name contains illegal character :",
     #       "status" : "INVALID_ARGUMENT",
-    #       "details": ......
+    #       "details": ...
     #    }
     # }
     # We will ignore it anyway and look at the details instead which includes
@@ -799,21 +800,15 @@ module Fluent
     # Given the logEntryErrors, constuct a map from errors to a list of indexes
     # of log entries that failed for this specific error.
     #
-    # The keys in this map are an array of [error_code, error_message]. The
-    # values in this map are a list of indexes of log entries that failed due to
-    # this error.
+    # The keys in this map are [error_code, error_message] pairs. The values in
+    # this map are a list of indexes of log entries that failed due to this
+    # error.
     #
-    # For logEntryErrors as in the example above (in the comment section of the
-    # function extract_log_entry_errors), the constructed map would be:
+    # For logEntryErrors as in the example above (in the header comment for
+    # extract_log_entry_errors), the constructed map would be:
     # {
-    #   [
-    #     7,
-    #     'User not authorized.'
-    #   ]: ["0"],
-    #   [
-    #     3,
-    #     'Log name contains illegal character :'
-    #   ]: ["1", "3"]
+    #   [7, 'User not authorized.']: ['0'],
+    #   [3, 'Log name contains illegal character :']: ['1', '3']
     # }
     def construct_error_details_map(log_entry_errors)
       error_details_map = Hash.new { |h, k| h[k] = [] }
