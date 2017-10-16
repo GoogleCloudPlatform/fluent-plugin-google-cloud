@@ -753,7 +753,7 @@ module Fluent
     # }
     #
     # The root level "code", "message", and "status" simply match the root
-    # cause of the first failed log entry. For example, if we switch the order
+    # cause of the first failed log entry. For example, if we switched the order
     # of the log entries, then we would get:
     # {
     #    "error" : {
@@ -797,11 +797,11 @@ module Fluent
       {}
     end
 
-    # Given the logEntryErrors, constuct a map from errors to a list of indexes
+    # Given the logEntryErrors, construct a map from errors to a list of indexes
     # of log entries that failed for this specific error.
     #
-    # The keys in this map are [error_code, error_message] pairs. The values in
-    # this map are a list of indexes of log entries that failed due to this
+    # The keys in this map are [error_code, error_message] pairs, and the values
+    # are a list of stringified indexes of log entries that failed due to this
     # error.
     #
     # For logEntryErrors as in the example above (in the header comment for
@@ -819,7 +819,9 @@ module Fluent
       end
       error_details_map
     rescue => e
-      @log.warn 'Failed to parse the log entry errors.', error: e
+      @log.warn 'Failed to parse the log entry errors because logEntryErrors ' \
+                "is not a hash or it does not contain 'code' and 'message' " \
+                'fields.', error: e
       {}
     end
 
