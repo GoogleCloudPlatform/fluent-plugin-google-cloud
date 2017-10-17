@@ -782,18 +782,17 @@ module Fluent
     #   }
     # }
     def extract_log_entry_errors(error)
-      error_body = ensure_hash(JSON.parse(error.body), 'error body')
-      error = ensure_hash(error_body['error'], 'error')
-      error_details = ensure_array(error['details'], 'error details')
+      error_body = ensure_hash(JSON.parse(error.body))
+      error = ensure_hash(error_body['error'])
+      error_details = ensure_array(error['details'])
       partial_errors = error_details.detect do |error_detail|
-        ensure_hash(error_detail, 'error detail')
-        error_detail['@type'] == PARTIAL_ERROR_FIELD
+        ensure_hash(error_detail)['@type'] == PARTIAL_ERROR_FIELD
       end
       unless partial_errors
-        "Failed to detect an error detail with type #{PARTIAL_ERROR_FIELD}."
+        @log.warn 'Failed to detect an error detail with type' \
+          " #{PARTIAL_ERROR_FIELD}."
       end
-      partial_errors_hash = ensure_hash(partial_errors, 'partial errors')
-      ensure_hash(partial_errors_hash['logEntryErrors'], 'log entry errors')
+      ensure_hash(ensure_hash(partial_errors)['logEntryErrors'])
     rescue JSON::ParserError => e
       @log.warn 'Failed to extract log entry errors from the error details' \
                 " because of JSON parsing error: #{error.body}.", error: e
@@ -816,7 +815,7 @@ module Fluent
     def construct_error_details_map(log_entry_errors)
       error_details_map = Hash.new { |h, k| h[k] = [] }
       log_entry_errors.each do |index, error|
-        error_hash = ensure_hash(error, 'log entry error')
+        error_hash = ensure_hash(error)
         unless error_hash['code'] && error_hash['message']
           @log.warn "Entry with index #{index} is missing 'code' or 'message'" \
                     ' field.'
@@ -827,30 +826,19 @@ module Fluent
         error_details_map[error_key] << index
       end
       error_details_map
-    rescue => e
-      @log.warn 'Failed to parse the log entry errors because logEntryErrors' \
-                " is not a hash or it does not contain 'code' and 'message'" \
-                ' fields.', error: e
-      {}
     end
 
-    def ensure_array(value, error_name)
-      if value.is_a?(Array)
-        value
-      else
-        @log.warn "Non-array value detected for #{error_name}: " \
-                  "#{value.inspect}."
-        {}
-      end
+    def ensure_array(value)
+      ensure_non_empty(Array.try_convert(value))
     end
 
-    def ensure_hash(value, error_name)
-      if value.is_a?(Hash)
-        value
-      else
-        @log.warn "Non-hash value detected for #{error_name}: #{value.inspect}."
-        {}
-      end
+    def ensure_hash(value)
+      ensure_non_empty(Hash.try_convert(value))
+    end
+
+    def ensure_non_empty(converted_value)
+      fail JSON::ParserError unless converted_value
+      converted_value
     end
 
     private
