@@ -689,13 +689,8 @@ module Fluent
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
             error_details_map = {}
-            if @partial_success
-              @log.debug 'Encountered error when talking to Stackdriver' \
-                         ' Logging API.',
-                         error: error.class, error_body: error.body
-              error_details_map = construct_error_details_map(
-                extract_log_entry_errors(error))
-            end
+            error_details_map = construct_error_details_map(error) if
+              @partial_success
             if error_details_map.empty?
               increment_dropped_entries_count(entries_count)
               @log.warn "Dropping #{entries_count} log message(s)",
@@ -712,129 +707,6 @@ module Fluent
           end
         end
       end
-    end
-
-    # Extract a map of error details from an potentially partially successful
-    # request. The keys in this map are stringified indexes of the failed log
-    # entries in the original json payload, and the values are the error code
-    # and error message.
-    #
-    # A sample error.body looks like:
-    # {
-    #   "error": {
-    #     "code": 403,
-    #     "message": "User not authorized.",
-    #     "status": "PERMISSION_DENIED",
-    #     "details": [
-    #       {
-    #         "@type": "type.googleapis.com/google.logging.v2.WriteLogEntriesPar
-    #           tialErrors",
-    #         "logEntryErrors": {
-    #           "0": {
-    #             "code": 7,
-    #             "message": "User not authorized."
-    #           },
-    #           "1": {
-    #             "code": 3,
-    #             "message": "Log name contains illegal character :"
-    #           },
-    #           "3": {
-    #             "code": 3,
-    #             "message": "Log name contains illegal character :"
-    #           }
-    #         }
-    #       },
-    #       {
-    #         "@type": "type.googleapis.com/google.rpc.DebugInfo",
-    #         "detail": ...
-    #       }
-    #     ]
-    #   }
-    # }
-    #
-    # The root level "code", "message", and "status" simply match the root
-    # cause of the first failed log entry. For example, if we switched the order
-    # of the log entries, then we would get:
-    # {
-    #    "error" : {
-    #       "code" : 400,
-    #       "message" : "Log name contains illegal character :",
-    #       "status" : "INVALID_ARGUMENT",
-    #       "details": ...
-    #    }
-    # }
-    # We will ignore it anyway and look at the details instead which includes
-    # info for all failed log entries.
-    #
-    # In this example, the logEntryErrors we are extracting should be:
-    # {
-    #   "0": {
-    #     "code": 7,
-    #     "message": "User not authorized."
-    #   },
-    #   "1": {
-    #     "code": 3,
-    #     "message": "Log name contains illegal character :"
-    #   },
-    #   "3": {
-    #     "code": 3,
-    #     "message": "Log name contains illegal character :"
-    #   }
-    # }
-    def extract_log_entry_errors(error)
-      error = ensure_hash(ensure_hash(JSON.parse(error.body))['error'])
-      partial_errors = ensure_array(error['details']).detect(
-        -> { fail JSON::ParserError, "No type #{PARTIAL_ERROR_FIELD}." }
-      ) do |error_detail|
-        ensure_hash(error_detail)['@type'] == PARTIAL_ERROR_FIELD
-      end
-      ensure_hash(ensure_hash(partial_errors)['logEntryErrors'])
-    end
-
-    # Given the logEntryErrors, construct a map from errors to a list of indexes
-    # of log entries that failed for this specific error.
-    #
-    # The keys in this map are [error_code, error_message] pairs, and the values
-    # are a list of stringified indexes of log entries that failed due to this
-    # error.
-    #
-    # For logEntryErrors as in the example above (in the header comment for
-    # extract_log_entry_errors), the constructed map would be:
-    # {
-    #   [7, 'User not authorized.']: ['0'],
-    #   [3, 'Log name contains illegal character :']: ['1', '3']
-    # }
-    def construct_error_details_map(log_entry_errors)
-      error_details_map = Hash.new { |h, k| h[k] = [] }
-      log_entry_errors.each do |index, error|
-        error_hash = ensure_hash(error)
-        unless error_hash['code'] && error_hash['message']
-          @log.warn "Entry with index #{index} is missing 'code' or 'message'" \
-                    ' field.'
-          return {}
-        end
-        error_key = [error_hash['code'], error_hash['message']].freeze
-        # TODO(qingling128): Convert indexes to integers.
-        error_details_map[error_key] << index
-      end
-      error_details_map
-    rescue JSON::ParserError => e
-      @log.warn 'Failed to extract log entry errors from the error details:' \
-                " #{error.body}.", error: e
-      {}
-    end
-
-    def ensure_array(value)
-      ensure_non_empty(Array.try_convert(value))
-    end
-
-    def ensure_hash(value)
-      ensure_non_empty(Hash.try_convert(value))
-    end
-
-    def ensure_non_empty(converted_value)
-      fail JSON::ParserError unless converted_value
-      converted_value
     end
 
     private
@@ -1873,6 +1745,118 @@ module Fluent
           raise
         end
       end
+    end
+
+    # Extract a map of error details from an potentially partially successful
+    # request.
+    #
+    # The keys in this map are [error_code, error_message] pairs, and the values
+    # are a list of stringified indexes of log entries that failed due to this
+    # error.
+    #
+    # A sample error.body looks like:
+    # {
+    #   "error": {
+    #     "code": 403,
+    #     "message": "User not authorized.",
+    #     "status": "PERMISSION_DENIED",
+    #     "details": [
+    #       {
+    #         "@type": "type.googleapis.com/google.logging.v2.WriteLogEntriesPar
+    #           tialErrors",
+    #         "logEntryErrors": {
+    #           "0": {
+    #             "code": 7,
+    #             "message": "User not authorized."
+    #           },
+    #           "1": {
+    #             "code": 3,
+    #             "message": "Log name contains illegal character :"
+    #           },
+    #           "3": {
+    #             "code": 3,
+    #             "message": "Log name contains illegal character :"
+    #           }
+    #         }
+    #       },
+    #       {
+    #         "@type": "type.googleapis.com/google.rpc.DebugInfo",
+    #         "detail": ...
+    #       }
+    #     ]
+    #   }
+    # }
+    #
+    # The root level "code", "message", and "status" simply match the root
+    # cause of the first failed log entry. For example, if we switched the order
+    # of the log entries, then we would get:
+    # {
+    #    "error" : {
+    #       "code" : 400,
+    #       "message" : "Log name contains illegal character :",
+    #       "status" : "INVALID_ARGUMENT",
+    #       "details": ...
+    #    }
+    # }
+    # We will ignore it anyway and look at the details instead which includes
+    # info for all failed log entries.
+    #
+    # In this example, the logEntryErrors that we care are:
+    # {
+    #   "0": {
+    #     "code": 7,
+    #     "message": "User not authorized."
+    #   },
+    #   "1": {
+    #     "code": 3,
+    #     "message": "Log name contains illegal character :"
+    #   },
+    #   "3": {
+    #     "code": 3,
+    #     "message": "Log name contains illegal character :"
+    #   }
+    # }
+    #
+    # The ultimate map that is constructed is:
+    # {
+    #   [7, 'User not authorized.']: ['0'],
+    #   [3, 'Log name contains illegal character :']: ['1', '3']
+    # }
+    def construct_error_details_map(error)
+      error_details_map = Hash.new { |h, k| h[k] = [] }
+
+      error_details = ensure_array(
+        ensure_hash(ensure_hash(JSON.parse(error.body))['error'])['details'])
+      partial_errors = error_details.detect(
+        -> { fail JSON::ParserError, "No type #{PARTIAL_ERROR_FIELD}." }
+      ) do |error_detail|
+        ensure_hash(error_detail)['@type'] == PARTIAL_ERROR_FIELD
+      end
+      log_entry_errors = ensure_hash(
+        ensure_hash(partial_errors)['logEntryErrors'])
+      log_entry_errors.each do |index, log_entry_error|
+        error_hash = ensure_hash(log_entry_error)
+        unless error_hash['code'] && error_hash['message']
+          @log.warn "Entry with index #{index} is missing 'code' or 'message'" \
+                    ' field.'
+          return {}
+        end
+        error_key = [error_hash['code'], error_hash['message']].freeze
+        # TODO(qingling128): Convert indexes to integers.
+        error_details_map[error_key] << index
+      end
+      error_details_map
+    rescue JSON::ParserError => e
+      @log.warn 'Failed to extract log entry errors from the error details:' \
+                " #{error.body}.", error: e
+    end
+
+    def ensure_array(value)
+      Array.try_convert(value) || (fail JSON::ParserError, "#{value.class}")
+    end
+
+    def ensure_hash(value)
+      Hash.try_convert(value) || (fail JSON::ParserError, "#{value.class}")
     end
 
     # Increment the metric for the number of successful requests.
