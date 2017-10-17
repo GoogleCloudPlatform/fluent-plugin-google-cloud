@@ -68,7 +68,7 @@ module Fluent
       DATAFLOW_CONSTANTS = {
         service: 'dataflow.googleapis.com',
         resource_type: 'dataflow_step',
-        extra_common_labels: %w(region job_name job_id step_id)
+        extra_resource_labels: %w(region job_name job_id step_id)
       }
       DATAPROC_CONSTANTS = {
         service: 'cluster.dataproc.googleapis.com',
@@ -82,7 +82,7 @@ module Fluent
       ML_CONSTANTS = {
         service: 'ml.googleapis.com',
         resource_type: 'ml_job',
-        extra_common_labels: %w(job_id task_name)
+        extra_resource_labels: %w(job_id task_name)
       }
 
       # The map between a subservice name and a resource type.
@@ -1091,6 +1091,18 @@ module Fluent
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
       end
 
+      # Cloud Dataflow and Cloud ML.
+      # These labels can be set via the 'labels' option.
+      # Report them as monitored resource labels instead of common labels.
+      # e.g. "dataflow.googleapis.com/job_id" => "job_id"
+      [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
+        next unless resource.type == service_constants[:resource_type]
+        resource.labels.merge!(
+          delete_and_extract_labels(
+            common_labels, service_constants[:extra_resource_labels]
+              .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h))
+      end
+
       resource.freeze
       resource.labels.freeze
       common_labels.freeze
@@ -1158,14 +1170,14 @@ module Fluent
       common_labels.merge!(delete_and_extract_labels(record, @label_map))
 
       # Cloud Dataflow and Cloud ML.
-      # These labels can be set via configuring 'labels' or 'label_map'.
+      # These labels can be set via the 'labels' or 'label_map' options.
       # Report them as monitored resource labels instead of common labels.
       # e.g. "dataflow.googleapis.com/job_id" => "job_id"
       [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
         next unless resource.type == service_constants[:resource_type]
         resource.labels.merge!(
           delete_and_extract_labels(
-            common_labels, service_constants[:extra_common_labels]
+            common_labels, service_constants[:extra_resource_labels]
               .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h))
       end
 
