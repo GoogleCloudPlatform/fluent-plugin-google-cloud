@@ -93,6 +93,18 @@ module BaseTest
     end
   end
 
+  def test_configure_partial_success
+    setup_gce_metadata_stubs
+    {
+      APPLICATION_DEFAULT_CONFIG => false,
+      PARTIAL_SUCCESS_CONFIG => true
+    }.each do |(config, partial_success)|
+      d = create_driver(config)
+      assert_equal partial_success,
+                   d.instance.instance_variable_get(:@partial_success)
+    end
+  end
+
   def test_metadata_loading
     setup_gce_metadata_stubs
     d = create_driver

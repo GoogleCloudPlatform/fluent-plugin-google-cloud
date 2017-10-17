@@ -140,6 +140,10 @@ module Constants
     detect_json true
   )
 
+  PARTIAL_SUCCESS_CONFIG = %(
+    partial_success true
+  )
+
   # rubocop:disable Metrics/LineLength
   PRIVATE_KEY_CONFIG = %(
      auth_method private_key
@@ -598,4 +602,43 @@ module Constants
         }
       }.to_json
   }
+
+  PARTIAL_SUCCESS_RESPONSE_BODY = {
+    'error' => {
+      'code' => 403,
+      'message' => 'User not authorized.',
+      'status' => 'PERMISSION_DENIED',
+      'details' => [
+        {
+          '@type' => 'type.googleapis.com/google.logging.v2.WriteLogEntriesPa' \
+            'rtialErrors',
+          'logEntryErrors' => {
+            '0' => {
+              'code' => 7,
+              'message' => 'User not authorized.'
+            },
+            '1' => {
+              'code' => 3,
+              'message' => 'Log name contains illegal character :'
+            },
+            '2' => {
+              'code' => 3,
+              'message' => 'Log name contains illegal character :'
+            }
+          }
+        },
+        {
+          '@type' => 'type.googleapis.com/google.rpc.DebugInfo',
+          'detail' => '[ORIGINAL ERROR] generic::permission_denied: User not ' \
+            'authorized. [google.rpc.error_details_ext] { message: \"User not' \
+            ' authorized.\" details { type_url: \"type.googleapis.com/google.' \
+            'logging.v2.WriteLogEntriesPartialErrors\" value: \"\\n\\034\\010' \
+            '\\000\\022\\030\\010\\007\\022\\024User not authorized.\\n-\\010' \
+            '\\001\\022)\\010\\003\\022%Log name contains illegal character :' \
+            '\\n-\\010\\002\\022)\\010\\003\\022%Log name contains illegal ch' \
+            'aracter :\" } }'
+        }
+      ]
+    }
+  }.to_json
 end
