@@ -1836,11 +1836,9 @@ module Fluent
         ensure_hash(partial_errors)['logEntryErrors'])
       log_entry_errors.each do |index, log_entry_error|
         error_hash = ensure_hash(log_entry_error)
-        unless error_hash['code'] && error_hash['message']
-          @log.warn "Entry with index #{index} is missing 'code' or 'message'" \
-                    ' field.'
-          return {}
-        end
+        fail JSON::ParserError,
+             "Entry #{index} is missing 'code' or 'message'." unless
+          error_hash['code'] && error_hash['message']
         error_key = [error_hash['code'], error_hash['message']].freeze
         # TODO(qingling128): Convert indexes to integers.
         error_details_map[error_key] << index
@@ -1849,6 +1847,7 @@ module Fluent
     rescue JSON::ParserError => e
       @log.warn 'Failed to extract log entry errors from the error details:' \
                 " #{error.body}.", error: e
+      {}
     end
 
     def ensure_array(value)
