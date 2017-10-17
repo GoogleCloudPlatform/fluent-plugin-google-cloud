@@ -782,21 +782,13 @@ module Fluent
     #   }
     # }
     def extract_log_entry_errors(error)
-      error_body = ensure_hash(JSON.parse(error.body))
-      error = ensure_hash(error_body['error'])
-      error_details = ensure_array(error['details'])
-      partial_errors = error_details.detect do |error_detail|
+      error = ensure_hash(ensure_hash(JSON.parse(error.body))['error'])
+      partial_errors = ensure_array(error['details']).detect(
+        -> { fail JSON::ParserError, "No type #{PARTIAL_ERROR_FIELD}." }
+      ) do |error_detail|
         ensure_hash(error_detail)['@type'] == PARTIAL_ERROR_FIELD
       end
-      unless partial_errors
-        @log.warn 'Failed to detect an error detail with type' \
-          " #{PARTIAL_ERROR_FIELD}."
-      end
       ensure_hash(ensure_hash(partial_errors)['logEntryErrors'])
-    rescue JSON::ParserError => e
-      @log.warn 'Failed to extract log entry errors from the error details' \
-                " because of JSON parsing error: #{error.body}.", error: e
-      {}
     end
 
     # Given the logEntryErrors, construct a map from errors to a list of indexes
@@ -826,6 +818,10 @@ module Fluent
         error_details_map[error_key] << index
       end
       error_details_map
+    rescue JSON::ParserError => e
+      @log.warn 'Failed to extract log entry errors from the error details:' \
+                " #{error.body}.", error: e
+      {}
     end
 
     def ensure_array(value)
