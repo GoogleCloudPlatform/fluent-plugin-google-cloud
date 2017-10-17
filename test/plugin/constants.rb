@@ -97,7 +97,7 @@ module Constants
   DATAFLOW_JOB_NAME = 'job_name_1'
   DATAFLOW_JOB_ID = 'job_id_1'
   DATAFLOW_STEP_ID = 'step_1'
-  DATAFLOW_TAG = 'dataflow.googleapis.com/worker'
+  DATAFLOW_TAG = 'dataflow-worker'
 
   # Dataproc specific labels.
   DATAPROC_CLUSTER_NAME = 'test-cluster'

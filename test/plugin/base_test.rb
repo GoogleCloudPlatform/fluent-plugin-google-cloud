@@ -961,6 +961,26 @@ module BaseTest
     verify_log_entries(1, DATAPROC_PARAMS, 'jsonPayload')
   end
 
+  def test_cloud_ml_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver(CONFIG_ML, ML_TAG)
+      d.emit(ml_log_entry(0))
+      d.run
+    end
+    verify_log_entries(1, ML_PARAMS)
+  end
+
+  def test_cloud_dataflow_log
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver(CONFIG_DATAFLOW, DATAFLOW_TAG)
+      d.emit(dataflow_log_entry(0))
+      d.run
+    end
+    verify_log_entries(1, DATAFLOW_PARAMS)
+  end
+
   def test_log_entry_http_request_field_from_record
     verify_subfields_from_record(DEFAULT_HTTP_REQUEST_KEY)
   end

@@ -1091,6 +1091,18 @@ module Fluent
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
       end
 
+      # Cloud Dataflow and Cloud ML.
+      # These labels can be set via configuring 'labels'.
+      # Report them as monitored resource labels instead of common labels.
+      # e.g. "dataflow.googleapis.com/job_id" => "job_id"
+      [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
+        next unless resource.type == service_constants[:resource_type]
+        resource.labels.merge!(
+          delete_and_extract_labels(
+            common_labels, service_constants[:extra_common_labels]
+              .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h))
+      end
+
       resource.freeze
       resource.labels.freeze
       common_labels.freeze
