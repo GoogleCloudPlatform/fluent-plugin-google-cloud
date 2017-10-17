@@ -688,9 +688,7 @@ module Fluent
           rescue Google::Apis::ClientError => error
             # Most ClientErrors indicate a problem with the request itself and
             # should not be retried.
-            error_details_map = {}
-            error_details_map = construct_error_details_map(error) if
-              @partial_success
+            error_details_map = construct_error_details_map(error)
             if error_details_map.empty?
               increment_dropped_entries_count(entries_count)
               @log.warn "Dropping #{entries_count} log message(s)",
@@ -1823,6 +1821,7 @@ module Fluent
     #   [3, 'Log name contains illegal character :']: ['1', '3']
     # }
     def construct_error_details_map(error)
+      return {} unless @partial_success
       error_details_map = Hash.new { |h, k| h[k] = [] }
 
       error_details = ensure_array(
