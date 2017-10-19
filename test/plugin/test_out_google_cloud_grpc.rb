@@ -213,7 +213,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   )
 
   def generate_mock_host
-    "localhost:#{Random.new.rand(1_000..9_999)}"
+    "localhost:#{Random.new.rand(50_000..60_000)}"
   end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
