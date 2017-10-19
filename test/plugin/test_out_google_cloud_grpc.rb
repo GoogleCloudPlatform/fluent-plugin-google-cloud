@@ -91,8 +91,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       [true, 13, 1, 2, [0, 1, 0, 0, 2]]
     ].each do |should_fail, code, request_count, entry_count, metric_values|
       setup_prometheus
-      setup_logging_stubs(should_fail, code, 'SomeMessage') do
-        (1..request_count).each do
+      (1..request_count).each do
+        setup_logging_stubs(should_fail, code, 'SomeMessage') do
           d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
                             GRPCLoggingMockFailingService.rpc_stub_class)
           (1..entry_count).each do |i|
@@ -205,8 +205,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   private
 
-  GRPC_MOCK_HOST = 'localhost:56789'
-
   WriteLogEntriesRequest = Google::Logging::V2::WriteLogEntriesRequest
   WriteLogEntriesResponse = Google::Logging::V2::WriteLogEntriesResponse
 
@@ -214,22 +212,34 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   )
 
+  def generate_mock_host
+    "localhost:#{Random.new.rand(1_000..9_999)}"
+  end
+
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be
   # passed in to construct the mock used by the test driver.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
                     grpc_stub = GRPCLoggingMockService.rpc_stub_class)
+    if @mock_host
+      mock_host = @mock_host
+      @mock_host = nil
+    else
+      mock_host = generate_mock_host
+    end
     conf += USE_GRPC_CONFIG
     Fluent::Test::BufferedOutputTestDriver.new(
-      GoogleCloudOutputWithGRPCMock.new(grpc_stub), tag).configure(conf, true)
+      GoogleCloudOutputWithGRPCMock.new(grpc_stub, mock_host),
+      tag).configure(conf, true)
   end
 
   # Google Cloud Fluent output stub with grpc mock.
   class GoogleCloudOutputWithGRPCMock < Fluent::GoogleCloudOutput
-    def initialize(grpc_stub)
+    def initialize(grpc_stub, mock_host)
       super()
       @grpc_stub = grpc_stub
+      @mock_host = mock_host
     end
 
     def api_client
@@ -240,7 +250,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
       # Here we have obtained the creds, but for the mock, we will leave the
       # channel insecure.
-      @grpc_stub.new(GRPC_MOCK_HOST, :this_channel_is_insecure)
+      @grpc_stub.new(@mock_host, :this_channel_is_insecure)
     end
   end
 
@@ -310,6 +320,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Set up grpc stubs to mock the external calls.
   def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
+    # Save the mock host in an instance variable, so later on when creating the
+    # logging driver, we can refer to this host with exactly the same port.
+    @mock_host = generate_mock_host
     srv = GRPC::RpcServer.new
     @failed_attempts = []
     @requests_sent = []
@@ -319,7 +332,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       grpc = GRPCLoggingMockService.new(@requests_sent)
     end
     srv.handle(grpc)
-    srv.add_http2_port(GRPC_MOCK_HOST, :this_port_is_insecure)
+    srv.add_http2_port(@mock_host, :this_port_is_insecure)
     t = Thread.new { srv.run }
     srv.wait_till_running
     begin
@@ -331,6 +344,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
     srv.stop
     t.join
+    @mock_host = nil
   end
 
   # Verify the number and the content of the log entries match the expectation.
