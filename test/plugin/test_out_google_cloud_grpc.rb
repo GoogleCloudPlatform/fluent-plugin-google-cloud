@@ -212,8 +212,13 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   )
 
+  @@mock_port = 0 # rubocop:disable Style/ClassVars
+
   def generate_mock_host
-    "localhost:#{Random.new.rand(50_000..60_000)}"
+    # rubocop:disable Style/ClassVars
+    @@mock_port = (@@mock_port + 1) % 10_000 + 50_000
+    "localhost:#{@@mock_port}"
+    # rubocop:enable Style/ClassVars
   end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
@@ -319,6 +324,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # Set up grpc stubs to mock the external calls.
+  # TODO(qingling128): Remove this comment after grpc/12506 is resolved.
+  # Due to a gRPC load balancing issue (grpc/12506), we have to use a different
+  # port each time we create a gRPC mock as a temporary workaround. Thus we can
+  # only create one driver in each of setup_logging_stubs context.
   def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
     # Save the mock host in an instance variable, so later on when creating the
     # logging driver, we can refer to this host with exactly the same port.
