@@ -227,18 +227,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # passed in to construct the mock used by the test driver.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
                     grpc_stub = GRPCLoggingMockService.rpc_stub_class)
-    if @mock_host
-      mock_host = @mock_host
-      @mock_host = nil
-    else
-      # @mock_host only gets set up when setup_logging_stubs is called. Some
-      # tests create drivers without creating a logging stub context. For these
-      # cases just use a new mock port.
-      mock_host = generate_mock_host
-    end
     conf += USE_GRPC_CONFIG
     Fluent::Test::BufferedOutputTestDriver.new(
-      GoogleCloudOutputWithGRPCMock.new(grpc_stub, mock_host),
+      GoogleCloudOutputWithGRPCMock.new(grpc_stub, @mock_host),
       tag).configure(conf, true)
   end
 
@@ -356,7 +347,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
     srv.stop
     t.join
-    @mock_host = nil
   end
 
   # Verify the number and the content of the log entries match the expectation.
