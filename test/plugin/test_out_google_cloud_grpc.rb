@@ -231,6 +231,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       mock_host = @mock_host
       @mock_host = nil
     else
+      # @mock_host only gets set up when setup_logging_stubs is called. Some
+      # tests create drivers without creating a logging stub context. For these
+      # cases just use a new mock port.
       mock_host = generate_mock_host
     end
     conf += USE_GRPC_CONFIG
