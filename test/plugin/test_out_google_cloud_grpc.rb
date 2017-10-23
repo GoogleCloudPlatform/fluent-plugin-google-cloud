@@ -347,6 +347,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
     srv.stop
     t.join
+    @mock_host = nil
   end
 
   # Verify the number and the content of the log entries match the expectation.
