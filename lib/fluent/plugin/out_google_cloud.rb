@@ -378,15 +378,6 @@ module Fluent
 
       # TODO(qingling128): Remove this warning after the support is added. Also
       # remove the comment in the description of this configuration.
-      if @partial_success && @use_grpc
-        @log.warn 'Detected partial_success enabled while use_grpc is also' \
-                  ' enabled. The support for partial success in the gRPC path' \
-                  ' is to be added in the near future. For now the ' \
-                  ' partial_success flag will be ignored.'
-      end
-
-      # TODO(qingling128): Remove this warning after the support is added. Also
-      # remove the comment in the description of this configuration.
       unless @logging_api_url == DEFAULT_LOGGING_API_URL || @use_grpc
         @log.warn 'Detected customized logging_api_url while use_grpc is not' \
                   ' enabled. Customized logging_api_url for the non-gRPC path' \
@@ -416,7 +407,7 @@ module Fluent
           'The number of log entries that failed to be ingested by the'\
             ' Stackdriver output plugin due to a transient error and were'\
             ' retried')
-        @ok_code = @use_grpc ? 0 : 200
+        @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
       end
 
       # Alert on old authentication configuration.
@@ -668,7 +659,8 @@ module Fluent
                   end,
         labels: labels.map do |k, v|
           [k.encode('utf-8'), convert_to_utf8(v)]
-        end.to_h
+        end.to_h,
+        partial_success: @partial_success
       )
       increment_successful_requests_count
       increment_ingested_entries_count(entries_count)
@@ -705,14 +697,10 @@ module Fluent
       # Most client errors indicate a problem with the request itself and
       # should not be retried.
       when \
-          # HTTP status 400 (Bad Request).
-          GRPC::InvalidArgument,
           # HTTP status 401 (Unauthorized).
-          # These are usually solved via a `gcloud auth` call, or by
-          # modifying the permissions on the Google Cloud project.
+          # These are usually solved via a `gcloud auth` call, or by modifying
+          # the permissions on the Google Cloud project.
           GRPC::Unauthenticated,
-          # HTTP status 403 (Forbidden).
-          GRPC::PermissionDenied,
           # HTTP status 404 (Not Found).
           GRPC::NotFound,
           # HTTP status 409 (Conflict).
@@ -732,6 +720,31 @@ module Fluent
         increment_dropped_entries_count(entries_count, error.code)
         @log.warn "Dropping #{entries_count} log message(s)",
                   error: error.to_s, error_code: error.code.to_s
+
+      # If partial_success is enabled, valid entries should have be
+      # written even if some other entries fail due to InvalidArgument or
+      # PermissionDenied errors. Only invalid entries will be dropped.
+      when \
+          # HTTP status 400 (Bad Request).
+          GRPC::InvalidArgument,
+          # HTTP status 403 (Forbidden).
+          GRPC::PermissionDenied
+        error_details_map = construct_error_details_map_grpc(gax_error)
+        if error_details_map.empty?
+          increment_dropped_entries_count(entries_count, error.code)
+          @log.warn "Dropping #{entries_count} log message(s)",
+                    error: error.to_s, error_code: error.code.to_s
+        else
+          error_details_map.each do |(error_code, error_message), indexes|
+            partial_errors_count = indexes.length
+            increment_dropped_entries_count(partial_errors_count,
+                                            error_code)
+            entries_count -= partial_errors_count
+            @log.warn "Dropping #{partial_errors_count} log message(s)",
+                      error: error_message, error_code: error_code.to_s
+          end
+          increment_ingested_entries_count(entries_count)
+        end
 
       else
         # Assume it's a problem with the request itself and don't retry.
@@ -793,7 +806,7 @@ module Fluent
       increment_failed_requests_count(error.status_code)
       increment_dropped_entries_count(entries_count, error.status_code)
       @log.warn "Dropping #{entries_count} log message(s)",
-                error_class: error.class.to_s, error: error.to_s
+                error: error.to_s, error_code: error.status_code.to_s
 
     rescue Google::Apis::ClientError => error
       # 4xx client errors. Most client errors indicate a problem with the
@@ -803,15 +816,15 @@ module Fluent
         increment_failed_requests_count(error.status_code)
         increment_dropped_entries_count(entries_count, error.status_code)
         @log.warn "Dropping #{entries_count} log message(s)",
-                  error_class: error.class.to_s, error: error.to_s
+                  error: error.to_s, error_code: error.status_code.to_s
       else
         error_details_map.each do |(error_code, error_message), indexes|
-          partial_error_count = indexes.length
-          increment_dropped_entries_count(partial_error_count, error_code)
-          entries_count -= partial_error_count
-          @log.warn "Dropping #{partial_error_count} log message(s)",
-                    error_code: "google.rpc.Code[#{error_code}]",
-                    error: error_message
+          partial_errors_count = indexes.length
+          increment_dropped_entries_count(partial_errors_count, error_code)
+          entries_count -= partial_errors_count
+          @log.warn "Dropping #{partial_errors_count} log message(s)",
+                    error: error_message,
+                    error_code: "google.rpc.Code[#{error_code}]"
         end
         # Consider partially successful requests successful.
         increment_successful_requests_count
@@ -1918,7 +1931,7 @@ module Fluent
       end
     end
 
-    # Extract a map of error details from an potentially partially successful
+    # Extract a map of error details from a potentially partially successful
     # request. Return an empty map if @partial_success is not enabled.
     #
     # The keys in this map are [error_code, error_message] pairs, and the values
@@ -2019,6 +2032,65 @@ module Fluent
     rescue JSON::ParserError => e
       @log.warn 'Failed to extract log entry errors from the error details:' \
                 " #{error.body}.", error: e
+      {}
+    end
+
+    # Extract a map of error details from an potentially partially successful
+    # request for gRPC. Return an empty map if @partial_success is not enabled.
+    #
+    # The keys in this map are [error_code, error_message] pairs, and the values
+    # are a list of indexes of log entries that failed due to this error.
+    #
+    # A sample error looks like:
+    # <Google::Gax::RetryError:
+    #   message: 'GaxError Exception occurred in retry method that was not class
+    #             ified as transient, caused by 7:User not authorized.',
+    #   details: [
+    #     <Google::Logging::V2::WriteLogEntriesPartialErrors:
+    #       log_entry_errors: {
+    #         0 => <Google::Rpc::Status:
+    #                code: 7,
+    #                message: "User not authorized.",
+    #                details: []>,
+    #         1 => <Google::Rpc::Status:
+    #                code: 3,
+    #                message: "Log name contains illegal character :",
+    #                details: []>,
+    #         3 => <Google::Rpc::Status:
+    #                code: 3,
+    #                message: "Log name contains illegal character :",
+    #                details: []>
+    #       }
+    #     >,
+    #     <Google::Rpc::DebugInfo:
+    #       stack_entries: [],
+    #       detail: "..."
+    #     >
+    #   ]
+    #   cause: <GRPC::PermissionDenied: 7:User not authorized.>
+    # }
+    #
+    # The ultimate map that is constructed is:
+    # {
+    #   [7, 'User not authorized.']: [0],
+    #   [3, 'Log name contains illegal character :']: [1, 3]
+    # }
+    def construct_error_details_map_grpc(gax_error)
+      return {} unless @partial_success
+      error_details_map = Hash.new { |h, k| h[k] = [] }
+
+      error_details = ensure_array(gax_error.status_details)
+      raise JSON::ParserError, 'The error details are empty.' if
+        error_details.empty?
+      log_entry_errors = ensure_hash(error_details[0].log_entry_errors)
+      log_entry_errors.each do |index, log_entry_error|
+        error_key = [log_entry_error[:code], log_entry_error[:message]].freeze
+        error_details_map[error_key] << index
+      end
+      error_details_map
+    rescue JSON::ParserError => e
+      @log.warn 'Failed to extract log entry errors from the error details:' \
+                " #{gax_error.details.inspect}.", error: e
       {}
     end
 

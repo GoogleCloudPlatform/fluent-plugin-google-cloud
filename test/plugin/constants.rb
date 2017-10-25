@@ -660,4 +660,46 @@ module Constants
       ]
     }
   }.freeze
+
+  # rubocop:disable Style/StringLiterals
+  PARTIAL_SUCCESS_GRPC_METADATA = {
+    'google.logging.v2.writelogentriespartialerrors-bin' =>
+      Google::Logging::V2::WriteLogEntriesPartialErrors.encode(
+        Google::Logging::V2::WriteLogEntriesPartialErrors.new(
+          log_entry_errors: {
+            0 => Google::Rpc::Status.new(
+              code: GRPC::Core::StatusCodes::PERMISSION_DENIED,
+              message: "User not authorized.",
+              details: []),
+            1 => Google::Rpc::Status.new(
+              code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
+              message: "Log name contains illegal character :",
+              details: []),
+            3 => Google::Rpc::Status.new(
+              code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
+              message: "Log name contains illegal character :",
+              details: []) })),
+    'google.rpc.debuginfo-bin' =>
+      "\x12\xA7\x03[ORIGINAL ERROR] generic::permission_denied: User not auth" \
+      "orized. [google.rpc.error_details_ext] { message: \"User not authorize" \
+      "d.\" details { type_url: \"type.googleapis.com/google.logging.v2.Write" \
+      "LogEntriesPartialErrors\" value: \"\\n\\034\\010\\000\\022\\030\\010\\" \
+      "007\\022\\024User not authorized.\\n-\\010\\001\\022)\\010\\003\\022%L" \
+      "og name contains illegal character :\\n-\\010\\002\\022)\\010\\003\\02" \
+      "2%Log name contains illegal character :\" } }",
+    'grpc-status-details-bin' =>
+      "\b\a\x12\x14User not authorized.\x1A\xC2\x01\nBtype.googleapis.com/goo" \
+      "gle.logging.v2.WriteLogEntriesPartialErrors\x12|\n\x1C\b\x00\x12\x18\b" \
+      "\a\x12\x14User not authorized.\n-\b\x01\x12)\b\x03\x12%Log name contai" \
+      "ns illegal character :\n-\b\x02\x12)\b\x03\x12%Log name contains illeg" \
+      "al character :\x1A\xD7\x03\n(type.googleapis.com/google.rpc.DebugInfo" \
+      "\x12\xAA\x03\x12\xA7\x03[ORIGINAL ERROR] generic::permission_denied: U" \
+      "ser not authorized. [google.rpc.error_details_ext] { message: \"User n" \
+      "ot authorized.\" details { type_url: \"type.googleapis.com/google.logg" \
+      "ing.v2.WriteLogEntriesPartialErrors\" value: \"\\n\\034\\010\\000\\022" \
+      "\\030\\010\\007\\022\\024User not authorized.\\n-\\010\\001\\022)\\010" \
+      "\\003\\022%Log name contains illegal character :\\n-\\010\\002\\022)" \
+      "\\010\\003\\022%Log name contains illegal character :\" } }"
+  }.freeze
+  # rubocop:enable Style/StringLiterals
 end
