@@ -223,10 +223,10 @@ module BaseTest
     setup_gce_metadata_stubs
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
     setup_logging_stubs do
-      d = create_driver
-      d.emit('message' => log_entry(0))
-      exception_count = 0
       begin
+        exception_count = 0
+        d = create_driver
+        d.emit('message' => log_entry(0))
         d.run
       rescue RuntimeError => error
         assert error.message.include? 'Unable to read the credential file'

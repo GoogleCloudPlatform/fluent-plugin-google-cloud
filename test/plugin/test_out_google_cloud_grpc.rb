@@ -31,9 +31,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     { 8 => 'ResourceExhausted',
       12 => 'Unimplemented',
       16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
-      setup_logging_stubs(true, code, message) do
-        d = create_driver(USE_GRPC_CONFIG, 'test',
-                          GRPCLoggingMockFailingService.rpc_stub_class)
+      setup_logging_stubs do
+        d = create_driver(
+          USE_GRPC_CONFIG, 'test',
+          GRPCLoggingMockFailingService.new(code, message, @failed_attempts))
         # The API Client should not retry this and the plugin should consume the
         # exception.
         d.emit('message' => log_entry(0))
@@ -51,17 +52,15 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       13 => 'Internal',
       14 => 'Unavailable' }.each_with_index do |(code, message), index|
       exception_count = 0
-      setup_logging_stubs(true, code, message) do
-        d = create_driver(USE_GRPC_CONFIG, 'test',
-                          GRPCLoggingMockFailingService.rpc_stub_class)
+      setup_logging_stubs do
+        d = create_driver(
+          USE_GRPC_CONFIG, 'test',
+          GRPCLoggingMockFailingService.new(code, message, @failed_attempts))
         # The API client should retry this once, then throw an exception which
         # gets propagated through the plugin
         d.emit('message' => log_entry(0))
         begin
           d.run
-        rescue GRPC::Cancelled
-          # No need to check the message -- we already know the code.
-          exception_count += 1
         rescue GRPC::BadStatus => error
           assert_equal "#{code}:#{message}", error.message
           exception_count += 1
@@ -92,9 +91,15 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     ].each do |should_fail, code, request_count, entry_count, metric_values|
       setup_prometheus
       (1..request_count).each do
-        setup_logging_stubs(should_fail, code, 'SomeMessage') do
-          d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test',
-                            GRPCLoggingMockFailingService.rpc_stub_class)
+        setup_logging_stubs do
+          grpc_stub = if should_fail
+                        GRPCLoggingMockFailingService.new(
+                          code, 'SomeMessage', @failed_attempts)
+                      else
+                        GRPCLoggingMockService.new(@requests_sent)
+                      end
+          d = create_driver(
+            USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test', grpc_stub)
           (1..entry_count).each do |i|
             d.emit('message' => log_entry(i.to_s))
           end
@@ -212,33 +217,22 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   ).freeze
 
-  @@mock_port = 0 # rubocop:disable Style/ClassVars
-
-  def generate_mock_host
-    # rubocop:disable Style/ClassVars
-    @@mock_port = (@@mock_port + 1) % 10_000 + 50_000
-    "localhost:#{@@mock_port}"
-    # rubocop:enable Style/ClassVars
-  end
-
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be
   # passed in to construct the mock used by the test driver.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
-                    grpc_stub = GRPCLoggingMockService.rpc_stub_class)
+                    grpc_stub = GRPCLoggingMockService.new(@requests_sent))
     conf += USE_GRPC_CONFIG
     Fluent::Test::BufferedOutputTestDriver.new(
-      GoogleCloudOutputWithGRPCMock.new(grpc_stub, @mock_host),
-      tag).configure(conf, true)
+      GoogleCloudOutputWithGRPCMock.new(grpc_stub), tag).configure(conf, true)
   end
 
   # Google Cloud Fluent output stub with grpc mock.
   class GoogleCloudOutputWithGRPCMock < Fluent::GoogleCloudOutput
-    def initialize(grpc_stub, mock_host)
+    def initialize(grpc_stub)
       super()
       @grpc_stub = grpc_stub
-      @mock_host = mock_host
     end
 
     def api_client
@@ -249,21 +243,37 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
       # Here we have obtained the creds, but for the mock, we will leave the
       # channel insecure.
-      @grpc_stub.new(@mock_host, :this_channel_is_insecure)
+      @grpc_stub
     end
   end
 
   # GRPC logging mock that successfully logs the records.
-  class GRPCLoggingMockService < Google::Logging::V2::LoggingServiceV2::Service
+  class GRPCLoggingMockService <
+      Google::Cloud::Logging::V2::LoggingServiceV2Client
     def initialize(requests_received)
       super()
       @requests_received = requests_received
     end
 
-    def write_log_entries(request, _call)
+    # rubocop:disable Lint/UnusedMethodArgument
+    # rubocop:disable Metrics/ParameterLists
+    def write_log_entries(entries,
+                          log_name: nil,
+                          resource: nil,
+                          labels: nil,
+                          partial_success: nil,
+                          options: nil)
+      request = Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
+        log_name: log_name,
+        resource: resource,
+        labels: labels,
+        entries: entries
+      )
       @requests_received << request
       WriteLogEntriesResponse.new
     end
+    # rubocop:enable Lint/UnusedMethodArgument
+    # rubocop:enable Metrics/ParameterLists
 
     # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
     #
@@ -297,7 +307,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
     def write_log_entries(_request, _call)
       @failed_attempts << 1
-      raise GRPC::BadStatus.new(@code, @message)
+      begin
+        raise GRPC::BadStatus.new_status_exception(@code, @message)
+      rescue
+        # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
+        raise Google::Gax::GaxError, @message
+      end
     end
 
     # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
@@ -318,43 +333,22 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # Set up grpc stubs to mock the external calls.
-  # TODO(qingling128): Remove this comment after grpc/grpc#12506 is resolved.
-  # Due to a gRPC load balancing issue (grpc/grpc#12506), we have to use a
-  # different port each time we create a gRPC mock as a temporary workaround.
-  # Thus we can only create one driver in each setup_logging_stubs context.
-  def setup_logging_stubs(should_fail = false, code = 0, message = 'Ok')
-    # Save the mock host in an instance variable, so later on when creating the
-    # logging driver, we can refer to this host with exactly the same port.
-    @mock_host = generate_mock_host
-    srv = GRPC::RpcServer.new
+  def setup_logging_stubs
     @failed_attempts = []
     @requests_sent = []
-    if should_fail
-      grpc = GRPCLoggingMockFailingService.new(code, message, @failed_attempts)
-    else
-      grpc = GRPCLoggingMockService.new(@requests_sent)
-    end
-    srv.handle(grpc)
-    srv.add_http2_port(@mock_host, :this_port_is_insecure)
-    t = Thread.new { srv.run }
-    srv.wait_till_running
-    begin
-      yield
-    rescue Test::Unit::Failure, StandardError => e
-      srv.stop
-      t.join
-      raise e
-    end
-    srv.stop
-    t.join
-    @mock_host = nil
+    yield
   end
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload', &block)
     @requests_sent.each do |request|
-      @logs_sent << JSON.parse(request.to_json)
+      @logs_sent << {
+        'entries' => request.entries.map { |entry| JSON.parse(entry.to_json) },
+        'labels' => request.labels,
+        'resource' => request.resource,
+        'logName' => request.log_name
+      }
     end
     verify_json_log_entries(n, params, payload_type, &block)
   end
