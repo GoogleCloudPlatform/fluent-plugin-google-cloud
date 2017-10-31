@@ -630,8 +630,8 @@ module BaseTest
         expected_ts.push(ts)
         emit_index += 1
         d.emit('message' => log_entry(emit_index),
-               'timestampSeconds' => "#{ts.tv_sec}",
-               'timestampNanos' => "#{ts.tv_nsec}")
+               'timestampSeconds' => ts.tv_sec.to_s,
+               'timestampNanos' => ts.tv_nsec.to_s)
         expected_ts.push(ts)
         emit_index += 1
         d.run
@@ -1795,6 +1795,6 @@ module BaseTest
   end
 
   def _undefined
-    fail "Method #{__callee__} is unimplemented and needs to be overridden."
+    raise "Method #{__callee__} is unimplemented and needs to be overridden."
   end
 end

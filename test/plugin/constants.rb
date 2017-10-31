@@ -23,98 +23,100 @@ module Constants
 
   # TODO(qingling128) Separate constants into different submodules.
   # Attributes used for the GCE metadata service.
-  PROJECT_ID = 'test-project-id'
-  ZONE = 'us-central1-b'
-  FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
-  VM_ID = '9876543210'
+  PROJECT_ID = 'test-project-id'.freeze
+  ZONE = 'us-central1-b'.freeze
+  FULLY_QUALIFIED_ZONE = "projects/#{PROJECT_ID}/zones/#{ZONE}".freeze
+  VM_ID = '9876543210'.freeze
 
   # Attributes used for the Metadata Agent resources.
-  METADATA_ZONE = 'us-central1-c'
-  METADATA_VM_ID = '0123456789'
+  METADATA_ZONE = 'us-central1-c'.freeze
+  METADATA_VM_ID = '0123456789'.freeze
 
   # Attributes used for custom (overridden) configs.
-  CUSTOM_PROJECT_ID = 'test-custom-project-id'
-  CUSTOM_ZONE = 'us-custom-central1-b'
-  CUSTOM_FULLY_QUALIFIED_ZONE = 'projects/' + PROJECT_ID + '/zones/' + ZONE
-  CUSTOM_VM_ID = 'C9876543210'
-  CUSTOM_HOSTNAME = 'custom.hostname.org'
+  CUSTOM_PROJECT_ID = 'test-custom-project-id'.freeze
+  CUSTOM_ZONE = 'us-custom-central1-b'.freeze
+  CUSTOM_FULLY_QUALIFIED_ZONE = "projects/#{PROJECT_ID}/zones/#{ZONE}".freeze
+  CUSTOM_VM_ID = 'C9876543210'.freeze
+  CUSTOM_HOSTNAME = 'custom.hostname.org'.freeze
 
   # Attributes used for the EC2 metadata service.
-  EC2_PROJECT_ID = 'test-ec2-project-id'
-  EC2_ZONE = 'us-west-2b'
-  EC2_PREFIXED_ZONE = 'aws:' + EC2_ZONE
-  EC2_VM_ID = 'i-81c16767'
-  EC2_ACCOUNT_ID = '123456789012'
+  EC2_PROJECT_ID = 'test-ec2-project-id'.freeze
+  EC2_ZONE = 'us-west-2b'.freeze
+  EC2_PREFIXED_ZONE = "aws:#{EC2_ZONE}".freeze
+  EC2_VM_ID = 'i-81c16767'.freeze
+  EC2_ACCOUNT_ID = '123456789012'.freeze
 
   # The formatting here matches the format used on the VM.
   EC2_IDENTITY_DOCUMENT = %({
     "accountId" : "#{EC2_ACCOUNT_ID}",
     "availabilityZone" : "#{EC2_ZONE}",
     "instanceId" : "#{EC2_VM_ID}"
-  })
+  }).freeze
 
   # Managed VMs specific labels.
-  MANAGED_VM_BACKEND_NAME = 'default'
-  MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'
+  MANAGED_VM_BACKEND_NAME = 'default'.freeze
+  MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'.freeze
 
   # Docker Container labels.
-  DOCKER_CONTAINER_ID = '0d0f03ff8d3c42688692536d1af77a28cd135c0a5c531f25a31'
-  DOCKER_CONTAINER_NAME = 'happy_hippo'
-  DOCKER_CONTAINER_STREAM_STDOUT = 'stdout'
-  DOCKER_CONTAINER_STREAM_STDERR = 'stderr'
+  DOCKER_CONTAINER_ID = \
+    '0d0f03ff8d3c42688692536d1af77a28cd135c0a5c531f25a31'.freeze
+  DOCKER_CONTAINER_NAME = 'happy_hippo'.freeze
+  DOCKER_CONTAINER_STREAM_STDOUT = 'stdout'.freeze
+  DOCKER_CONTAINER_STREAM_STDERR = 'stderr'.freeze
   # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch.
-  DOCKER_CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'
+  DOCKER_CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'.freeze
   DOCKER_CONTAINER_SECONDS_EPOCH = 1_234_567_890
   DOCKER_CONTAINER_NANOS = 987_654_321
 
   # Container Engine / Kubernetes specific labels.
-  CONTAINER_CLUSTER_NAME = 'cluster-1'
-  CONTAINER_NAMESPACE_ID = '898268c8-4a36-11e5-9d81-42010af0194c'
-  CONTAINER_NAMESPACE_NAME = 'kube-system'
-  CONTAINER_POD_ID = 'cad3c3c4-4b9c-11e5-9d81-42010af0194c'
-  CONTAINER_POD_NAME = 'redis-master-c0l82.foo.bar'
-  CONTAINER_CONTAINER_NAME = 'redis'
-  CONTAINER_LABEL_KEY = 'component'
-  CONTAINER_LABEL_VALUE = 'redis-component'
-  CONTAINER_STREAM = 'stdout'
-  CONTAINER_SEVERITY = 'INFO'
+  CONTAINER_CLUSTER_NAME = 'cluster-1'.freeze
+  CONTAINER_NAMESPACE_ID = '898268c8-4a36-11e5-9d81-42010af0194c'.freeze
+  CONTAINER_NAMESPACE_NAME = 'kube-system'.freeze
+  CONTAINER_POD_ID = 'cad3c3c4-4b9c-11e5-9d81-42010af0194c'.freeze
+  CONTAINER_POD_NAME = 'redis-master-c0l82.foo.bar'.freeze
+  CONTAINER_CONTAINER_NAME = 'redis'.freeze
+  CONTAINER_LABEL_KEY = 'component'.freeze
+  CONTAINER_LABEL_VALUE = 'redis-component'.freeze
+  CONTAINER_STREAM = 'stdout'.freeze
+  CONTAINER_SEVERITY = 'INFO'.freeze
   # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch.
-  CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'
+  CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'.freeze
   CONTAINER_SECONDS_EPOCH = 1_234_567_890
   CONTAINER_NANOS = 987_654_321
 
   # Cloud Functions specific labels.
-  CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'
-  CLOUDFUNCTIONS_REGION = 'us-central1'
-  CLOUDFUNCTIONS_EXECUTION_ID = '123-0'
-  CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'
-  CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'
-  CLOUDFUNCTIONS_POD_NAME = 'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'
-  CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'
+  CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'.freeze
+  CLOUDFUNCTIONS_REGION = 'us-central1'.freeze
+  CLOUDFUNCTIONS_EXECUTION_ID = '123-0'.freeze
+  CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'.freeze
+  CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'.freeze
+  CLOUDFUNCTIONS_POD_NAME = \
+    'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'.freeze
+  CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'.freeze
 
   # Dataflow specific labels.
-  DATAFLOW_REGION = 'us-central1'
-  DATAFLOW_JOB_NAME = 'job_name_1'
-  DATAFLOW_JOB_ID = 'job_id_1'
-  DATAFLOW_STEP_ID = 'step_1'
-  DATAFLOW_TAG = 'dataflow-worker'
+  DATAFLOW_REGION = 'us-central1'.freeze
+  DATAFLOW_JOB_NAME = 'job_name_1'.freeze
+  DATAFLOW_JOB_ID = 'job_id_1'.freeze
+  DATAFLOW_STEP_ID = 'step_1'.freeze
+  DATAFLOW_TAG = 'dataflow-worker'.freeze
 
   # Dataproc specific labels.
-  DATAPROC_CLUSTER_NAME = 'test-cluster'
-  DATAPROC_CLUSTER_UUID = '00000000-0000-0000-0000-000000000000'
-  DATAPROC_REGION = 'unittest'
+  DATAPROC_CLUSTER_NAME = 'test-cluster'.freeze
+  DATAPROC_CLUSTER_UUID = '00000000-0000-0000-0000-000000000000'.freeze
+  DATAPROC_REGION = 'unittest'.freeze
 
   # ML specific labels.
-  ML_REGION = 'us-central1'
-  ML_JOB_ID = 'job_name_1'
-  ML_TASK_NAME = 'task_name_1'
-  ML_TRIAL_ID = 'trial_id_1'
-  ML_LOG_AREA = 'log_area_1'
-  ML_TAG = 'master-replica-0'
+  ML_REGION = 'us-central1'.freeze
+  ML_JOB_ID = 'job_name_1'.freeze
+  ML_TASK_NAME = 'task_name_1'.freeze
+  ML_TRIAL_ID = 'trial_id_1'.freeze
+  ML_LOG_AREA = 'log_area_1'.freeze
+  ML_TAG = 'master-replica-0'.freeze
 
   # Parameters used for authentication.
-  AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'
-  FAKE_AUTH_TOKEN = 'abc123'
+  AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'.freeze
+  FAKE_AUTH_TOKEN = 'abc123'.freeze
 
   # Information about test credentials files.
   # path: Path to the credentials file.
@@ -122,97 +124,97 @@ module Constants
   IAM_CREDENTIALS = {
     path: 'test/plugin/data/iam-credentials.json',
     project_id: 'fluent-test-project'
-  }
+  }.freeze
   LEGACY_CREDENTIALS = {
     path: 'test/plugin/data/credentials.json',
     project_id: '847859579879'
-  }
+  }.freeze
   INVALID_CREDENTIALS = {
     path: 'test/plugin/data/invalid_credentials.json',
     project_id: ''
-  }
+  }.freeze
 
   # Configuration files for various test scenarios.
   APPLICATION_DEFAULT_CONFIG = %(
-  )
+  ).freeze
 
   DETECT_JSON_CONFIG = %(
     detect_json true
-  )
+  ).freeze
 
   PARTIAL_SUCCESS_CONFIG = %(
     partial_success true
-  )
+  ).freeze
 
   # rubocop:disable Metrics/LineLength
   PRIVATE_KEY_CONFIG = %(
      auth_method private_key
      private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
      private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
-  )
+  ).freeze
   # rubocop:enable Metrics/LineLength
 
   REQUIRE_VALID_TAGS_CONFIG = %(
     require_valid_tags true
-  )
+  ).freeze
 
   NO_METADATA_SERVICE_CONFIG = %(
     use_metadata_service false
-  )
+  ).freeze
 
   NO_DETECT_SUBSERVICE_CONFIG = %(
     detect_subservice false
-  )
+  ).freeze
 
   PROMETHEUS_ENABLE_CONFIG = %(
     enable_monitoring true
     monitoring_type prometheus
-  )
+  ).freeze
 
   ENABLE_METADATA_AGENT_CONFIG = %(
     enable_metadata_agent true
-  )
+  ).freeze
 
   DISABLE_METADATA_AGENT_CONFIG = %(
     enable_metadata_agent false
-  )
+  ).freeze
 
   DOCKER_CONTAINER_CONFIG = %(
     enable_metadata_agent true
     label_map { "source": "#{DOCKER_CONSTANTS[:service]}/stream" }
     detect_json true
-  )
+  ).freeze
 
   CUSTOM_METADATA_CONFIG = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
     vm_name #{CUSTOM_HOSTNAME}
-  )
+  ).freeze
 
   CONFIG_MISSING_METADATA_PROJECT_ID = %(
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
-  )
+  ).freeze
   CONFIG_MISSING_METADATA_ZONE = %(
     project_id #{CUSTOM_PROJECT_ID}
     vm_id #{CUSTOM_VM_ID}
-  )
+  ).freeze
   CONFIG_MISSING_METADATA_VM_ID = %(
     project_id #{CUSTOM_PROJECT_ID}
     zone #{CUSTOM_ZONE}
-  )
+  ).freeze
   CONFIG_MISSING_METADATA_ALL = %(
-  )
+  ).freeze
 
   CONFIG_EC2_PROJECT_ID = %(
     project_id #{EC2_PROJECT_ID}
-  )
+  ).freeze
 
   CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID = %(
     project_id #{EC2_PROJECT_ID}
     vm_id #{CUSTOM_VM_ID}
-  )
+  ).freeze
 
   CONFIG_DATAFLOW = %(
     subservice_name "#{DATAFLOW_CONSTANTS[:service]}"
@@ -222,7 +224,7 @@ module Constants
       "#{DATAFLOW_CONSTANTS[:service]}/job_id" : "#{DATAFLOW_JOB_ID}"
     }
     label_map { "step": "#{DATAFLOW_CONSTANTS[:service]}/step_id" }
-  )
+  ).freeze
 
   CONFIG_ML = %(
     subservice_name "#{ML_CONSTANTS[:service]}"
@@ -232,11 +234,11 @@ module Constants
       "#{ML_CONSTANTS[:service]}/trial_id" : "#{ML_TRIAL_ID}"
     }
     label_map { "name": "#{ML_CONSTANTS[:service]}/job_id/log_area" }
-  )
+  ).freeze
 
   CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
     trace_key custom_trace_key
-  )
+  ).freeze
 
   # Service configurations for various services.
 
@@ -254,7 +256,7 @@ module Constants
     labels: {
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
-  }
+  }.freeze
   COMPUTE_PARAMS_WITH_METADATA_VM_ID_AND_ZONE = COMPUTE_PARAMS.merge(
     resource: COMPUTE_PARAMS[:resource].merge(
       labels: {
@@ -262,7 +264,7 @@ module Constants
         'zone' => METADATA_ZONE
       }
     )
-  )
+  ).freeze
 
   # GAE.
   VMENGINE_PARAMS = {
@@ -280,11 +282,12 @@ module Constants
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
       "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
-  }
+  }.freeze
 
   # GKE Container.
-  CONTAINER_TAG = "kubernetes.#{CONTAINER_POD_NAME}_" \
-                  "#{CONTAINER_NAMESPACE_NAME}_#{CONTAINER_CONTAINER_NAME}"
+  CONTAINER_TAG = \
+    "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
+    "#{CONTAINER_CONTAINER_NAME}".freeze
 
   CONTAINER_FROM_METADATA_PARAMS = {
     resource: {
@@ -308,7 +311,7 @@ module Constants
       "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
-  }
+  }.freeze
 
   # Almost the same as from metadata, but namespace_id and pod_id come from
   # namespace and pod names.
@@ -333,7 +336,7 @@ module Constants
       "#{GKE_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
-  }
+  }.freeze
 
   CONTAINER_FROM_APPLICATION_PARAMS = {
     resource: {
@@ -352,7 +355,7 @@ module Constants
     labels: {
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
-  }
+  }.freeze
 
   # Docker Container.
   DOCKER_CONTAINER_PARAMS = {
@@ -368,18 +371,19 @@ module Constants
     labels: {
       "#{DOCKER_CONSTANTS[:service]}/stream" => DOCKER_CONTAINER_STREAM_STDOUT
     }
-  }
+  }.freeze
   DOCKER_CONTAINER_PARAMS_STREAM_STDERR = DOCKER_CONTAINER_PARAMS.merge(
     labels: DOCKER_CONTAINER_PARAMS[:labels].merge(
       "#{DOCKER_CONSTANTS[:service]}/stream" => DOCKER_CONTAINER_STREAM_STDERR
     )
-  )
-  DOCKER_CONTAINER_PARAMS_NO_STREAM = DOCKER_CONTAINER_PARAMS.merge(labels: {})
+  ).freeze
+  DOCKER_CONTAINER_PARAMS_NO_STREAM = \
+    DOCKER_CONTAINER_PARAMS.merge(labels: {}).freeze
 
   # Cloud Functions.
   CLOUDFUNCTIONS_TAG = "kubernetes.#{CLOUDFUNCTIONS_POD_NAME}_" \
                         "#{CLOUDFUNCTIONS_NAMESPACE_NAME}_" \
-                        "#{CLOUDFUNCTIONS_CONTAINER_NAME}"
+                        "#{CLOUDFUNCTIONS_CONTAINER_NAME}".freeze
 
   CLOUDFUNCTIONS_PARAMS = {
     resource: {
@@ -400,7 +404,7 @@ module Constants
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
       "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
-  }
+  }.freeze
 
   CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
     resource: {
@@ -420,7 +424,7 @@ module Constants
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
       "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
-  }
+  }.freeze
 
   # Cloud Dataflow.
   DATAFLOW_PARAMS = {
@@ -440,7 +444,7 @@ module Constants
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
       "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
-  }
+  }.freeze
 
   # Cloud Dataproc.
   DATAPROC_PARAMS = {
@@ -459,7 +463,7 @@ module Constants
       "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
       "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
-  }
+  }.freeze
 
   # Cloud ML.
   ML_PARAMS = {
@@ -479,7 +483,7 @@ module Constants
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
       "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
     }
-  }
+  }.freeze
 
   CUSTOM_PARAMS = {
     resource: {
@@ -494,7 +498,7 @@ module Constants
     labels: {
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => CUSTOM_HOSTNAME
     }
-  }
+  }.freeze
 
   EC2_PARAMS = {
     resource: {
@@ -510,7 +514,7 @@ module Constants
     labels: {
       "#{EC2_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
-  }
+  }.freeze
 
   HTTP_REQUEST_MESSAGE = {
     'requestMethod' => 'POST',
@@ -523,24 +527,24 @@ module Constants
     'referer' => 'http://referer/',
     'cacheHit' => true,
     'cacheValidatedWithOriginServer' => true
-  }
+  }.freeze
 
   SOURCE_LOCATION_MESSAGE = {
     'file' => 'source/file',
     'function' => 'my_function',
     'line' => 18
-  }
+  }.freeze
 
   OPERATION_MESSAGE = {
     'id' => 'op_id',
     'producer' => 'my/app',
     'last' => true
-  }
+  }.freeze
 
   CUSTOM_LABELS_MESSAGE = {
     'customKey' => 'value'
-  }
-  CONFLICTING_LABEL_KEY = "#{COMPUTE_CONSTANTS[:service]}/resource_name"
+  }.freeze
+  CONFLICTING_LABEL_KEY = "#{COMPUTE_CONSTANTS[:service]}/resource_name".freeze
 
   # Tags and their sanitized and encoded version.
   VALID_TAGS = {
@@ -550,7 +554,7 @@ module Constants
     'specialCharacter/_-.' => 'specialCharacter%2F_-.',
     'abc@&^$*' => 'abc%40%26%5E%24%2A',
     '@&^$*' => '%40%26%5E%24%2A'
-  }
+  }.freeze
   INVALID_TAGS = {
     # Non-string tags.
     123 => '123',
@@ -560,10 +564,10 @@ module Constants
     # Non-utf8 string tags.
     "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
     "abc#{[0x92].pack('C*')}" => 'abc%20',
-    "#{[0x92].pack('C*')}" => '%20',
+    [0x92].pack('C*').to_s => '%20',
     # Empty string tag.
     '' => '_'
-  }
+  }.freeze
   ALL_TAGS = VALID_TAGS.merge(INVALID_TAGS)
 
   # Stub value for Monitored resources from Metadata Agent.
@@ -601,7 +605,7 @@ module Constants
           'zone' => ZONE
         }
       }.to_json
-  }
+  }.freeze
 
   PARTIAL_SUCCESS_RESPONSE_BODY = {
     'error' => {

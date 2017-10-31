@@ -31,7 +31,7 @@ module Google
   module Protobuf
     # Alias the has_key? method to have the same interface as a regular map.
     class Map
-      alias_method :key?, :has_key?
+      alias key? has_key?
     end
   end
 end
@@ -45,45 +45,45 @@ module Fluent
         service: 'appengine.googleapis.com',
         resource_type: 'gae_app',
         metadata_attributes: %w(gae_backend_name gae_backend_version)
-      }
+      }.freeze
       CLOUDFUNCTIONS_CONSTANTS = {
         service: 'cloudfunctions.googleapis.com',
         resource_type: 'cloud_function'
-      }
+      }.freeze
       COMPUTE_CONSTANTS = {
         service: 'compute.googleapis.com',
         resource_type: 'gce_instance'
-      }
+      }.freeze
       GKE_CONSTANTS = {
         service: 'container.googleapis.com',
         resource_type: 'container',
         extra_resource_labels: %w(namespace_id pod_id container_name),
         extra_common_labels: %w(namespace_name pod_name),
         metadata_attributes: %w(kube-env)
-      }
+      }.freeze
       DOCKER_CONSTANTS = {
         service: 'docker.googleapis.com',
         resource_type: 'docker_container'
-      }
+      }.freeze
       DATAFLOW_CONSTANTS = {
         service: 'dataflow.googleapis.com',
         resource_type: 'dataflow_step',
         extra_resource_labels: %w(region job_name job_id step_id)
-      }
+      }.freeze
       DATAPROC_CONSTANTS = {
         service: 'cluster.dataproc.googleapis.com',
         resource_type: 'cloud_dataproc_cluster',
         metadata_attributes: %w(dataproc-cluster-uuid dataproc-cluster-name)
-      }
+      }.freeze
       EC2_CONSTANTS = {
         service: 'ec2.amazonaws.com',
         resource_type: 'aws_ec2_instance'
-      }
+      }.freeze
       ML_CONSTANTS = {
         service: 'ml.googleapis.com',
         resource_type: 'ml_job',
         extra_resource_labels: %w(job_id task_name)
-      }
+      }.freeze
 
       # The map between a subservice name and a resource type.
       SUBSERVICE_MAP = \
@@ -104,13 +104,14 @@ module Fluent
     module ConfigConstants
       # Default values for JSON payload keys to set the "httpRequest",
       # "operation", "sourceLocation", "trace" fields in the LogEntry.
-      DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'
-      DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'
-      DEFAULT_SOURCE_LOCATION_KEY = 'logging.googleapis.com/sourceLocation'
-      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'
+      DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'.freeze
+      DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'.freeze
+      DEFAULT_SOURCE_LOCATION_KEY = \
+        'logging.googleapis.com/sourceLocation'.freeze
+      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
 
       DEFAULT_METADATA_AGENT_URL =
-        'http://local-metadata-agent.stackdriver.com:8000'
+        'http://local-metadata-agent.stackdriver.com:8000'.freeze
     end
 
     # Internal constants.
@@ -118,7 +119,7 @@ module Fluent
       # The label name of local_resource_id in the json payload. When a record
       # has this field in the payload, we will use the value to retrieve
       # monitored resource from Stackdriver Metadata agent.
-      LOCAL_RESOURCE_ID_KEY = 'logging.googleapis.com/local_resource_id'
+      LOCAL_RESOURCE_ID_KEY = 'logging.googleapis.com/local_resource_id'.freeze
 
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
@@ -168,11 +169,12 @@ module Fluent
           'Google::Logging::V2::LogEntryOperation',
           'Google::Apis::LoggingV2::LogEntryOperation'
         ]
-      }
+      }.freeze
 
       # The name of the WriteLogEntriesPartialErrors field in the error details.
       PARTIAL_ERROR_FIELD =
-        'type.googleapis.com/google.logging.v2.WriteLogEntriesPartialErrors'
+        'type.googleapis.com/google.logging.v2.WriteLogEntriesPartialErrors' \
+        .freeze
     end
 
     include self::ServiceConstants
@@ -181,14 +183,14 @@ module Fluent
 
     Fluent::Plugin.register_output('google_cloud', self)
 
-    PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'
-    PLUGIN_VERSION = '0.6.8'
+    PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
+    PLUGIN_VERSION = '0.6.8'.freeze
 
     # Name of the the Google cloud logging write scope.
-    LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'
+    LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'.freeze
 
     # Address of the metadata service.
-    METADATA_SERVICE_ADDR = '169.254.169.254'
+    METADATA_SERVICE_ADDR = '169.254.169.254'.freeze
 
     # Disable this warning to conform to fluentd config_param conventions.
     # rubocop:disable Style/HashSyntax
@@ -391,10 +393,9 @@ module Fluent
         extra << 'private_key_path' unless @private_key_path.nil?
         extra << 'private_key_passphrase' unless @private_key_passphrase.nil?
 
-        fail Fluent::ConfigError,
-             "#{PLUGIN_NAME} no longer supports auth_method.\n" \
-             'Please remove configuration parameters: ' +
-               extra.join(' ')
+        raise Fluent::ConfigError,
+              "#{PLUGIN_NAME} no longer supports auth_method.\n" \
+              "Please remove configuration parameters: #{extra.join(' ')}"
       end
 
       set_regexp_patterns
@@ -767,7 +768,7 @@ module Fluent
     end
 
     def fetch_gce_metadata(metadata_path)
-      fail "Called fetch_gce_metadata with platform=#{@platform}" unless
+      raise "Called fetch_gce_metadata with platform=#{@platform}" unless
         @platform == Platform::GCE
       # See https://cloud.google.com/compute/docs/metadata
       open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
@@ -777,7 +778,7 @@ module Fluent
     # EC2 Metadata server returns everything in one call. Store it after the
     # first fetch to avoid making multiple calls.
     def ec2_metadata
-      fail "Called ec2_metadata with platform=#{@platform}" unless
+      raise "Called ec2_metadata with platform=#{@platform}" unless
         @platform == Platform::EC2
       unless @ec2_metadata
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
@@ -821,8 +822,8 @@ module Fluent
       missing << 'zone' unless @zone
       missing << 'vm_id' unless @vm_id
       return if missing.empty?
-      fail Fluent::ConfigError, 'Unable to obtain metadata parameters: ' +
-        missing.join(' ')
+      raise Fluent::ConfigError,
+            "Unable to obtain metadata parameters: #{missing.join(' ')}"
     end
 
     # 1. Return the value if it is explicitly set in the config already.
@@ -991,13 +992,11 @@ module Fluent
       # GCE instance and GKE container.
       when COMPUTE_CONSTANTS[:resource_type],
            GKE_CONSTANTS[:resource_type]
-        labels.merge!(
-          "#{COMPUTE_CONSTANTS[:service]}/resource_name" => @vm_name)
+        labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
 
       # EC2.
       when EC2_CONSTANTS[:resource_type]
-        labels.merge!(
-          "#{EC2_CONSTANTS[:service]}/resource_name" => @vm_name)
+        labels["#{EC2_CONSTANTS[:service]}/resource_name"] = @vm_name
       end
       labels
     end
@@ -1367,13 +1366,9 @@ module Fluent
         return parse_severity(record.delete('severity'))
       elsif resource_type == GKE_CONSTANTS[:resource_type]
         stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
-        if stream == 'stdout'
-          return 'INFO'
-        elsif stream == 'stderr'
-          return 'ERROR'
-        else
-          return 'DEFAULT'
-        end
+        return 'INFO' if stream == 'stdout'
+        return 'ERROR' if stream == 'stderr'
+        return 'DEFAULT'
       else
         return 'DEFAULT'
       end
@@ -1404,11 +1399,11 @@ module Fluent
 
           next unless extracted_subfields
 
-          if @use_grpc
-            output = Object.const_get(grpc_class).new
-          else
-            output = Object.const_get(non_grpc_class).new
-          end
+          output = if @use_grpc
+                     Object.const_get(grpc_class).new
+                   else
+                     Object.const_get(non_grpc_class).new
+                   end
           extracted_subfields.each do |key, value|
             output.send("#{key}=", value)
           end
@@ -1453,7 +1448,7 @@ module Fluent
       # other misc. translations.
       'ERR' => 'ERROR',
       'F' => 'CRITICAL'
-    }
+    }.freeze
 
     def parse_severity(severity_str)
       # The API is case insensitive, but uppercase to make things simpler.
@@ -1464,16 +1459,12 @@ module Fluent
 
       # If the severity is an integer (string) return it as an integer,
       # truncated to the closest valid value (multiples of 100 between 0-800).
-      if /\A\d+\z/.match(severity)
+      if /\A\d+\z/ =~ severity
         begin
           numeric_severity = (severity.to_i / 100) * 100
-          if numeric_severity < 0
-            return 0
-          elsif numeric_severity > 800
-            return 800
-          else
-            return numeric_severity
-          end
+          return 0 if numeric_severity < 0
+          return 800 if numeric_severity > 800
+          return numeric_severity
         rescue
           return 'DEFAULT'
         end
@@ -1507,7 +1498,7 @@ module Fluent
       600 => Google::Logging::Type::LogSeverity::CRITICAL,
       700 => Google::Logging::Type::LogSeverity::ALERT,
       800 => Google::Logging::Type::LogSeverity::EMERGENCY
-    }
+    }.freeze
 
     def grpc_severity(severity)
       # TODO: find out why this doesn't work.
@@ -1561,7 +1552,10 @@ module Fluent
 
     def decode_cloudfunctions_function_name(function_name)
       function_name.gsub(/c\.[a-z]/) { |s| s.upcase[-1] }
-        .gsub('u.u', '_').gsub('d.d', '$').gsub('a.a', '@').gsub('p.p', '.')
+                   .gsub('u.u', '_')
+                   .gsub('d.d', '$')
+                   .gsub('a.a', '@')
+                   .gsub('p.p', '.')
     end
 
     def format(tag, time, record)
@@ -1618,7 +1612,7 @@ module Fluent
         ret.list_value = list_from_ruby(value)
       else
         @log.error "Unknown type: #{value.class}"
-        fail Google::Protobuf::Error, "Unknown type: #{value.class}"
+        raise Google::Protobuf::Error, "Unknown type: #{value.class}"
       end
       ret
     end
@@ -1839,7 +1833,7 @@ module Fluent
       error_details = ensure_array(
         ensure_hash(ensure_hash(JSON.parse(error.body))['error'])['details'])
       partial_errors = error_details.detect(
-        -> { fail JSON::ParserError, "No type #{PARTIAL_ERROR_FIELD}." }
+        -> { raise JSON::ParserError, "No type #{PARTIAL_ERROR_FIELD}." }
       ) do |error_detail|
         ensure_hash(error_detail)['@type'] == PARTIAL_ERROR_FIELD
       end
@@ -1847,8 +1841,8 @@ module Fluent
         ensure_hash(partial_errors)['logEntryErrors'])
       log_entry_errors.each do |index, log_entry_error|
         error_hash = ensure_hash(log_entry_error)
-        fail JSON::ParserError,
-             "Entry #{index} is missing 'code' or 'message'." unless
+        raise JSON::ParserError,
+              "Entry #{index} is missing 'code' or 'message'." unless
           error_hash['code'] && error_hash['message']
         error_key = [error_hash['code'], error_hash['message']].freeze
         # TODO(qingling128): Convert indexes to integers.
@@ -1862,11 +1856,11 @@ module Fluent
     end
 
     def ensure_array(value)
-      Array.try_convert(value) || (fail JSON::ParserError, "#{value.class}")
+      Array.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
     end
 
     def ensure_hash(value)
-      Hash.try_convert(value) || (fail JSON::ParserError, "#{value.class}")
+      Hash.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
     end
 
     # Increment the metric for the number of successful requests.
