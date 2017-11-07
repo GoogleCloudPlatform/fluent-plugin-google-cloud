@@ -48,7 +48,11 @@ module Fluent
       }.freeze
       CLOUDFUNCTIONS_CONSTANTS = {
         service: 'cloudfunctions.googleapis.com',
-        resource_type: 'cloud_function'
+        resource_type: 'cloud_function',
+        severity_map: {
+          'stdout' => 'INFO',
+          'stderr' => 'ERROR'
+        }
       }.freeze
       COMPUTE_CONSTANTS = {
         service: 'compute.googleapis.com',
@@ -59,7 +63,11 @@ module Fluent
         resource_type: 'container',
         extra_resource_labels: %w(namespace_id pod_id container_name),
         extra_common_labels: %w(namespace_name pod_name),
-        metadata_attributes: %w(kube-env)
+        metadata_attributes: %w(kube-env),
+        severity_map: {
+          'stdout' => 'INFO',
+          'stderr' => 'ERROR'
+        }
       }.freeze
       DOCKER_CONSTANTS = {
         service: 'docker.googleapis.com',
@@ -86,18 +94,19 @@ module Fluent
       }.freeze
 
       # The map between a subservice name and a resource type.
-      SUBSERVICE_MAP = \
+      SUBSERVICE_MAP =
         [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAFLOW_CONSTANTS,
          DATAPROC_CONSTANTS, ML_CONSTANTS]
         .map { |consts| [consts[:service], consts[:resource_type]] }.to_h
       # Default back to GCE if invalid value is detected.
       SUBSERVICE_MAP.default = COMPUTE_CONSTANTS[:resource_type]
+      SUBSERVICE_MAP.freeze
 
       # The map between a resource type and expected subservice attributes.
-      SUBSERVICE_METADATA_ATTRIBUTES = \
+      SUBSERVICE_METADATA_ATTRIBUTES =
         [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAPROC_CONSTANTS].map do |consts|
           [consts[:resource_type], consts[:metadata_attributes].to_set]
-        end.to_h
+        end.to_h.freeze
     end
 
     # Constants for configuration.
@@ -106,7 +115,7 @@ module Fluent
       # "operation", "sourceLocation", "trace" fields in the LogEntry.
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'.freeze
       DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'.freeze
-      DEFAULT_SOURCE_LOCATION_KEY = \
+      DEFAULT_SOURCE_LOCATION_KEY =
         'logging.googleapis.com/sourceLocation'.freeze
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
 
@@ -642,7 +651,7 @@ module Fluent
           end
         else
           begin
-            write_request = \
+            write_request =
               Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
                 log_name: log_name,
                 resource: group_level_resource,
@@ -1353,25 +1362,19 @@ module Fluent
       if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
           return parse_severity(@cloudfunctions_log_match['severity'])
-        elsif record.key?('stream') && record['stream'] == 'stdout'
+        elsif record.key?('stream')
+          severity = CLOUDFUNCTIONS_CONSTANTS[:severity_map].fetch(
+            record['stream'], 'DEFAULT')
           record.delete('stream')
-          return 'INFO'
-        elsif record.key?('stream') && record['stream'] == 'stderr'
-          record.delete('stream')
-          return 'ERROR'
-        else
-          return 'DEFAULT'
+          return severity
         end
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
       elsif resource_type == GKE_CONSTANTS[:resource_type]
         stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
-        return 'INFO' if stream == 'stdout'
-        return 'ERROR' if stream == 'stderr'
-        return 'DEFAULT'
-      else
-        return 'DEFAULT'
+        return GKE_CONSTANTS[:severity_map].fetch(stream, 'DEFAULT')
       end
+      'DEFAULT'
     end
 
     def set_log_entry_fields(record, entry)
@@ -1418,8 +1421,8 @@ module Fluent
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
-    VALID_SEVERITIES = Set.new(
-      %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY))
+    VALID_SEVERITIES = Set.new(%w(DEFAULT DEBUG INFO NOTICE WARNING ERROR
+                                  CRITICAL ALERT EMERGENCY)).freeze
 
     # Translates other severity strings to one of the valid values above.
     SEVERITY_TRANSLATIONS = {

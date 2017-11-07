@@ -7,7 +7,7 @@ Gem::Specification.new do |gem|
    This is an official Google Ruby gem.
 eos
   gem.summary       = 'fluentd output plugin for the Stackdriver Logging API'
-  gem.homepage      = \
+  gem.homepage      =
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache-2.0'
   gem.version       = '0.6.8'

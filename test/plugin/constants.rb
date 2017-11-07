@@ -58,7 +58,7 @@ module Constants
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'.freeze
 
   # Docker Container labels.
-  DOCKER_CONTAINER_ID = \
+  DOCKER_CONTAINER_ID =
     '0d0f03ff8d3c42688692536d1af77a28cd135c0a5c531f25a31'.freeze
   DOCKER_CONTAINER_NAME = 'happy_hippo'.freeze
   DOCKER_CONTAINER_STREAM_STDOUT = 'stdout'.freeze
@@ -90,7 +90,7 @@ module Constants
   CLOUDFUNCTIONS_EXECUTION_ID = '123-0'.freeze
   CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'.freeze
   CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'.freeze
-  CLOUDFUNCTIONS_POD_NAME = \
+  CLOUDFUNCTIONS_POD_NAME =
     'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'.freeze
   CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'.freeze
 
@@ -285,7 +285,7 @@ module Constants
   }.freeze
 
   # GKE Container.
-  CONTAINER_TAG = \
+  CONTAINER_TAG =
     "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
     "#{CONTAINER_CONTAINER_NAME}".freeze
 
@@ -377,7 +377,7 @@ module Constants
       "#{DOCKER_CONSTANTS[:service]}/stream" => DOCKER_CONTAINER_STREAM_STDERR
     )
   ).freeze
-  DOCKER_CONTAINER_PARAMS_NO_STREAM = \
+  DOCKER_CONTAINER_PARAMS_NO_STREAM =
     DOCKER_CONTAINER_PARAMS.merge(labels: {}).freeze
 
   # Cloud Functions.

@@ -273,7 +273,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   private
 
-  WRITE_LOG_ENTRIES_URI = \
+  WRITE_LOG_ENTRIES_URI =
     'https://logging.googleapis.com/v2/entries:write'.freeze
 
   def rename_key(hash, old_key, new_key)
