@@ -49,7 +49,7 @@ module Fluent
       CLOUDFUNCTIONS_CONSTANTS = {
         service: 'cloudfunctions.googleapis.com',
         resource_type: 'cloud_function',
-        severity_map: {
+        stream_severity_map: {
           'stdout' => 'INFO',
           'stderr' => 'ERROR'
         }
@@ -64,7 +64,7 @@ module Fluent
         extra_resource_labels: %w(namespace_id pod_id container_name),
         extra_common_labels: %w(namespace_name pod_name),
         metadata_attributes: %w(kube-env),
-        severity_map: {
+        stream_severity_map: {
           'stdout' => 'INFO',
           'stderr' => 'ERROR'
         }
@@ -1363,16 +1363,14 @@ module Fluent
         if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
           return parse_severity(@cloudfunctions_log_match['severity'])
         elsif record.key?('stream')
-          severity = CLOUDFUNCTIONS_CONSTANTS[:severity_map].fetch(
-            record['stream'], 'DEFAULT')
-          record.delete('stream')
-          return severity
+          return CLOUDFUNCTIONS_CONSTANTS[:stream_severity_map].fetch(
+            record.delete('stream'), 'DEFAULT')
         end
       elsif record.key?('severity')
         return parse_severity(record.delete('severity'))
       elsif resource_type == GKE_CONSTANTS[:resource_type]
         stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
-        return GKE_CONSTANTS[:severity_map].fetch(stream, 'DEFAULT')
+        return GKE_CONSTANTS[:stream_severity_map].fetch(stream, 'DEFAULT')
       end
       'DEFAULT'
     end
@@ -1421,8 +1419,9 @@ module Fluent
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
-    VALID_SEVERITIES = Set.new(%w(DEFAULT DEBUG INFO NOTICE WARNING ERROR
-                                  CRITICAL ALERT EMERGENCY)).freeze
+    VALID_SEVERITIES = Set.new(
+      %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY)
+    ).freeze
 
     # Translates other severity strings to one of the valid values above.
     SEVERITY_TRANSLATIONS = {
@@ -1465,9 +1464,14 @@ module Fluent
       if /\A\d+\z/ =~ severity
         begin
           numeric_severity = (severity.to_i / 100) * 100
-          return 0 if numeric_severity < 0
-          return 800 if numeric_severity > 800
-          return numeric_severity
+          case
+          when numeric_severity < 0
+            return 0
+          when numeric_severity > 800
+            return 800
+          else
+            return numeric_severity
+          end
         rescue
           return 'DEFAULT'
         end

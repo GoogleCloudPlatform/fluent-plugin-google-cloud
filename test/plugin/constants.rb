@@ -564,7 +564,7 @@ module Constants
     # Non-utf8 string tags.
     "nonutf8#{[0x92].pack('C*')}" => 'nonutf8%20',
     "abc#{[0x92].pack('C*')}" => 'abc%20',
-    [0x92].pack('C*').to_s => '%20',
+    [0x92].pack('C*') => '%20',
     # Empty string tag.
     '' => '_'
   }.freeze
