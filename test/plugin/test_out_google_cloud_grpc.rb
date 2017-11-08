@@ -210,7 +210,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   USE_GRPC_CONFIG = %(
     use_grpc true
-  )
+  ).freeze
 
   @@mock_port = 0 # rubocop:disable Style/ClassVars
 
@@ -270,15 +270,15 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     # These methods should never be called, so they will just fail the tests
     # with "unimplemented" errors..
     def _undefined
-      fail "Method #{__callee__} is unimplemented and needs to be overridden."
+      raise "Method #{__callee__} is unimplemented and needs to be overridden."
     end
 
-    alias_method :list_logs, :_undefined
-    alias_method :list_log_entries, :_undefined
-    alias_method :list_log_services, :_undefined
-    alias_method :list_log_service_indexes, :_undefined
-    alias_method :list_monitored_resource_descriptors, :_undefined
-    alias_method :delete_log, :_undefined
+    alias list_logs _undefined
+    alias list_log_entries _undefined
+    alias list_log_services _undefined
+    alias list_log_service_indexes _undefined
+    alias list_monitored_resource_descriptors _undefined
+    alias delete_log _undefined
     undef_method :_undefined
   end
 
@@ -297,7 +297,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
     def write_log_entries(_request, _call)
       @failed_attempts << 1
-      fail GRPC::BadStatus.new(@code, @message)
+      raise GRPC::BadStatus.new(@code, @message)
     end
 
     # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
@@ -305,15 +305,15 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     # These methods should never be called, so they will just fail the tests
     # with "unimplemented" errors..
     def _undefined
-      fail "Method #{__callee__} is unimplemented and needs to be overridden."
+      raise "Method #{__callee__} is unimplemented and needs to be overridden."
     end
 
-    alias_method :list_logs, :_undefined
-    alias_method :list_log_entries, :_undefined
-    alias_method :list_log_services, :_undefined
-    alias_method :list_log_service_indexes, :_undefined
-    alias_method :list_monitored_resource_descriptors, :_undefined
-    alias_method :delete_log, :_undefined
+    alias list_logs _undefined
+    alias list_log_entries _undefined
+    alias list_log_services _undefined
+    alias list_log_service_indexes _undefined
+    alias list_monitored_resource_descriptors _undefined
+    alias delete_log _undefined
     undef_method :_undefined
   end
 
