@@ -623,9 +623,9 @@ module Fluent
               raise error
 
             # Most client errors indicate a problem with the request itself and
-            # should not be retried. Auth errors are usually solved via a
-            # `gcloud auth` call, or by modifying the permissions on the Google
-            # Cloud project.
+            # should not be retried. Authorization errors are usually solved via
+            # a `gcloud auth` call, or by modifying the permissions on the
+            # Google Cloud project.
             when GRPC::Unimplemented, # Method not found or implemented.
                  GRPC::ResourceExhausted, # Some resource has been exhausted.
                  GRPC::Unauthenticated, # Invalid authentication credentials.

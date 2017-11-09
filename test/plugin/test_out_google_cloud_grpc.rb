@@ -31,10 +31,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     { 8 => 'ResourceExhausted',
       12 => 'Unimplemented',
       16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
-      setup_logging_stubs do
-        d = create_driver(
-          USE_GRPC_CONFIG, 'test',
-          GRPCLoggingMockFailingService.new(code, message, @failed_attempts))
+      setup_logging_stubs(true, code, message) do
+        d = create_driver(USE_GRPC_CONFIG, 'test')
         # The API Client should not retry this and the plugin should consume the
         # exception.
         d.emit('message' => log_entry(0))
@@ -52,10 +50,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       13 => 'Internal',
       14 => 'Unavailable' }.each_with_index do |(code, message), index|
       exception_count = 0
-      setup_logging_stubs do
-        d = create_driver(
-          USE_GRPC_CONFIG, 'test',
-          GRPCLoggingMockFailingService.new(code, message, @failed_attempts))
+      setup_logging_stubs(true, code, message) do
+        d = create_driver(USE_GRPC_CONFIG, 'test')
         # The API client should retry this once, then throw an exception which
         # gets propagated through the plugin
         d.emit('message' => log_entry(0))
@@ -91,15 +87,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     ].each do |should_fail, code, request_count, entry_count, metric_values|
       setup_prometheus
       (1..request_count).each do
-        setup_logging_stubs do
-          grpc_stub = if should_fail
-                        GRPCLoggingMockFailingService.new(
-                          code, 'SomeMessage', @failed_attempts)
-                      else
-                        GRPCLoggingMockService.new(@requests_sent)
-                      end
-          d = create_driver(
-            USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test', grpc_stub)
+        setup_logging_stubs(should_fail, code, 'SomeMessage') do
+          d = create_driver(USE_GRPC_CONFIG + PROMETHEUS_ENABLE_CONFIG, 'test')
           (1..entry_count).each do |i|
             d.emit('message' => log_entry(i.to_s))
           end
@@ -221,11 +210,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be
   # passed in to construct the mock used by the test driver.
-  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test',
-                    grpc_stub = GRPCLoggingMockService.new(@requests_sent))
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
     conf += USE_GRPC_CONFIG
     Fluent::Test::BufferedOutputTestDriver.new(
-      GoogleCloudOutputWithGRPCMock.new(grpc_stub), tag).configure(conf, true)
+      GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag).configure(conf, true)
   end
 
   # Google Cloud Fluent output stub with grpc mock.
@@ -241,8 +229,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
       ssl_creds.compose(creds)
 
-      # Here we have obtained the creds, but for the mock, we will leave the
-      # channel insecure.
       @grpc_stub
     end
   end
@@ -267,37 +253,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         log_name: log_name,
         resource: resource,
         labels: labels,
-        entries: entries
+        entries: entries,
+        partial_success: partial_success
       )
       @requests_received << request
       WriteLogEntriesResponse.new
     end
     # rubocop:enable Lint/UnusedMethodArgument
     # rubocop:enable Metrics/ParameterLists
-
-    # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
-    #
-    # These methods should never be called, so they will just fail the tests
-    # with "unimplemented" errors..
-    def _undefined
-      raise "Method #{__callee__} is unimplemented and needs to be overridden."
-    end
-
-    alias list_logs _undefined
-    alias list_log_entries _undefined
-    alias list_log_services _undefined
-    alias list_log_service_indexes _undefined
-    alias list_monitored_resource_descriptors _undefined
-    alias delete_log _undefined
-    undef_method :_undefined
   end
 
   # GRPC logging mock that fails and returns server side or client side errors.
   class GRPCLoggingMockFailingService <
-      Google::Logging::V2::LoggingServiceV2::Service
-    # 'code_sent' and 'message_sent' are references of external variables. We
-    #  will assert the values of them later. 'code_value' and 'message_value'
-    #  are actual error code and message we expect this mock to return.
+      Google::Cloud::Logging::V2::LoggingServiceV2Client
     def initialize(code, message, failed_attempts)
       @code = code
       @message = message
@@ -305,7 +273,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       super()
     end
 
-    def write_log_entries(_request, _call)
+    # rubocop:disable Lint/UnusedMethodArgument
+    # rubocop:disable Metrics/ParameterLists
+    def write_log_entries(entries,
+                          log_name: nil,
+                          resource: nil,
+                          labels: nil,
+                          partial_success: nil,
+                          options: nil)
       @failed_attempts << 1
       begin
         raise GRPC::BadStatus.new_status_exception(@code, @message)
@@ -314,28 +289,20 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         raise Google::Gax::GaxError, @message
       end
     end
-
-    # TODO(lingshi) Remove these dummy methods when grpc/9033 is fixed.
-    #
-    # These methods should never be called, so they will just fail the tests
-    # with "unimplemented" errors..
-    def _undefined
-      raise "Method #{__callee__} is unimplemented and needs to be overridden."
-    end
-
-    alias list_logs _undefined
-    alias list_log_entries _undefined
-    alias list_log_services _undefined
-    alias list_log_service_indexes _undefined
-    alias list_monitored_resource_descriptors _undefined
-    alias delete_log _undefined
-    undef_method :_undefined
+    # rubocop:enable Lint/UnusedMethodArgument
+    # rubocop:enable Metrics/ParameterLists
   end
 
   # Set up grpc stubs to mock the external calls.
-  def setup_logging_stubs
-    @failed_attempts = []
-    @requests_sent = []
+  def setup_logging_stubs(should_fail = false, code = nil, message = nil)
+    if should_fail
+      @failed_attempts = []
+      @grpc_stub = GRPCLoggingMockFailingService.new(
+        code, message, @failed_attempts)
+    else
+      @requests_sent = []
+      @grpc_stub = GRPCLoggingMockService.new(@requests_sent)
+    end
     yield
   end
 

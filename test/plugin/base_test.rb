@@ -222,18 +222,18 @@ module BaseTest
   def test_one_log_with_invalid_json_credentials
     setup_gce_metadata_stubs
     ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
-    setup_logging_stubs do
-      begin
-        exception_count = 0
+    exception_count = 0
+    begin
+      setup_logging_stubs do
         d = create_driver
         d.emit('message' => log_entry(0))
         d.run
-      rescue RuntimeError => error
-        assert error.message.include? 'Unable to read the credential file'
-        exception_count += 1
       end
-      assert_equal 1, exception_count
+    rescue RuntimeError => error
+      assert error.message.include? 'Unable to read the credential file'
+      exception_count += 1
     end
+    assert_equal 1, exception_count
   end
 
   def test_one_log_custom_metadata
