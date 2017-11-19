@@ -1357,14 +1357,14 @@ module BaseTest
 
   def setup_auth_stubs
     # Used when loading credentials from a JSON file.
-    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
+    stub_request(:post, 'https://www.googleapis.com/oauth2/v4/token')
       .with(body: hash_including(grant_type: AUTH_GRANT_TYPE))
       .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
                  status: 200,
                  headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
                             'Content-Type' => 'application/json' })
 
-    stub_request(:post, 'https://www.googleapis.com/oauth2/v3/token')
+    stub_request(:post, 'https://www.googleapis.com/oauth2/v4/token')
       .with(body: hash_including(grant_type: 'refresh_token'))
       .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
                  status: 200,
