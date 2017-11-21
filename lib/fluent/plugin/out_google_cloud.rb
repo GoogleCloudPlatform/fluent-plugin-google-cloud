@@ -1722,7 +1722,8 @@ module Fluent
       else
         unless @client.authorization.expired?
           begin
-            @client.authorization.fetch_access_token!
+            @client.authorization.fetch_access_token!(
+              use_configured_scope: true)
           rescue MultiJson::ParseError
             # Workaround an issue in the API client; just re-raise a more
             # descriptive error for the user (which will still cause a retry).
