@@ -1454,7 +1454,7 @@ module Fluent
 
     def parse_severity(severity_str)
       # The API is case insensitive, but uppercase to make things simpler.
-      severity = severity_str.upcase.strip
+      severity = severity_str.to_s.upcase.strip
 
       # If the severity is already valid, just return it.
       return severity if VALID_SEVERITIES.include?(severity)
