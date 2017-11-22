@@ -206,6 +206,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal(100, test_obj.parse_severity('     105'))
     assert_equal(100, test_obj.parse_severity('     105    '))
 
+    assert_equal(100, test_obj.parse_severity(100))
+
     assert_equal('DEFAULT', test_obj.parse_severity('-100'))
     assert_equal('DEFAULT', test_obj.parse_severity('105 100'))
 
@@ -243,6 +245,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal('DEFAULT', test_obj.parse_severity('ER ROR'))
 
     # anything else should translate to 'DEFAULT'
+    assert_equal('DEFAULT', test_obj.parse_severity(nil))
+    assert_equal('DEFAULT', test_obj.parse_severity(Object.new))
+    assert_equal('DEFAULT', test_obj.parse_severity({}))
+    assert_equal('DEFAULT', test_obj.parse_severity([]))
+    assert_equal('DEFAULT', test_obj.parse_severity(100.0))
     assert_equal('DEFAULT', test_obj.parse_severity(''))
     assert_equal('DEFAULT', test_obj.parse_severity('garbage'))
     assert_equal('DEFAULT', test_obj.parse_severity('er'))
