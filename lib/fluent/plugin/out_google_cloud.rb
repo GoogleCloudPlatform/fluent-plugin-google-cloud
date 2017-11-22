@@ -1715,10 +1715,9 @@ module Fluent
       if @use_grpc
         ssl_creds = GRPC::Core::ChannelCredentials.new
         authentication = Google::Auth.get_application_default(LOGGING_SCOPE)
-        updater_proc = lambda do |a_hash|
+        creds = GRPC::Core::CallCredentials.new(lambda do |a_hash|
           authentication.apply(a_hash, use_configured_scope: true)
-        end
-        creds = GRPC::Core::CallCredentials.new(updater_proc)
+        end)
         creds = ssl_creds.compose(creds)
         @client = Google::Logging::V2::LoggingServiceV2::Stub.new(
           'logging.googleapis.com', creds)
