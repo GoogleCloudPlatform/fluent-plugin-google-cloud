@@ -1088,38 +1088,39 @@ module BaseTest
     end
   end
 
-  def test_log_entry_trace_field
+  def verify_log_entry_field_key(log_entry_field, default_key, custom_key,
+                                 custom_key_config)
     setup_gce_metadata_stubs
     message = log_entry(0)
-    trace = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
+    sample_value = "sample #{log_entry_field} value"
     [
       {
-        # It leaves trace entry field nil if no trace value sent.
+        # It leaves log entry field nil if no keyed value sent.
         driver_config: APPLICATION_DEFAULT_CONFIG,
         emitted_log: { 'msg' => message },
-        expected_fields: { 'msg' => message },
-        expected_trace_value: nil
+        expected_payload: { 'msg' => message },
+        expected_field_value: nil
       },
       {
-        # By default, it sets trace via Google-specific key.
+        # By default, it sets log entry field via a default key.
         driver_config: APPLICATION_DEFAULT_CONFIG,
-        emitted_log: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
-        expected_fields: { 'msg' => message },
-        expected_trace_value: trace
+        emitted_log: { 'msg' => message, default_key => sample_value },
+        expected_payload: { 'msg' => message },
+        expected_field_value: sample_value
       },
       {
-        # It allows setting the trace via a custom configured key.
-        driver_config: CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
-        emitted_log: { 'msg' => message, 'custom_trace_key' => trace },
-        expected_fields: { 'msg' => message },
-        expected_trace_value: trace
+        # It allows setting the log entry field via a custom configured key.
+        driver_config: custom_key_config,
+        emitted_log: { 'msg' => message, custom_key => sample_value },
+        expected_payload: { 'msg' => message },
+        expected_field_value: sample_value
       },
       {
-        # It no longer sets trace by the default key if custom key specified.
-        driver_config: CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
-        emitted_log: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
-        expected_fields: { 'msg' => message, DEFAULT_TRACE_KEY => trace },
-        expected_trace_value: nil
+        # It doesn't set log entry field by default key if custom key specified.
+        driver_config: custom_key_config,
+        emitted_log: { 'msg' => message, default_key => sample_value },
+        expected_payload: { 'msg' => message, default_key => sample_value },
+        expected_field_value: nil
       }
     ].each do |input|
       setup_logging_stubs do
@@ -1129,15 +1130,27 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-        assert_equal input[:expected_trace_value], entry['trace'], input
+        assert_equal input[:expected_field_value], entry[log_entry_field], input
 
-        fields = get_fields(entry['jsonPayload'])
-        assert_equal input[:expected_fields].size, fields.size, input
-        fields.each do |key, value|
-          assert_equal input[:expected_fields][key], get_string(value), input
+        payload_fields = get_fields(entry['jsonPayload'])
+        assert_equal input[:expected_payload].size, payload_fields.size, input
+        payload_fields.each do |key, value|
+          assert_equal input[:expected_payload][key], get_string(value), input
         end
       end
     end
+  end
+
+  def test_log_entry_trace_field
+    verify_log_entry_field_key('trace', DEFAULT_TRACE_KEY,
+                               'custom_trace_key',
+                               CONFIG_CUSTOM_TRACE_KEY_SPECIFIED)
+  end
+
+  def test_log_entry_span_id_field
+    verify_log_entry_field_key('spanId', DEFAULT_SPAN_ID_KEY,
+                               'custom_span_id_key',
+                               CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED)
   end
 
   # Metadata Agent related tests.
