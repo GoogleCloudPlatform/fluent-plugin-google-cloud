@@ -20,6 +20,8 @@ require 'time'
 require 'yaml'
 require 'google/apis'
 require 'google/apis/logging_v2'
+require 'google/cloud/logging/v2'
+require 'google/gax'
 require 'google/logging/v2/logging_pb'
 require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
@@ -583,18 +585,16 @@ module Fluent
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
 
-            write_request = Google::Logging::V2::WriteLogEntriesRequest.new(
+            entries_count = entries.length
+            client.write_log_entries(
+              entries,
               log_name: log_name,
               resource: Google::Api::MonitoredResource.new(
                 type: group_level_resource.type,
                 labels: group_level_resource.labels.to_h
               ),
-              labels: labels_utf8_pairs.to_h,
-              entries: entries
+              labels: labels_utf8_pairs.to_h
             )
-
-            entries_count = entries.length
-            client.write_log_entries(write_request)
             increment_successful_requests_count
             increment_ingested_entries_count(entries_count)
 
@@ -605,44 +605,38 @@ module Fluent
               @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
             end
 
-          rescue GRPC::Cancelled => error
-            increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
-            increment_retried_entries_count(entries_count, error.code)
-            # RPC cancelled, so retry via re-raising the error.
-            @log.debug "Retrying #{entries_count} log message(s) later.",
-                       error: error.to_s, error_code: error.code.to_s
-            raise error
-
-          rescue GRPC::BadStatus => error
+          rescue Google::Gax::GaxError => gax_error
+            # GRPC::BadStatus is wrapped in error.cause.
+            error = gax_error.cause
             increment_failed_requests_count(error.code)
-            case error.code
-            when GRPC::Core::StatusCodes::CANCELLED,
-                 GRPC::Core::StatusCodes::UNAVAILABLE,
-                 GRPC::Core::StatusCodes::DEADLINE_EXCEEDED,
-                 GRPC::Core::StatusCodes::INTERNAL,
-                 GRPC::Core::StatusCodes::UNKNOWN
-              # Server error, so retry via re-raising the error.
+
+            case error
+            # Server error, so retry via re-raising the error.
+            when GRPC::Cancelled, # The operation was cancelled.
+                 GRPC::Unavailable, # Server shuts down or connection breaks.
+                 GRPC::DeadlineExceeded, # No response received before deadline.
+                 GRPC::Internal, # Error parsing proto or compression issue.
+                 GRPC::Unknown # Error parsing proto or compression issue.
               increment_retried_entries_count(entries.length, error.code)
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
               raise error
-            when GRPC::Core::StatusCodes::UNIMPLEMENTED,
-                 GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED
-              # Most client errors indicate a problem with the request itself
-              # and should not be retried.
+
+            # Most client errors indicate a problem with the request itself and
+            # should not be retried. Authorization errors are usually solved via
+            # a `gcloud auth` call, or by modifying the permissions on the
+            # Google Cloud project.
+            when GRPC::Unimplemented, # Method not found or implemented.
+                 GRPC::ResourceExhausted, # Some resource has been exhausted.
+                 GRPC::Unauthenticated, # Invalid authentication credentials.
+                 GRPC::InvalidArgument, # Client specified an invalid argument.
+                 GRPC::PermissionDenied # No permission to execute operation.
               increment_dropped_entries_count(entries_count)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
-            when GRPC::Core::StatusCodes::UNAUTHENTICATED
-              # Authorization error.
-              # These are usually solved via a `gcloud auth` call, or by
-              # modifying the permissions on the Google Cloud project.
-              increment_dropped_entries_count(entries_count)
-              @log.warn "Dropping #{entries_count} log message(s)",
-                        error: error.to_s, error_code: error.code.to_s
+
             else
-              # Assume this is a problem with the request itself and don't
-              # retry.
+              # Assume it is a problem with the request itself and don't retry.
               increment_dropped_entries_count(entries_count)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{entries_count} log message(s)",
@@ -1717,8 +1711,9 @@ module Fluent
         authentication = Google::Auth.get_application_default
         creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
         creds = ssl_creds.compose(creds)
-        @client = Google::Logging::V2::LoggingServiceV2::Stub.new(
-          'logging.googleapis.com', creds)
+        channel = GRPC::Core::Channel.new('logging.googleapis.com', nil, creds)
+        @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
+          channel: channel)
       else
         unless @client.authorization.expired?
           begin
