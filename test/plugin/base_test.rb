@@ -1088,59 +1088,6 @@ module BaseTest
     end
   end
 
-  def verify_log_entry_field_key(log_entry_field, default_key, custom_key,
-                                 custom_key_config)
-    setup_gce_metadata_stubs
-    message = log_entry(0)
-    sample_value = "sample #{log_entry_field} value"
-    [
-      {
-        # It leaves log entry field nil if no keyed value sent.
-        driver_config: APPLICATION_DEFAULT_CONFIG,
-        emitted_log: { 'msg' => message },
-        expected_payload: { 'msg' => message },
-        expected_field_value: nil
-      },
-      {
-        # By default, it sets log entry field via a default key.
-        driver_config: APPLICATION_DEFAULT_CONFIG,
-        emitted_log: { 'msg' => message, default_key => sample_value },
-        expected_payload: { 'msg' => message },
-        expected_field_value: sample_value
-      },
-      {
-        # It allows setting the log entry field via a custom configured key.
-        driver_config: custom_key_config,
-        emitted_log: { 'msg' => message, custom_key => sample_value },
-        expected_payload: { 'msg' => message },
-        expected_field_value: sample_value
-      },
-      {
-        # It doesn't set log entry field by default key if custom key specified.
-        driver_config: custom_key_config,
-        emitted_log: { 'msg' => message, default_key => sample_value },
-        expected_payload: { 'msg' => message, default_key => sample_value },
-        expected_field_value: nil
-      }
-    ].each do |input|
-      setup_logging_stubs do
-        @logs_sent = []
-        d = create_driver(input[:driver_config])
-        d.emit(input[:emitted_log])
-        d.run
-      end
-      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-        assert_equal input[:expected_field_value], entry[log_entry_field], input
-
-        payload_fields = get_fields(entry['jsonPayload'])
-        assert_equal input[:expected_payload].size, payload_fields.size, input
-        payload_fields.each do |key, value|
-          assert_equal input[:expected_payload][key], get_string(value), input
-        end
-      end
-    end
-  end
-
   def test_log_entry_trace_field
     verify_log_entry_field_key('trace', DEFAULT_TRACE_KEY,
                                'custom_trace_key',
@@ -1704,6 +1651,59 @@ module BaseTest
       field = get_fields(entry['jsonPayload'])[payload_key]
       assert_equal 'a_string', get_string(field), entry
       assert_nil entry[destination_key], entry
+    end
+  end
+
+  def verify_log_entry_field_key(log_entry_field, default_key, custom_key,
+                                 custom_key_config)
+    setup_gce_metadata_stubs
+    message = log_entry(0)
+    sample_value = "sample #{log_entry_field} value"
+    [
+      {
+        # It leaves log entry field nil if no keyed value sent.
+        driver_config: APPLICATION_DEFAULT_CONFIG,
+        emitted_log: { 'msg' => message },
+        expected_payload: { 'msg' => message },
+        expected_field_value: nil
+      },
+      {
+        # By default, it sets log entry field via a default key.
+        driver_config: APPLICATION_DEFAULT_CONFIG,
+        emitted_log: { 'msg' => message, default_key => sample_value },
+        expected_payload: { 'msg' => message },
+        expected_field_value: sample_value
+      },
+      {
+        # It allows setting the log entry field via a custom configured key.
+        driver_config: custom_key_config,
+        emitted_log: { 'msg' => message, custom_key => sample_value },
+        expected_payload: { 'msg' => message },
+        expected_field_value: sample_value
+      },
+      {
+        # It doesn't set log entry field by default key if custom key specified.
+        driver_config: custom_key_config,
+        emitted_log: { 'msg' => message, default_key => sample_value },
+        expected_payload: { 'msg' => message, default_key => sample_value },
+        expected_field_value: nil
+      }
+    ].each do |input|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(input[:driver_config])
+        d.emit(input[:emitted_log])
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+        assert_equal input[:expected_field_value], entry[log_entry_field], input
+
+        payload_fields = get_fields(entry['jsonPayload'])
+        assert_equal input[:expected_payload].size, payload_fields.size, input
+        payload_fields.each do |key, value|
+          assert_equal input[:expected_payload][key], get_string(value), input
+        end
+      end
     end
   end
 
