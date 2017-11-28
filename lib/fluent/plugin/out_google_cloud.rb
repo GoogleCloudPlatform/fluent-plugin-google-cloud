@@ -514,17 +514,6 @@ module Fluent
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
 
-          ts_secs = begin
-                      Integer ts_secs
-                    rescue ArgumentError, TypeError
-                      ts_secs
-                    end
-          ts_nanos = begin
-                       Integer ts_nanos
-                     rescue ArgumentError, TypeError
-                       ts_nanos
-                     end
-
           if @use_grpc
             entry = Google::Logging::V2::LogEntry.new(
               labels: entry_level_common_labels,
@@ -1354,6 +1343,48 @@ module Fluent
         timestamp = Time.at(time)
         ts_secs = timestamp.tv_sec
         ts_nanos = timestamp.tv_nsec
+      end
+      ts_secs = begin
+                  Integer ts_secs
+                rescue ArgumentError, TypeError
+                  ts_secs
+                end
+      ts_nanos = begin
+                   Integer ts_nanos
+                 rescue ArgumentError, TypeError
+                   ts_nanos
+                 end
+
+      # Adjust timestamps from the future.
+      if ts_secs.is_a?(Integer) && ts_nanos.is_a?(Integer)
+        parsed_timestamp = Time.at(ts_secs + ts_nanos / 1_000_000_000.0)
+        end_of_year = Time.utc(Time.now.year, 12, 31, 23, 59, 59.999)
+        one_day_later = Time.now + 60 * 60 * 24
+        if parsed_timestamp > end_of_year
+          # This isn't the issue with system logs missing a year, because we are
+          # further than the current year. It is unlikely that users wanted logs
+          # more than a year in the future, This could be logs from a VM just
+          # starting up and the clock hasn't synced, or there was no reasonable
+          # time in the payload but we parsed some random number. Leave time as
+          # the default value so downstream backend will handle it.
+          ts_secs = 0
+          ts_nanos = 0
+        elsif parsed_timestamp > one_day_later
+          # This is the current year, but in the future. Most likely this is
+          # from some previous year. We assume it is last year. This could
+          # incorrectly label 2 year old logs, but they probably aren't super
+          # important and implies that fluentd is broken and resending unneeded
+          # logs. Adjust the timestamp to 1 year ago from the parsed value.
+          adjusted_timestamp = Time.mktime(
+            parsed_timestamp.year - 1,
+            parsed_timestamp.month,
+            parsed_timestamp.day,
+            parsed_timestamp.hour,
+            parsed_timestamp.min,
+            parsed_timestamp.sec + parsed_timestamp.nsec / 1_000_000_000.0)
+          ts_secs = adjusted_timestamp.tv_sec
+          ts_nanos = adjusted_timestamp.tv_nsec
+        end
       end
       [ts_secs, ts_nanos]
     end
