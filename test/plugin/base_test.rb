@@ -1089,15 +1089,15 @@ module BaseTest
   end
 
   def test_log_entry_trace_field
-    verify_log_entry_field_key('trace', DEFAULT_TRACE_KEY,
-                               'custom_trace_key',
-                               CONFIG_CUSTOM_TRACE_KEY_SPECIFIED)
+    sample_value = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
+    verify_field_key('trace', DEFAULT_TRACE_KEY, 'custom_trace_key',
+                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED, sample_value)
   end
 
   def test_log_entry_span_id_field
-    verify_log_entry_field_key('spanId', DEFAULT_SPAN_ID_KEY,
-                               'custom_span_id_key',
-                               CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED)
+    sample_value = '000000000000004a'
+    verify_field_key('spanId', DEFAULT_SPAN_ID_KEY, 'custom_span_id_key',
+                     CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, sample_value)
   end
 
   # Metadata Agent related tests.
@@ -1654,11 +1654,10 @@ module BaseTest
     end
   end
 
-  def verify_log_entry_field_key(log_entry_field, default_key, custom_key,
-                                 custom_key_config)
+  def verify_field_key(log_entry_field, default_key, custom_key,
+                       custom_key_config, sample_value)
     setup_gce_metadata_stubs
     message = log_entry(0)
-    sample_value = "sample #{log_entry_field} value"
     [
       {
         # It leaves log entry field nil if no keyed value sent.
@@ -1697,7 +1696,6 @@ module BaseTest
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
         assert_equal input[:expected_field_value], entry[log_entry_field], input
-
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal input[:expected_payload].size, payload_fields.size, input
         payload_fields.each do |key, value|
