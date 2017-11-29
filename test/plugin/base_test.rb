@@ -1089,15 +1089,14 @@ module BaseTest
   end
 
   def test_log_entry_trace_field
-    sample_value = 'projects/project-1/traces/1234567890abcdef1234567890abcdef'
     verify_field_key('trace', DEFAULT_TRACE_KEY, 'custom_trace_key',
-                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED, sample_value)
+                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
+                     'projects/proj1/traces/1234567890abcdef1234567890abcdef')
   end
 
   def test_log_entry_span_id_field
-    sample_value = '000000000000004a'
     verify_field_key('spanId', DEFAULT_SPAN_ID_KEY, 'custom_span_id_key',
-                     CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, sample_value)
+                     CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, '000000000000004a')
   end
 
   # Metadata Agent related tests.
