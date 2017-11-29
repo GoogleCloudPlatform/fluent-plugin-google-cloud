@@ -53,24 +53,22 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_partial_success
     setup_gce_metadata_stubs
-    {
-      APPLICATION_DEFAULT_CONFIG => 4.0,
-      PARTIAL_SUCCESS_CONFIG => 3.0
-    }.each do |config, failed_entry_count|
-      setup_prometheus
-      # The API Client should not retry this and the plugin should consume
-      # the exception.
-      stub_request(:post, WRITE_LOG_ENTRIES_URI)
-        .to_return(status: 400, body: PARTIAL_SUCCESS_RESPONSE_BODY)
-      d = create_driver(PROMETHEUS_ENABLE_CONFIG + config)
-      4.times do |i|
-        d.emit('message' => log_entry(i.to_s))
-      end
-      d.run
-      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
-                                     failed_entry_count)
+    setup_prometheus
+    # The API Client should not retry this and the plugin should consume
+    # the exception.
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
+      .to_return(status: PARTIAL_SUCCESS_RESPONSE_BODY['error']['code'],
+                 body: PARTIAL_SUCCESS_RESPONSE_BODY.to_json)
+    d = create_driver(PROMETHEUS_ENABLE_CONFIG + PARTIAL_SUCCESS_CONFIG)
+    4.times do |i|
+      d.emit('message' => log_entry(i.to_s))
     end
-    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
+    d.run
+    assert_prometheus_metric_value(
+      :stackdriver_dropped_entries_count, 2, grpc: false, code: 3)
+    assert_prometheus_metric_value(
+      :stackdriver_dropped_entries_count, 1, grpc: false, code: 7)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
   def test_server_error
@@ -136,11 +134,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                                      failed_requests_count,
                                      grpc: false, code: code)
       assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     ingested_entries_count)
+                                     ingested_entries_count, grpc: false)
       assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
-                                     dropped_entries_count)
+                                     dropped_entries_count,
+                                     grpc: false, code: code)
       assert_prometheus_metric_value(:stackdriver_retried_entries_count,
-                                     retried_entries_count, code: code)
+                                     retried_entries_count,
+                                     grpc: false, code: code)
     end
   end
 
