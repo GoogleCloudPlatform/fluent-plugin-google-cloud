@@ -608,16 +608,17 @@ module BaseTest
   def test_timestamps
     setup_gce_metadata_stubs
     current_time = Time.now
-    current_year = current_time.year
-    future_before_end_of_year = Time.utc(current_year, 12, 31, 23, 59, 59)
-    adjusted_to_last_year = Time.utc(current_year - 1, 12, 31, 23, 59, 59)
-    future_after_end_of_year = Time.utc(current_year + 1, 2, 3, 0, 0, 0)
+    next_year = Time.mktime(current_time.year + 1)
+    one_second_before_next_year = next_year - 1
+    adjusted_to_last_year =
+      one_second_before_next_year.to_datetime.prev_year.to_time
+    one_day_into_next_year = next_year.to_date.next_day.to_time
     {
       Time.at(123_456.789) => Time.at(123_456.789),
       Time.at(0) => Time.at(0),
       current_time => current_time,
-      future_before_end_of_year => adjusted_to_last_year,
-      future_after_end_of_year => Time.at(0)
+      one_second_before_next_year => adjusted_to_last_year,
+      one_day_into_next_year => Time.at(0)
     }.each do |ts, adjusted_ts|
       expected_ts = []
       emit_index = 0

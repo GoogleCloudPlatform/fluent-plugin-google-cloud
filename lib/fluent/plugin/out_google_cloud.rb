@@ -1302,6 +1302,7 @@ module Fluent
     end
 
     def compute_timestamp(resource_type, record, time)
+      current_time = Time.now
       if record.key?('timestamp') &&
          record['timestamp'].is_a?(Hash) &&
          record['timestamp'].key?('seconds') &&
@@ -1356,32 +1357,28 @@ module Fluent
                  end
 
       # Adjust timestamps from the future.
+      #
+      # 1. If the parsed timestamp is later than the end of the year.
+      # This isn't the issue with system logs missing a year, because we are
+      # further than the current year. It is unlikely that users wanted logs
+      # more than a year in the future. This could be logs from a VM just
+      # starting up and the clock hasn't synced, or there was no reasonable time
+      # in the payload but we parsed some random number. Reset time to the
+      # default value and let the downstream API handle it.
+      #
+      # 2. If the parsed timestamp is in the future but still the current year.
+      # Most likely this is from some previous year. We assume it is last year.
+      # This could incorrectly label 2-year-old logs, but they probably aren't
+      # super important. Adjust the timestamp to last year.
       if ts_secs.is_a?(Integer) && ts_nanos.is_a?(Integer)
         parsed_timestamp = Time.at(ts_secs + ts_nanos / 1_000_000_000.0)
-        end_of_year = Time.utc(Time.now.year, 12, 31, 23, 59, 59.999)
-        one_day_later = Time.now + 60 * 60 * 24
-        if parsed_timestamp > end_of_year
-          # This isn't the issue with system logs missing a year, because we are
-          # further than the current year. It is unlikely that users wanted logs
-          # more than a year in the future, This could be logs from a VM just
-          # starting up and the clock hasn't synced, or there was no reasonable
-          # time in the payload but we parsed some random number. Leave time as
-          # the default value so downstream backend will handle it.
+        next_year = Time.mktime(current_time.year + 1)
+        one_day_later = current_time.to_datetime.next_day.to_time
+        if parsed_timestamp >= next_year
           ts_secs = 0
           ts_nanos = 0
-        elsif parsed_timestamp > one_day_later
-          # This is the current year, but in the future. Most likely this is
-          # from some previous year. We assume it is last year. This could
-          # incorrectly label 2 year old logs, but they probably aren't super
-          # important and implies that fluentd is broken and resending unneeded
-          # logs. Adjust the timestamp to 1 year ago from the parsed value.
-          adjusted_timestamp = Time.mktime(
-            parsed_timestamp.year - 1,
-            parsed_timestamp.month,
-            parsed_timestamp.day,
-            parsed_timestamp.hour,
-            parsed_timestamp.min,
-            parsed_timestamp.sec + parsed_timestamp.nsec / 1_000_000_000.0)
+        elsif parsed_timestamp >= one_day_later
+          adjusted_timestamp = parsed_timestamp.to_datetime.prev_year.to_time
           ts_secs = adjusted_timestamp.tv_sec
           ts_nanos = adjusted_timestamp.tv_nsec
         end
