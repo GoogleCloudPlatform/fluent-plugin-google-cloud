@@ -839,11 +839,9 @@ module Fluent
     # 2. If not, try to retrieve it by calling metadata server directly.
     # 3. If still not set, try to obtain it from the credentials.
     def set_project_id
+      @project_id ||= CredentialsInfo.project_id
       @project_id ||= fetch_gce_metadata('project/project-id') if
         @platform == Platform::GCE
-      @project_id ||= CredentialsInfo.project_id
-    rescue StandardError => e
-      @log.error 'Failed to obtain project id: ', error: e
     end
 
     # 1. Return the value if it is explicitly set in the config already.
