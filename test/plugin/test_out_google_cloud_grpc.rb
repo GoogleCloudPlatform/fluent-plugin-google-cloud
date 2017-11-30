@@ -29,15 +29,15 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   def test_client_error
     setup_gce_metadata_stubs
     {
-      1 => 'Cancelled',
-      2 => 'Unknown',
-      3 => 'InvalidArgument',
-      5 => 'NotFound',
-      7 => 'PermissionDenied',
-      8 => 'ResourceExhausted',
-      9 => 'FailedPrecondition',
-      10 => 'Aborted',
-      16 => 'Unauthenticated'
+      GRPC::Core::StatusCodes::CANCELLED => 'Cancelled',
+      GRPC::Core::StatusCodes::UNKNOWN => 'Unknown',
+      GRPC::Core::StatusCodes::INVALID_ARGUMENT => 'InvalidArgument',
+      GRPC::Core::StatusCodes::NOT_FOUND => 'NotFound',
+      GRPC::Core::StatusCodes::PERMISSION_DENIED => 'PermissionDenied',
+      GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED => 'ResourceExhausted',
+      GRPC::Core::StatusCodes::FAILED_PRECONDITION => 'FailedPrecondition',
+      GRPC::Core::StatusCodes::ABORTED => 'Aborted',
+      GRPC::Core::StatusCodes::UNAUTHENTICATED => 'Unauthenticated'
     }.each_with_index do |(code, message), index|
       setup_logging_stubs(true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
@@ -54,10 +54,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   def test_server_error
     setup_gce_metadata_stubs
     {
-      4 => 'DeadlineExceeded',
-      12 => 'Unimplemented',
-      13 => 'Internal',
-      14 => 'Unavailable'
+      GRPC::Core::StatusCodes::DEADLINE_EXCEEDED => 'DeadlineExceeded',
+      GRPC::Core::StatusCodes::UNIMPLEMENTED => 'Unimplemented',
+      GRPC::Core::StatusCodes::INTERNAL => 'Internal',
+      GRPC::Core::StatusCodes::UNAVAILABLE => 'Unavailable'
     }.each_with_index do |(code, message), index|
       exception_count = 0
       setup_logging_stubs(true, code, message) do
