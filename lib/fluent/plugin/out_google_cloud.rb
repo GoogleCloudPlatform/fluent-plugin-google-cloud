@@ -1357,19 +1357,20 @@ module Fluent
                  end
 
       # Adjust timestamps from the future.
+      # There are two cases:
+      # 1. The parsed timestamp later in the current year:
+      # This can happen when system log lines from previous years are missing
+      # the year, so the date parser assumes the current year.
+      # We treat these lines as coming from last year.  This could label
+      # 2-year-old logs incorrectly, but this probably isn't super important.
       #
-      # 1. If the parsed timestamp is later than the end of the year.
-      # This isn't the issue with system logs missing a year, because we are
-      # further than the current year. It is unlikely that users wanted logs
-      # more than a year in the future. This could be logs from a VM just
-      # starting up and the clock hasn't synced, or there was no reasonable time
-      # in the payload but we parsed some random number. Reset time to the
-      # default value and let the downstream API handle it.
-      #
-      # 2. If the parsed timestamp is in the future but still the current year.
-      # Most likely this is from some previous year. We assume it is last year.
-      # This could incorrectly label 2-year-old logs, but they probably aren't
-      # super important. Adjust the timestamp to last year.
+      # 2. The parsed timestamp is past the end of the current year:
+      # Since the year is different from the current year, this isn't the
+      # missing year in system logs.  It is unlikely that users explicitly
+      # write logs at a future date.  This could result from an unsynchronized
+      # clock on a VM, or some random value being parsed as the timestamp.
+      # We reset the timestamp on those lines to the default value and let the
+      # downstream API handle it.
       if ts_secs.is_a?(Integer) && ts_nanos.is_a?(Integer)
         parsed_timestamp = Time.at(ts_secs + ts_nanos / 1_000_000_000.0)
         next_year = Time.mktime(current_time.year + 1)

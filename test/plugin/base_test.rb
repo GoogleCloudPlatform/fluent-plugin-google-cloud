@@ -612,12 +612,15 @@ module BaseTest
     one_second_before_next_year = next_year - 1
     adjusted_to_last_year =
       one_second_before_next_year.to_datetime.prev_year.to_time
+    one_second_into_next_year = next_year + 1
     one_day_into_next_year = next_year.to_date.next_day.to_time
     {
       Time.at(123_456.789) => Time.at(123_456.789),
       Time.at(0) => Time.at(0),
       current_time => current_time,
       one_second_before_next_year => adjusted_to_last_year,
+      next_year => Time.at(0),
+      one_second_into_next_year => Time.at(0),
       one_day_into_next_year => Time.at(0)
     }.each do |ts, adjusted_ts|
       expected_ts = []
