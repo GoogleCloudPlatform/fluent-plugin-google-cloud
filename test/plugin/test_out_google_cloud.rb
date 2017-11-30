@@ -66,9 +66,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
     d.run
     assert_prometheus_metric_value(
-      :stackdriver_successful_requests_count, 0, grpc: false, code: 200)
+      :stackdriver_successful_requests_count, 1, grpc: false, code: 200)
     assert_prometheus_metric_value(
-      :stackdriver_failed_requests_count, 1, grpc: false, code: root_error_code)
+      :stackdriver_failed_requests_count, 0, grpc: false)
     assert_prometheus_metric_value(
       :stackdriver_ingested_entries_count, 1, grpc: false, code: 200)
     assert_prometheus_metric_value(
@@ -115,7 +115,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       [401, 1, 1, [0, 1, 0, 1, 0]],
       # Single failed request that escalates without logs being dropped with
       # several entries.
-      [500, 1, 2, [0, 1, 0, 0, 2]]
+      [500, 1, 2, [0, 0, 0, 0, 2]]
     ].each do |code, request_count, entry_count, metric_values|
       setup_prometheus
       # TODO: Do this as part of setup_logging_stubs.
