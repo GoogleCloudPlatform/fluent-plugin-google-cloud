@@ -1301,6 +1301,12 @@ module Fluent
       instance_prefix
     end
 
+    def time_from_seconds_and_nanos(ts_secs, ts_nanos)
+      Time.at((Integer ts_secs) + (Integer ts_nanos) / 1_000_000_000.0)
+    rescue
+      nil
+    end
+
     def compute_timestamp(resource_type, record, time)
       current_time = Time.now
       if record.key?('timestamp') &&
@@ -1310,10 +1316,12 @@ module Fluent
         ts_secs = record['timestamp']['seconds']
         ts_nanos = record['timestamp']['nanos']
         record.delete('timestamp')
+        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
       elsif record.key?('timestampSeconds') &&
             record.key?('timestampNanos')
         ts_secs = record.delete('timestampSeconds')
         ts_nanos = record.delete('timestampNanos')
+        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
       elsif record.key?('timeNanos')
         # This is deprecated since the precision is insufficient.
         # Use timestampSeconds/timestampNanos instead
@@ -1326,11 +1334,13 @@ module Fluent
           @log.warn 'timeNanos is deprecated - please use ' \
             'timestampSeconds and timestampNanos instead.'
         end
+        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
       elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
             @cloudfunctions_log_match
-        timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
-        ts_secs = timestamp.strftime('%s').to_i
-        ts_nanos = timestamp.strftime('%N').to_i
+        date_time = DateTime.parse(@cloudfunctions_log_match['timestamp'])
+        ts_secs = date_time.strftime('%s').to_i
+        ts_nanos = date_time.strftime('%N').to_i
+        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1371,15 +1381,14 @@ module Fluent
       # clock on a VM, or some random value being parsed as the timestamp.
       # We reset the timestamp on those lines to the default value and let the
       # downstream API handle it.
-      if ts_secs.is_a?(Integer) && ts_nanos.is_a?(Integer)
-        parsed_timestamp = Time.at(ts_secs + ts_nanos / 1_000_000_000.0)
+      if timestamp
         next_year = Time.mktime(current_time.year + 1)
         one_day_later = current_time.to_datetime.next_day.to_time
-        if parsed_timestamp >= next_year
+        if timestamp >= next_year
           ts_secs = 0
           ts_nanos = 0
-        elsif parsed_timestamp >= one_day_later
-          adjusted_timestamp = parsed_timestamp.to_datetime.prev_year.to_time
+        elsif timestamp >= one_day_later
+          adjusted_timestamp = timestamp.to_datetime.prev_year.to_time
           ts_secs = adjusted_timestamp.tv_sec
           ts_nanos = adjusted_timestamp.tv_nsec
         end
