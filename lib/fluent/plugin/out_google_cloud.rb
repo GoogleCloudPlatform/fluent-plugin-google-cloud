@@ -393,7 +393,7 @@ module Fluent
           'The number of log entries that failed to be ingested by the'\
             ' Stackdriver output plugin due to a transient error and were'\
             ' retried')
-        @ok_code = @use_grpc ? 0 : 200
+        @ok_code = if @use_grpc then 0 else 200 end
       end
 
       # Alert on old authentication configuration.
