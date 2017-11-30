@@ -1301,9 +1301,9 @@ module Fluent
       instance_prefix
     end
 
-    def time_from_seconds_and_nanos(ts_secs, ts_nanos)
-      Time.at((Integer ts_secs) + (Integer ts_nanos) / 1_000_000_000.0)
-    rescue
+    def time_or_nil(ts_secs, ts_nanos)
+      Time.at((Integer ts_secs), (Integer ts_nanos) / 1_000.0)
+    rescue ArgumentError, TypeError
       nil
     end
 
@@ -1316,12 +1316,12 @@ module Fluent
         ts_secs = record['timestamp']['seconds']
         ts_nanos = record['timestamp']['nanos']
         record.delete('timestamp')
-        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
+        timestamp = time_or_nil(ts_secs, ts_nanos)
       elsif record.key?('timestampSeconds') &&
             record.key?('timestampNanos')
         ts_secs = record.delete('timestampSeconds')
         ts_nanos = record.delete('timestampNanos')
-        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
+        timestamp = time_or_nil(ts_secs, ts_nanos)
       elsif record.key?('timeNanos')
         # This is deprecated since the precision is insufficient.
         # Use timestampSeconds/timestampNanos instead
@@ -1334,13 +1334,13 @@ module Fluent
           @log.warn 'timeNanos is deprecated - please use ' \
             'timestampSeconds and timestampNanos instead.'
         end
-        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
+        timestamp = time_or_nil(ts_secs, ts_nanos)
       elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
             @cloudfunctions_log_match
-        date_time = DateTime.parse(@cloudfunctions_log_match['timestamp'])
-        ts_secs = date_time.strftime('%s').to_i
-        ts_nanos = date_time.strftime('%N').to_i
-        timestamp = time_from_seconds_and_nanos(ts_secs, ts_nanos)
+        timestamp = DateTime.parse(
+          @cloudfunctions_log_match['timestamp']).to_time
+        ts_secs = timestamp.tv_sec
+        ts_nanos = timestamp.tv_nsec
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1368,7 +1368,7 @@ module Fluent
 
       # Adjust timestamps from the future.
       # There are two cases:
-      # 1. The parsed timestamp later in the current year:
+      # 1. The parsed timestamp is later in the current year:
       # This can happen when system log lines from previous years are missing
       # the year, so the date parser assumes the current year.
       # We treat these lines as coming from last year.  This could label
@@ -1384,13 +1384,12 @@ module Fluent
       if timestamp
         next_year = Time.mktime(current_time.year + 1)
         one_day_later = current_time.to_datetime.next_day.to_time
-        if timestamp >= next_year
+        if timestamp >= next_year # Case 2.
           ts_secs = 0
           ts_nanos = 0
-        elsif timestamp >= one_day_later
+        elsif timestamp >= one_day_later # Case 1
           adjusted_timestamp = timestamp.to_datetime.prev_year.to_time
           ts_secs = adjusted_timestamp.tv_sec
-          ts_nanos = adjusted_timestamp.tv_nsec
         end
       end
       [ts_secs, ts_nanos]
