@@ -609,7 +609,7 @@ module Fluent
                  GRPC::Core::StatusCodes::INTERNAL,
                  GRPC::Core::StatusCodes::UNKNOWN
               # Server error, so retry via re-raising the error.
-              increment_retried_entries_count(entries.length, error.code)
+              increment_retried_entries_count(entries_count, error.code)
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
               raise error
@@ -667,7 +667,7 @@ module Fluent
 
           rescue Google::Apis::ServerError => error
             # Server error, so retry via re-raising the error.
-            increment_retried_entries_count(entries.length, error.status_code)
+            increment_retried_entries_count(entries_count, error.status_code)
             @log.debug "Retrying #{entries_count} log message(s) later.",
                        error: error.to_s, error_code: error.status_code.to_s
             raise error
