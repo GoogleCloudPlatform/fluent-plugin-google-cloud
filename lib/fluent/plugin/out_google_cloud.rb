@@ -632,17 +632,15 @@ module Fluent
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
               raise error
-            when GRPC::Core::StatusCodes::UNIMPLEMENTED,
-                 GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED
-              # Most client errors indicate a problem with the request itself
-              # and should not be retried.
-              increment_dropped_entries_count(entries_count, error.code)
-              @log.warn "Dropping #{entries_count} log message(s)",
-                        error: error.to_s, error_code: error.code.to_s
-            when GRPC::Core::StatusCodes::UNAUTHENTICATED
-              # Authorization error.
-              # These are usually solved via a `gcloud auth` call, or by
-              # modifying the permissions on the Google Cloud project.
+            when \
+                # Most client errors indicate a problem with the request itself
+                # and should not be retried.
+                GRPC::Core::StatusCodes::UNIMPLEMENTED,
+                GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED,
+                # Authorization error.
+                # These are usually solved via a `gcloud auth` call, or by
+                # modifying the permissions on the Google Cloud project.
+                GRPC::Core::StatusCodes::UNAUTHENTICATED
               increment_dropped_entries_count(entries_count, error.code)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
