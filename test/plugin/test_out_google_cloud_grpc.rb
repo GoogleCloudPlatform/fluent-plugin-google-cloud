@@ -28,9 +28,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_client_error
     setup_gce_metadata_stubs
-    { 8 => 'ResourceExhausted',
-      12 => 'Unimplemented',
-      16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
+    {
+      1 => 'Cancelled',
+      2 => 'Unknown',
+      3 => 'InvalidArgument',
+      5 => 'NotFound',
+      7 => 'PermissionDenied',
+      8 => 'ResourceExhausted',
+      9 => 'FailedPrecondition',
+      10 => 'Aborted',
+      16 => 'Unauthenticated'
+    }.each_with_index do |(code, message), index|
       setup_logging_stubs(true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
                           GRPCLoggingMockFailingService.rpc_stub_class)
@@ -45,11 +53,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_server_error
     setup_gce_metadata_stubs
-    { 1 => 'Cancelled',
-      2 => 'Unknown',
+    {
       4 => 'DeadlineExceeded',
+      12 => 'Unimplemented',
       13 => 'Internal',
-      14 => 'Unavailable' }.each_with_index do |(code, message), index|
+      14 => 'Unavailable'
+    }.each_with_index do |(code, message), index|
       exception_count = 0
       setup_logging_stubs(true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
@@ -59,9 +68,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         d.emit('message' => log_entry(0))
         begin
           d.run
-        rescue GRPC::Cancelled
-          # No need to check the message -- we already know the code.
-          exception_count += 1
         rescue GRPC::BadStatus => error
           assert_equal "#{code}:#{message}", error.message
           exception_count += 1

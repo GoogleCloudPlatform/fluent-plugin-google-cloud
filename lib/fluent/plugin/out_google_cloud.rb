@@ -602,26 +602,51 @@ module Fluent
 
           rescue GRPC::BadStatus => error
             increment_failed_requests_count(error.code)
+            # See the mapping between http status and grpc status code at:
+            # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
             case error.code
-            when GRPC::Core::StatusCodes::CANCELLED,
-                 GRPC::Core::StatusCodes::UNAVAILABLE,
-                 GRPC::Core::StatusCodes::DEADLINE_EXCEEDED,
-                 GRPC::Core::StatusCodes::INTERNAL,
-                 GRPC::Core::StatusCodes::UNKNOWN
-              # Server error, so retry via re-raising the error.
+            # Server error, so retry via re-raising the error.
+            when \
+                # Maps to http status 500 (Internal Server Error)
+                GRPC::Core::StatusCodes::INTERNAL,
+                # Maps to http status 501 (Not Implemented).
+                GRPC::Core::StatusCodes::UNIMPLEMENTED,
+                # Maps to http status 503 (Service Unavailable).
+                GRPC::Core::StatusCodes::UNAVAILABLE,
+                # Maps to http status 504 (Gateway Timeout).
+                GRPC::Core::StatusCodes::DEADLINE_EXCEEDED
               increment_retried_entries_count(entries_count, error.code)
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
               raise error
+
+            # Most client errors indicate a problem with the request itself and
+            # should not be retried.
             when \
-                # Most client errors indicate a problem with the request itself
-                # and should not be retried.
-                GRPC::Core::StatusCodes::UNIMPLEMENTED,
+                # Maps to http status 400 (Bad Request).
+                GRPC::Core::StatusCodes::INVALID_ARGUMENT,
+                # Authorization error. These are usually solved via a `gcloud
+                # auth` call, or by modifying the permissions on the Google
+                # Cloud project.
+                # Maps to http status 401 (Unauthorized).
+                GRPC::Core::StatusCodes::UNAUTHENTICATED,
+                # Maps to http status 403 (Forbidden).
+                GRPC::Core::StatusCodes::PERMISSION_DENIED,
+                # Maps to http status 404 (Not Found).
+                GRPC::Core::StatusCodes::NOT_FOUND,
+                # Maps to http status 409 (Conflict).
+                GRPC::Core::StatusCodes::ABORTED,
+                # Maps to http status 412 (Precondition Failed).
+                GRPC::Core::StatusCodes::FAILED_PRECONDITION,
+                # Maps to http status 429 (Too Many Requests).
                 GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED,
-                # Authorization error.
-                # These are usually solved via a `gcloud auth` call, or by
-                # modifying the permissions on the Google Cloud project.
-                GRPC::Core::StatusCodes::UNAUTHENTICATED
+                # Maps to http status 499 (Client Closed Request).
+                GRPC::Core::StatusCodes::CANCELLED,
+                # Maps to the remaining http codes in both 4XX and 5XX category.
+                # It's debatable whether to retry or drop these log entries.
+                # This decision is made to avoid retrying forever due to client
+                # errors.
+                GRPC::Core::StatusCodes::UNKNOWN
               increment_dropped_entries_count(entries_count, error.code)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
@@ -666,14 +691,14 @@ module Fluent
             end
 
           rescue Google::Apis::ServerError => error
-            # Server error, so retry via re-raising the error.
+            # 5XX Server errors, so retry via re-raising the error.
             increment_retried_entries_count(entries_count, error.status_code)
             @log.debug "Retrying #{entries_count} log message(s) later.",
                        error: error.to_s, error_code: error.status_code.to_s
             raise error
 
           rescue Google::Apis::AuthorizationError => error
-            # Authorization error.
+            # 401 Authorization error.
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
             increment_dropped_entries_count(entries_count, error.status_code)
@@ -681,8 +706,8 @@ module Fluent
                       error_class: error.class.to_s, error: error.to_s
 
           rescue Google::Apis::ClientError => error
-            # Most ClientErrors indicate a problem with the request itself and
-            # should not be retried.
+            # 4XX client errors. Most ClientErrors indicate a problem with the
+            # request itself and should not be retried.
             error_details_map = construct_error_details_map(error)
             if error_details_map.empty?
               increment_dropped_entries_count(entries_count, error.status_code)
