@@ -1387,8 +1387,9 @@ module Fluent
         if timestamp >= next_year # Case 2.
           ts_secs = 0
           ts_nanos = 0
-        elsif timestamp >= one_day_later # Case 1
+        elsif timestamp >= one_day_later # Case 1.
           adjusted_timestamp = timestamp.to_datetime.prev_year.to_time
+          # The value of ts_nanos should not change when subtracting a year.
           ts_secs = adjusted_timestamp.tv_sec
         end
       end
