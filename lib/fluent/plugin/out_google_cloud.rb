@@ -393,6 +393,7 @@ module Fluent
           'The number of log entries that failed to be ingested by the'\
             ' Stackdriver output plugin due to a transient error and were'\
             ' retried')
+        @ok_code = @use_grpc ? 0 : 200
       end
 
       # Alert on old authentication configuration.
@@ -1876,7 +1877,7 @@ module Fluent
     # Increment the metric for the number of successful requests.
     def increment_successful_requests_count
       return unless @successful_requests_count
-      @successful_requests_count.increment(grpc: @use_grpc)
+      @successful_requests_count.increment(grpc: @use_grpc, code: @ok_code)
     end
 
     # Increment the metric for the number of failed requests, labeled by
@@ -1890,7 +1891,8 @@ module Fluent
     # ingested by the Stackdriver Logging API.
     def increment_ingested_entries_count(count)
       return unless @ingested_entries_count
-      @ingested_entries_count.increment({ grpc: @use_grpc }, count)
+      @ingested_entries_count.increment({ grpc: @use_grpc, code: @ok_code },
+                                        count)
     end
 
     # Increment the metric for the number of log entries that were dropped

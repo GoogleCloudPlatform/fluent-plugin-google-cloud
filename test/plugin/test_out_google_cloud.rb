@@ -129,12 +129,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         ingested_entries_count, dropped_entries_count,
         retried_entries_count = metric_values
       assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     successful_requests_count, grpc: false)
+                                     successful_requests_count,
+                                     grpc: false, code: 200)
       assert_prometheus_metric_value(:stackdriver_failed_requests_count,
                                      failed_requests_count,
                                      grpc: false, code: code)
       assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     ingested_entries_count, grpc: false)
+                                     ingested_entries_count,
+                                     grpc: false, code: 200)
       assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
                                      dropped_entries_count,
                                      grpc: false, code: code)
