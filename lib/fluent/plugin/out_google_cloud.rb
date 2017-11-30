@@ -393,6 +393,7 @@ module Fluent
           'The number of log entries that failed to be ingested by the'\
             ' Stackdriver output plugin due to a transient error and were'\
             ' retried')
+        @ok_code = @use_grpc ? 0 : 200
       end
 
       # Alert on old authentication configuration.
@@ -620,24 +621,22 @@ module Fluent
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
               raise error
-            when GRPC::Core::StatusCodes::UNIMPLEMENTED,
-                 GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED
-              # Most client errors indicate a problem with the request itself
-              # and should not be retried.
-              increment_dropped_entries_count(entries_count)
-              @log.warn "Dropping #{entries_count} log message(s)",
-                        error: error.to_s, error_code: error.code.to_s
-            when GRPC::Core::StatusCodes::UNAUTHENTICATED
-              # Authorization error.
-              # These are usually solved via a `gcloud auth` call, or by
-              # modifying the permissions on the Google Cloud project.
-              increment_dropped_entries_count(entries_count)
+            when \
+                # Most client errors indicate a problem with the request itself
+                # and should not be retried.
+                GRPC::Core::StatusCodes::UNIMPLEMENTED,
+                GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED,
+                # Authorization error.
+                # These are usually solved via a `gcloud auth` call, or by
+                # modifying the permissions on the Google Cloud project.
+                GRPC::Core::StatusCodes::UNAUTHENTICATED
+              increment_dropped_entries_count(entries_count, error.code)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
             else
               # Assume this is a problem with the request itself and don't
               # retry.
-              increment_dropped_entries_count(entries_count)
+              increment_dropped_entries_count(entries_count, error.code)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{entries_count} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
@@ -685,7 +684,7 @@ module Fluent
             # Authorization error.
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
-            increment_dropped_entries_count(entries_count)
+            increment_dropped_entries_count(entries_count, error.status_code)
             @log.warn "Dropping #{entries_count} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
 
@@ -694,13 +693,13 @@ module Fluent
             # should not be retried.
             error_details_map = construct_error_details_map(error)
             if error_details_map.empty?
-              increment_dropped_entries_count(entries_count)
+              increment_dropped_entries_count(entries_count, error.status_code)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error_class: error.class.to_s, error: error.to_s
             else
               error_details_map.each do |(error_code, error_message), indexes|
                 partial_error_count = indexes.length
-                increment_dropped_entries_count(partial_error_count)
+                increment_dropped_entries_count(partial_error_count, error_code)
                 @log.warn "Dropping #{partial_error_count} log message(s)",
                           error_code: "google.rpc.Code[#{error_code}]",
                           error: error_message
@@ -1916,7 +1915,7 @@ module Fluent
     # Increment the metric for the number of successful requests.
     def increment_successful_requests_count
       return unless @successful_requests_count
-      @successful_requests_count.increment(grpc: @use_grpc)
+      @successful_requests_count.increment(grpc: @use_grpc, code: @ok_code)
     end
 
     # Increment the metric for the number of failed requests, labeled by
@@ -1930,21 +1929,22 @@ module Fluent
     # ingested by the Stackdriver Logging API.
     def increment_ingested_entries_count(count)
       return unless @ingested_entries_count
-      @ingested_entries_count.increment({}, count)
+      @ingested_entries_count.increment({ grpc: @use_grpc, code: @ok_code },
+                                        count)
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
-    def increment_dropped_entries_count(count)
+    def increment_dropped_entries_count(count, code)
       return unless @dropped_entries_count
-      @dropped_entries_count.increment({}, count)
+      @dropped_entries_count.increment({ grpc: @use_grpc, code: code }, count)
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
     def increment_retried_entries_count(count, code)
       return unless @retried_entries_count
-      @retried_entries_count.increment({ code: code }, count)
+      @retried_entries_count.increment({ grpc: @use_grpc, code: code }, count)
     end
   end
 end
