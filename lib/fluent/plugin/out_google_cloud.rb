@@ -604,7 +604,6 @@ module Fluent
             # GRPC::BadStatus is wrapped in error.cause.
             error = gax_error.cause
             increment_failed_requests_count(error.code)
-
             case error
             # Server error, so retry via re-raising the error.
             when GRPC::Cancelled, # The operation was cancelled.
@@ -612,7 +611,7 @@ module Fluent
                  GRPC::DeadlineExceeded, # No response received before deadline.
                  GRPC::Internal, # Error parsing proto or compression issue.
                  GRPC::Unknown # Error parsing proto or compression issue.
-              increment_retried_entries_count(entries.length, error.code)
+              increment_retried_entries_count(entries_count, error.code)
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
               raise error
@@ -671,7 +670,7 @@ module Fluent
 
           rescue Google::Apis::ServerError => error
             # Server error, so retry via re-raising the error.
-            increment_retried_entries_count(entries.length, error.status_code)
+            increment_retried_entries_count(entries_count, error.status_code)
             @log.debug "Retrying #{entries_count} log message(s) later.",
                        error: error.to_s, error_code: error.status_code.to_s
             raise error
