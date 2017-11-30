@@ -177,7 +177,6 @@ module BaseTest
   def test_ec2_metadata_requires_project_id
     setup_ec2_metadata_stubs
     exception_count = 0
-    Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
     begin
       create_driver
     rescue Fluent::ConfigError => error
@@ -188,13 +187,15 @@ module BaseTest
     assert_equal 1, exception_count
   end
 
-  def test_ec2_metadata_project_id_from_credentials
-    setup_ec2_metadata_stubs
-    [IAM_CREDENTIALS, LEGACY_CREDENTIALS].each do |creds|
-      ENV['GOOGLE_APPLICATION_CREDENTIALS'] = creds[:path]
-      d = create_driver
-      d.run
-      assert_equal creds[:project_id], d.instance.project_id
+  def test_project_id_from_credentials
+    %w(gce ec2).each do |platform|
+      send("setup_#{platform}_metadata_stubs")
+      [IAM_CREDENTIALS, LEGACY_CREDENTIALS].each do |creds|
+        ENV['GOOGLE_APPLICATION_CREDENTIALS'] = creds[:path]
+        d = create_driver
+        d.run
+        assert_equal creds[:project_id], d.instance.project_id
+      end
     end
   end
 
@@ -216,24 +217,23 @@ module BaseTest
       d.emit('message' => log_entry(0))
       d.run
     end
-    verify_log_entries(1, COMPUTE_PARAMS)
+    verify_log_entries(1, COMPUTE_PARAMS.merge(
+                            project_id: IAM_CREDENTIALS[:project_id]))
   end
 
-  def test_one_log_with_invalid_json_credentials
-    setup_gce_metadata_stubs
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
-    exception_count = 0
-    begin
-      setup_logging_stubs do
-        d = create_driver
-        d.emit('message' => log_entry(0))
-        d.run
+  def test_invalid_json_credentials
+    %w(gce_metadata ec2_metadata no_metadata_service).each do |platform|
+      exception_count = 0
+      send("setup_#{platform}_stubs")
+      ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
+      begin
+        create_driver
+      rescue RuntimeError => error
+        assert error.message.include? 'Unable to read the credential file'
+        exception_count += 1
       end
-    rescue RuntimeError => error
-      assert error.message.include? 'Unable to read the credential file'
-      exception_count += 1
+      assert_equal 1, exception_count
     end
-    assert_equal 1, exception_count
   end
 
   def test_one_log_custom_metadata
