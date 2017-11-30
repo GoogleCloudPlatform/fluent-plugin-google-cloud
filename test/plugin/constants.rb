@@ -648,5 +648,5 @@ module Constants
         }
       ]
     }
-  }.to_json
+  }.freeze
 end
