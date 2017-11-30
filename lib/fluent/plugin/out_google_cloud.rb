@@ -692,10 +692,12 @@ module Fluent
               error_details_map.each do |(error_code, error_message), indexes|
                 partial_error_count = indexes.length
                 increment_dropped_entries_count(partial_error_count, error_code)
+                entries_count -= partial_error_count
                 @log.warn "Dropping #{partial_error_count} log message(s)",
                           error_code: "google.rpc.Code[#{error_code}]",
                           error: error_message
               end
+              increment_ingested_entries_count(entries_count)
             end
           end
         end
