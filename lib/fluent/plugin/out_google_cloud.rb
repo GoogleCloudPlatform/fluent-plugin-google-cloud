@@ -600,14 +600,6 @@ module Fluent
               @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
             end
 
-          rescue GRPC::Cancelled => error
-            increment_failed_requests_count(GRPC::Core::StatusCodes::CANCELLED)
-            increment_retried_entries_count(entries_count, error.code)
-            # RPC cancelled, so retry via re-raising the error.
-            @log.debug "Retrying #{entries_count} log message(s) later.",
-                       error: error.to_s, error_code: error.code.to_s
-            raise error
-
           rescue GRPC::BadStatus => error
             increment_failed_requests_count(error.code)
             case error.code
