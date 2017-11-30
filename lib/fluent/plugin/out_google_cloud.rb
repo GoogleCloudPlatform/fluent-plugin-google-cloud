@@ -602,7 +602,7 @@ module Fluent
 
           rescue GRPC::BadStatus => error
             increment_failed_requests_count(error.code)
-            # See the mapping between HTTP status and grpc status code at:
+            # See the mapping between HTTP status and gRPC status code at:
             # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
             case error.code
             # Server error, so retry via re-raising the error.
