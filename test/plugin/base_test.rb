@@ -188,8 +188,8 @@ module BaseTest
   end
 
   def test_project_id_from_credentials
-    %w(gce_metadata ec2_metadata no_metadata_service).each do |platform|
-      send("setup_#{platform}_stubs")
+    %w(gce ec2).each do |platform|
+      send("setup_#{platform}_metadata_stubs")
       [IAM_CREDENTIALS, LEGACY_CREDENTIALS].each do |creds|
         ENV['GOOGLE_APPLICATION_CREDENTIALS'] = creds[:path]
         d = create_driver
