@@ -56,8 +56,9 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_prometheus
     # The API Client should not retry this and the plugin should consume
     # the exception.
+    root_error_code = PARTIAL_SUCCESS_RESPONSE_BODY['error']['code']
     stub_request(:post, WRITE_LOG_ENTRIES_URI)
-      .to_return(status: PARTIAL_SUCCESS_RESPONSE_BODY['error']['code'],
+      .to_return(status: root_error_code,
                  body: PARTIAL_SUCCESS_RESPONSE_BODY.to_json)
     d = create_driver(PROMETHEUS_ENABLE_CONFIG + PARTIAL_SUCCESS_CONFIG)
     4.times do |i|
@@ -65,9 +66,17 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
     d.run
     assert_prometheus_metric_value(
+      :stackdriver_successful_requests_count, 0, grpc: false, code: 200)
+    assert_prometheus_metric_value(
+      :stackdriver_failed_requests_count, 1, grpc: false, code: root_error_code)
+    assert_prometheus_metric_value(
+      :stackdriver_ingested_entries_count, 1, grpc: false, code: 200)
+    assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 2, grpc: false, code: 3)
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 1, grpc: false, code: 7)
+    assert_prometheus_metric_value(
+      :stackdriver_retried_entries_count, 0, grpc: false)
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
