@@ -607,7 +607,22 @@ module BaseTest
 
   def test_timestamps
     setup_gce_metadata_stubs
-    [Time.at(123_456.789), Time.at(0), Time.now].each do |ts|
+    current_time = Time.now
+    next_year = Time.mktime(current_time.year + 1)
+    one_second_before_next_year = next_year - 1
+    adjusted_to_last_year =
+      one_second_before_next_year.to_datetime.prev_year.to_time
+    one_second_into_next_year = next_year + 1
+    one_day_into_next_year = next_year.to_date.next_day.to_time
+    {
+      Time.at(123_456.789) => Time.at(123_456.789),
+      Time.at(0) => Time.at(0),
+      current_time => current_time,
+      one_second_before_next_year => adjusted_to_last_year,
+      next_year => Time.at(0),
+      one_second_into_next_year => Time.at(0),
+      one_day_into_next_year => Time.at(0)
+    }.each do |ts, adjusted_ts|
       expected_ts = []
       emit_index = 0
       setup_logging_stubs do
@@ -615,24 +630,24 @@ module BaseTest
         d = create_driver
         # Test the "native" fluentd timestamp as well as our nanosecond tags.
         d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
-        expected_ts.push(ts)
+        expected_ts.push(adjusted_ts)
         emit_index += 1
         d.emit('message' => log_entry(emit_index),
                'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
-        expected_ts.push(ts)
+        expected_ts.push(adjusted_ts)
         emit_index += 1
         d.emit('message' => log_entry(emit_index),
                'timestamp' => { 'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec })
-        expected_ts.push(ts)
+        expected_ts.push(adjusted_ts)
         emit_index += 1
         d.emit('message' => log_entry(emit_index),
                'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec)
-        expected_ts.push(ts)
+        expected_ts.push(adjusted_ts)
         emit_index += 1
         d.emit('message' => log_entry(emit_index),
                'timestampSeconds' => ts.tv_sec.to_s,
                'timestampNanos' => ts.tv_nsec.to_s)
-        expected_ts.push(ts)
+        expected_ts.push(adjusted_ts)
         emit_index += 1
         d.run
         verify_index = 0

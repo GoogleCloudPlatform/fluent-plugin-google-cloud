@@ -516,17 +516,6 @@ module Fluent
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
 
-          ts_secs = begin
-                      Integer ts_secs
-                    rescue ArgumentError, TypeError
-                      ts_secs
-                    end
-          ts_nanos = begin
-                       Integer ts_nanos
-                     rescue ArgumentError, TypeError
-                       ts_nanos
-                     end
-
           if @use_grpc
             entry = Google::Logging::V2::LogEntry.new(
               labels: entry_level_common_labels,
@@ -1317,7 +1306,14 @@ module Fluent
       instance_prefix
     end
 
+    def time_or_nil(ts_secs, ts_nanos)
+      Time.at((Integer ts_secs), (Integer ts_nanos) / 1_000.0)
+    rescue ArgumentError, TypeError
+      nil
+    end
+
     def compute_timestamp(resource_type, record, time)
+      current_time = Time.now
       if record.key?('timestamp') &&
          record['timestamp'].is_a?(Hash) &&
          record['timestamp'].key?('seconds') &&
@@ -1325,10 +1321,12 @@ module Fluent
         ts_secs = record['timestamp']['seconds']
         ts_nanos = record['timestamp']['nanos']
         record.delete('timestamp')
+        timestamp = time_or_nil(ts_secs, ts_nanos)
       elsif record.key?('timestampSeconds') &&
             record.key?('timestampNanos')
         ts_secs = record.delete('timestampSeconds')
         ts_nanos = record.delete('timestampNanos')
+        timestamp = time_or_nil(ts_secs, ts_nanos)
       elsif record.key?('timeNanos')
         # This is deprecated since the precision is insufficient.
         # Use timestampSeconds/timestampNanos instead
@@ -1341,11 +1339,13 @@ module Fluent
           @log.warn 'timeNanos is deprecated - please use ' \
             'timestampSeconds and timestampNanos instead.'
         end
+        timestamp = time_or_nil(ts_secs, ts_nanos)
       elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
             @cloudfunctions_log_match
-        timestamp = DateTime.parse(@cloudfunctions_log_match['timestamp'])
-        ts_secs = timestamp.strftime('%s').to_i
-        ts_nanos = timestamp.strftime('%N').to_i
+        timestamp = DateTime.parse(
+          @cloudfunctions_log_match['timestamp']).to_time
+        ts_secs = timestamp.tv_sec
+        ts_nanos = timestamp.tv_nsec
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1359,6 +1359,44 @@ module Fluent
         timestamp = Time.at(time)
         ts_secs = timestamp.tv_sec
         ts_nanos = timestamp.tv_nsec
+      end
+      ts_secs = begin
+                  Integer ts_secs
+                rescue ArgumentError, TypeError
+                  ts_secs
+                end
+      ts_nanos = begin
+                   Integer ts_nanos
+                 rescue ArgumentError, TypeError
+                   ts_nanos
+                 end
+
+      # Adjust timestamps from the future.
+      # There are two cases:
+      # 1. The parsed timestamp is later in the current year:
+      # This can happen when system log lines from previous years are missing
+      # the year, so the date parser assumes the current year.
+      # We treat these lines as coming from last year.  This could label
+      # 2-year-old logs incorrectly, but this probably isn't super important.
+      #
+      # 2. The parsed timestamp is past the end of the current year:
+      # Since the year is different from the current year, this isn't the
+      # missing year in system logs.  It is unlikely that users explicitly
+      # write logs at a future date.  This could result from an unsynchronized
+      # clock on a VM, or some random value being parsed as the timestamp.
+      # We reset the timestamp on those lines to the default value and let the
+      # downstream API handle it.
+      if timestamp
+        next_year = Time.mktime(current_time.year + 1)
+        one_day_later = current_time.to_datetime.next_day.to_time
+        if timestamp >= next_year # Case 2.
+          ts_secs = 0
+          ts_nanos = 0
+        elsif timestamp >= one_day_later # Case 1.
+          adjusted_timestamp = timestamp.to_datetime.prev_year.to_time
+          ts_secs = adjusted_timestamp.tv_sec
+          # The value of ts_nanos should not change when subtracting a year.
+        end
       end
       [ts_secs, ts_nanos]
     end
