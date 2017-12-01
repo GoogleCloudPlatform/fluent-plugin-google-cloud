@@ -722,7 +722,7 @@ module Fluent
                           error_code: "google.rpc.Code[#{error_code}]",
                           error: error_message
               end
-              # Consider partially successful request successful.
+              # Consider partially successful requests successful.
               increment_successful_requests_count
               increment_ingested_entries_count(entries_count)
             end
