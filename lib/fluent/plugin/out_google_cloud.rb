@@ -379,22 +379,26 @@ module Fluent
         registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
         @successful_requests_count = registry.counter(
           :stackdriver_successful_requests_count,
-          'A number of successful requests to the Stackdriver Logging API')
+          'A number of successful requests to the Stackdriver Logging API.')
+        @partially_successful_requests_count = registry.counter(
+          :stackdriver_partially_successful_requests_count,
+          'A number of partially successful requests to the Stackdriver' \
+            ' Logging API.')
         @failed_requests_count = registry.counter(
           :stackdriver_failed_requests_count,
-          'A number of failed requests to the Stackdriver Logging API,'\
-            ' broken down by the error code')
+          'A number of failed requests to the Stackdriver Logging API,' \
+            ' broken down by the error code.')
         @ingested_entries_count = registry.counter(
           :stackdriver_ingested_entries_count,
-          'A number of log entries ingested by Stackdriver Logging')
+          'A number of log entries ingested by Stackdriver Logging.')
         @dropped_entries_count = registry.counter(
           :stackdriver_dropped_entries_count,
-          'A number of log entries dropped by the Stackdriver output plugin')
+          'A number of log entries dropped by the Stackdriver output plugin.')
         @retried_entries_count = registry.counter(
           :stackdriver_retried_entries_count,
-          'The number of log entries that failed to be ingested by the'\
-            ' Stackdriver output plugin due to a transient error and were'\
-            ' retried')
+          'The number of log entries that failed to be ingested by the' \
+            ' Stackdriver output plugin due to a transient error and were' \
+            ' retried.')
         @ok_code = @use_grpc ? 0 : 200
       end
 
@@ -721,8 +725,7 @@ module Fluent
                           error_code: "google.rpc.Code[#{error_code}]",
                           error: error_message
               end
-              # Consider partially successful requests successful.
-              increment_successful_requests_count
+              increment_partially_successful_requests_count(error.status_code)
               increment_ingested_entries_count(entries_count)
             end
           end
@@ -1938,6 +1941,13 @@ module Fluent
     def increment_successful_requests_count
       return unless @successful_requests_count
       @successful_requests_count.increment(grpc: @use_grpc, code: @ok_code)
+    end
+
+    # Increment the metric for the number of partially successful requests.
+    def increment_partially_successful_requests_count(code)
+      return unless @partially_successful_requests_count
+      @partially_successful_requests_count.increment(grpc: @use_grpc,
+                                                     code: code)
     end
 
     # Increment the metric for the number of failed requests, labeled by

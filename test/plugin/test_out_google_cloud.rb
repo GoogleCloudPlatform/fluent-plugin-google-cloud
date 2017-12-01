@@ -66,7 +66,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
     d.run
     assert_prometheus_metric_value(
-      :stackdriver_successful_requests_count, 1, grpc: false, code: 200)
+      :stackdriver_successful_requests_count, 0, grpc: false, code: 200)
+    assert_prometheus_metric_value(
+      :stackdriver_partially_successful_requests_count, 1,
+      grpc: false, code: root_error_code)
     assert_prometheus_metric_value(
       :stackdriver_failed_requests_count, 0, grpc: false)
     assert_prometheus_metric_value(
