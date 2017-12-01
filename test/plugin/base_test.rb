@@ -223,8 +223,8 @@ module BaseTest
 
   def test_invalid_json_credentials
     %w(gce_metadata ec2_metadata no_metadata_service).each do |platform|
-      exception_count = 0
       send("setup_#{platform}_stubs")
+      exception_count = 0
       ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
       begin
         create_driver

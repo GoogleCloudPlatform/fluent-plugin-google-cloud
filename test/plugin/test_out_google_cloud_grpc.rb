@@ -254,26 +254,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       @requests_received = requests_received
     end
 
-    # rubocop:disable Lint/UnusedMethodArgument
-    # rubocop:disable Metrics/ParameterLists
     def write_log_entries(entries,
                           log_name: nil,
                           resource: nil,
-                          labels: nil,
-                          partial_success: nil,
-                          options: nil)
+                          labels: nil)
       request = Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
         log_name: log_name,
         resource: resource,
         labels: labels,
-        entries: entries,
-        partial_success: partial_success
+        entries: entries
       )
       @requests_received << request
       WriteLogEntriesResponse.new
     end
-    # rubocop:enable Lint/UnusedMethodArgument
-    # rubocop:enable Metrics/ParameterLists
   end
 
   # GRPC logging mock that fails and returns server side or client side errors.
@@ -287,13 +280,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
-    # rubocop:disable Metrics/ParameterLists
     def write_log_entries(entries,
                           log_name: nil,
                           resource: nil,
-                          labels: nil,
-                          partial_success: nil,
-                          options: nil)
+                          labels: nil)
       @failed_attempts << 1
       begin
         raise GRPC::BadStatus.new_status_exception(@code, @message)
@@ -303,7 +293,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       end
     end
     # rubocop:enable Lint/UnusedMethodArgument
-    # rubocop:enable Metrics/ParameterLists
   end
 
   # Set up grpc stubs to mock the external calls.
