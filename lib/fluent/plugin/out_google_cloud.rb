@@ -690,14 +690,14 @@ module Fluent
             end
 
           rescue Google::Apis::ServerError => error
-            # 5xx Server errors, so retry via re-raising the error.
+            # 5xx server errors. Retry via re-raising the error.
             increment_retried_entries_count(entries_count, error.status_code)
             @log.debug "Retrying #{entries_count} log message(s) later.",
                        error: error.to_s, error_code: error.status_code.to_s
             raise error
 
           rescue Google::Apis::AuthorizationError => error
-            # 401 Authorization error.
+            # 401 authorization error.
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
             increment_dropped_entries_count(entries_count, error.status_code)
@@ -705,7 +705,7 @@ module Fluent
                       error_class: error.class.to_s, error: error.to_s
 
           rescue Google::Apis::ClientError => error
-            # 4xx client errors. Most ClientErrors indicate a problem with the
+            # 4xx client errors. Most client errors indicate a problem with the
             # request itself and should not be retried.
             error_details_map = construct_error_details_map(error)
             if error_details_map.empty?
