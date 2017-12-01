@@ -28,9 +28,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_client_error
     setup_gce_metadata_stubs
-    { 8 => 'ResourceExhausted',
-      12 => 'Unimplemented',
-      16 => 'Unauthenticated' }.each_with_index do |(code, message), index|
+    {
+      GRPC::Core::StatusCodes::CANCELLED => 'Cancelled',
+      GRPC::Core::StatusCodes::UNKNOWN => 'Unknown',
+      GRPC::Core::StatusCodes::INVALID_ARGUMENT => 'InvalidArgument',
+      GRPC::Core::StatusCodes::NOT_FOUND => 'NotFound',
+      GRPC::Core::StatusCodes::PERMISSION_DENIED => 'PermissionDenied',
+      GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED => 'ResourceExhausted',
+      GRPC::Core::StatusCodes::FAILED_PRECONDITION => 'FailedPrecondition',
+      GRPC::Core::StatusCodes::ABORTED => 'Aborted',
+      GRPC::Core::StatusCodes::UNAUTHENTICATED => 'Unauthenticated'
+    }.each_with_index do |(code, message), index|
       setup_logging_stubs(true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
                           GRPCLoggingMockFailingService.rpc_stub_class)
@@ -45,11 +53,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_server_error
     setup_gce_metadata_stubs
-    { 1 => 'Cancelled',
-      2 => 'Unknown',
-      4 => 'DeadlineExceeded',
-      13 => 'Internal',
-      14 => 'Unavailable' }.each_with_index do |(code, message), index|
+    {
+      GRPC::Core::StatusCodes::DEADLINE_EXCEEDED => 'DeadlineExceeded',
+      GRPC::Core::StatusCodes::UNIMPLEMENTED => 'Unimplemented',
+      GRPC::Core::StatusCodes::INTERNAL => 'Internal',
+      GRPC::Core::StatusCodes::UNAVAILABLE => 'Unavailable'
+    }.each_with_index do |(code, message), index|
       exception_count = 0
       setup_logging_stubs(true, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test',
@@ -59,9 +68,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         d.emit('message' => log_entry(0))
         begin
           d.run
-        rescue GRPC::Cancelled
-          # No need to check the message -- we already know the code.
-          exception_count += 1
         rescue GRPC::BadStatus => error
           assert_equal "#{code}:#{message}", error.message
           exception_count += 1
