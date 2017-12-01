@@ -254,10 +254,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       @requests_received = requests_received
     end
 
-    def write_log_entries(entries,
-                          log_name: nil,
-                          resource: nil,
-                          labels: nil)
+    def write_log_entries(entries, log_name: nil, resource: nil, labels: nil)
       request = Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
         log_name: log_name,
         resource: resource,
@@ -280,10 +277,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
-    def write_log_entries(entries,
-                          log_name: nil,
-                          resource: nil,
-                          labels: nil)
+    def write_log_entries(entries, log_name: nil, resource: nil, labels: nil)
       @failed_attempts << 1
       begin
         raise GRPC::BadStatus.new_status_exception(@code, @message)
