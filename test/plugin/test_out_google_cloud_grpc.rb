@@ -253,8 +253,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
     def api_client
       ssl_creds = GRPC::Core::ChannelCredentials.new
-      authentication = Google::Auth.get_application_default
-      creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
+      authentication = Google::Auth.get_application_default(LOGGING_SCOPE)
+      creds = GRPC::Core::CallCredentials.new(lambda do |a_hash|
+        authentication.apply(a_hash, use_configured_scope: true)
+      end)
       ssl_creds.compose(creds)
 
       # Here we have obtained the creds, but for the mock, we will leave the
