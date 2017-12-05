@@ -218,6 +218,9 @@ module Fluent
     # Whether to attempt to obtain metadata from the local metadata service.
     # It is safe to specify 'true' even on platforms with no metadata service.
     config_param :use_metadata_service, :bool, :default => true
+    # Whether to set the AWS location to the availability zone instead of the
+    # region.
+    config_param :use_aws_availability_zone, :bool, :default => true
     # These parameters override any values obtained from the metadata service.
     config_param :project_id, :string, :default => nil
     config_param :zone, :string, :default => nil
@@ -878,8 +881,13 @@ module Fluent
       # Response format: "projects/<number>/zones/<zone>"
       @zone ||= fetch_gce_metadata('instance/zone').rpartition('/')[2] if
         @platform == Platform::GCE
-      @zone ||= 'aws:' + ec2_metadata['availabilityZone'] if
-        @platform == Platform::EC2 && ec2_metadata.key?('availabilityZone')
+      aws_location_key = if @use_aws_availability_zone
+                           'availabilityZone'
+                         else
+                           'region'
+                         end
+      @zone ||= 'aws:' + ec2_metadata[aws_location_key] if
+        @platform == Platform::EC2 && ec2_metadata.key?(aws_location_key)
     rescue StandardError => e
       @log.error 'Failed to obtain location: ', error: e
     end

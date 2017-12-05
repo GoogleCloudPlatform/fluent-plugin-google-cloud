@@ -163,7 +163,9 @@ module BaseTest
       CONFIG_EC2_PROJECT_ID =>
         ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_ZONE, EC2_VM_ID],
       CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID =>
-        ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_ZONE, CUSTOM_VM_ID]
+        ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_ZONE, CUSTOM_VM_ID],
+      CONFIG_EC2_USE_REGION =>
+        ['ec2', EC2_PROJECT_ID, EC2_PREFIXED_REGION, EC2_VM_ID]
     }.each_with_index do |(config, parts), index|
       send("setup_#{parts[0]}_metadata_stubs")
       d = create_driver(config)
@@ -254,6 +256,17 @@ module BaseTest
     setup_ec2_metadata_stubs
     setup_logging_stubs do
       d = create_driver(CONFIG_EC2_PROJECT_ID)
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries(1, EC2_ZONE_PARAMS)
+  end
+
+  def test_one_log_ec2_region
+    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    setup_ec2_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver(CONFIG_EC2_USE_REGION)
       d.emit('message' => log_entry(0))
       d.run
     end
