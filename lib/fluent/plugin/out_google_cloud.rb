@@ -218,8 +218,8 @@ module Fluent
     # Whether to attempt to obtain metadata from the local metadata service.
     # It is safe to specify 'true' even on platforms with no metadata service.
     config_param :use_metadata_service, :bool, :default => true
-    # Whether to set the AWS location to the availability zone instead of the
-    # region.
+    # A compatibility option to enable the legacy behavior of setting the AWS
+    # location to the availability zone rather than the region.
     config_param :use_aws_availability_zone, :bool, :default => true
     # These parameters override any values obtained from the metadata service.
     config_param :project_id, :string, :default => nil

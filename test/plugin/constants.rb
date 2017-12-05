@@ -219,7 +219,7 @@ module Constants
     vm_id #{CUSTOM_VM_ID}
   ).freeze
 
-  CONFIG_EC2_USE_REGION = %(
+  CONFIG_EC2_PROJECT_ID_USE_REGION = %(
     project_id #{EC2_PROJECT_ID}
     use_aws_availability_zone false
   ).freeze
@@ -512,7 +512,7 @@ module Constants
     }
   }.freeze
 
-  EC2_PARAMS = {
+  EC2_REGION_PARAMS = {
     resource: {
       type: EC2_CONSTANTS[:resource_type],
       labels: {
@@ -528,9 +528,9 @@ module Constants
     }
   }.freeze
 
-  EC2_ZONE_PARAMS = EC2_PARAMS.merge(
-    resource: EC2_PARAMS[:resource].merge(
-      labels: EC2_PARAMS[:resource][:labels].merge(
+  EC2_ZONE_PARAMS = EC2_REGION_PARAMS.merge(
+    resource: EC2_REGION_PARAMS[:resource].merge(
+      labels: EC2_REGION_PARAMS[:resource][:labels].merge(
         'region' => EC2_PREFIXED_ZONE
       )
     )
