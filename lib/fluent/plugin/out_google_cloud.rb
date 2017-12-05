@@ -1779,7 +1779,8 @@ module Fluent
         creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
         creds = ssl_creds.compose(creds)
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
-          channel: GRPC::Core::Channel.new('logging.googleapis.com', nil, creds))
+          channel: GRPC::Core::Channel.new(
+            'logging.googleapis.com', nil, creds))
       else
         unless @client.authorization.expired?
           begin
