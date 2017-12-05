@@ -20,6 +20,8 @@ require 'time'
 require 'yaml'
 require 'google/apis'
 require 'google/apis/logging_v2'
+require 'google/cloud/logging/v2'
+require 'google/gax'
 require 'google/logging/v2/logging_pb'
 require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
@@ -578,18 +580,16 @@ module Fluent
               [k.encode('utf-8'), convert_to_utf8(v)]
             end
 
-            write_request = Google::Logging::V2::WriteLogEntriesRequest.new(
+            entries_count = entries.length
+            client.write_log_entries(
+              entries,
               log_name: log_name,
               resource: Google::Api::MonitoredResource.new(
                 type: group_level_resource.type,
                 labels: group_level_resource.labels.to_h
               ),
-              labels: labels_utf8_pairs.to_h,
-              entries: entries
+              labels: labels_utf8_pairs.to_h
             )
-
-            entries_count = entries.length
-            client.write_log_entries(write_request)
             increment_successful_requests_count
             increment_ingested_entries_count(entries_count)
 
@@ -600,21 +600,24 @@ module Fluent
               @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
             end
 
-          rescue GRPC::BadStatus => error
+          rescue Google::Gax::GaxError => gax_error
+            # GRPC::BadStatus is wrapped in error.cause.
+            error = gax_error.cause
             increment_failed_requests_count(error.code)
+
             # See the mapping between HTTP status and gRPC status code at:
             # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
-            case error.code
+            case error
             # Server error, so retry via re-raising the error.
             when \
                 # HTTP status 500 (Internal Server Error).
-                GRPC::Core::StatusCodes::INTERNAL,
+                GRPC::Internal,
                 # HTTP status 501 (Not Implemented).
-                GRPC::Core::StatusCodes::UNIMPLEMENTED,
+                GRPC::Unimplemented,
                 # HTTP status 503 (Service Unavailable).
-                GRPC::Core::StatusCodes::UNAVAILABLE,
+                GRPC::Unavailable,
                 # HTTP status 504 (Gateway Timeout).
-                GRPC::Core::StatusCodes::DEADLINE_EXCEEDED
+                GRPC::DeadlineExceeded
               increment_retried_entries_count(entries_count, error.code)
               @log.debug "Retrying #{entries_count} log message(s) later.",
                          error: error.to_s, error_code: error.code.to_s
@@ -624,34 +627,34 @@ module Fluent
             # should not be retried.
             when \
                 # HTTP status 400 (Bad Request).
-                GRPC::Core::StatusCodes::INVALID_ARGUMENT,
+                GRPC::InvalidArgument,
                 # HTTP status 401 (Unauthorized).
                 # These are usually solved via a `gcloud auth` call, or by
                 # modifying the permissions on the Google Cloud project.
-                GRPC::Core::StatusCodes::UNAUTHENTICATED,
+                GRPC::Unauthenticated,
                 # HTTP status 403 (Forbidden).
-                GRPC::Core::StatusCodes::PERMISSION_DENIED,
+                GRPC::PermissionDenied,
                 # HTTP status 404 (Not Found).
-                GRPC::Core::StatusCodes::NOT_FOUND,
+                GRPC::NotFound,
                 # HTTP status 409 (Conflict).
-                GRPC::Core::StatusCodes::ABORTED,
+                GRPC::Aborted,
                 # HTTP status 412 (Precondition Failed).
-                GRPC::Core::StatusCodes::FAILED_PRECONDITION,
+                GRPC::FailedPrecondition,
                 # HTTP status 429 (Too Many Requests).
-                GRPC::Core::StatusCodes::RESOURCE_EXHAUSTED,
+                GRPC::ResourceExhausted,
                 # HTTP status 499 (Client Closed Request).
-                GRPC::Core::StatusCodes::CANCELLED,
+                GRPC::Cancelled,
                 # the remaining http codes in both 4xx and 5xx category.
                 # It's debatable whether to retry or drop these log entries.
                 # This decision is made to avoid retrying forever due to client
                 # errors.
-                GRPC::Core::StatusCodes::UNKNOWN
+                GRPC::Unknown
               increment_dropped_entries_count(entries_count, error.code)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
+
             else
-              # Assume this is a problem with the request itself and don't
-              # retry.
+              # Assume it is a problem with the request itself and don't retry.
               increment_dropped_entries_count(entries_count, error.code)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{entries_count} log message(s)",
@@ -1777,8 +1780,9 @@ module Fluent
           authentication.apply(a_hash, use_configured_scope: true)
         end)
         creds = ssl_creds.compose(creds)
-        @client = Google::Logging::V2::LoggingServiceV2::Stub.new(
-          'logging.googleapis.com', creds)
+        @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
+          channel: GRPC::Core::Channel.new(
+            'logging.googleapis.com', nil, creds))
       else
         unless @client.authorization.expired?
           begin
