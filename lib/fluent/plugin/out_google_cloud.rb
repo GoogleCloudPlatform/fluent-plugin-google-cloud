@@ -120,7 +120,6 @@ module Fluent
       DEFAULT_SOURCE_LOCATION_KEY =
         'logging.googleapis.com/sourceLocation'.freeze
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
-      DEFAULT_SPAN_ID_KEY = 'logging.googleapis.com/spanId'.freeze
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
@@ -233,7 +232,6 @@ module Fluent
     config_param :source_location_key, :string, :default =>
       DEFAULT_SOURCE_LOCATION_KEY
     config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
-    config_param :span_id_key, :string, :default => DEFAULT_SPAN_ID_KEY
 
     # Whether to try to detect if the record is a text log entry with JSON
     # content that needs to be parsed.
@@ -557,9 +555,6 @@ module Fluent
           # Get fully-qualified trace id for LogEntry "trace" field.
           fq_trace_id = record.delete(@trace_key)
           entry.trace = fq_trace_id if fq_trace_id
-
-          span_id = record.delete(@span_id_key)
-          entry.span_id = span_id if span_id
 
           set_log_entry_fields(record, entry)
           set_payload(entry_level_resource.type, record, entry, is_json)
