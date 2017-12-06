@@ -603,7 +603,6 @@ module Fluent
           rescue Google::Gax::GaxError => gax_error
             # GRPC::BadStatus is wrapped in error.cause.
             error = gax_error.cause
-            increment_failed_requests_count(error.code)
 
             # See the mapping between HTTP status and gRPC status code at:
             # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
