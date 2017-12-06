@@ -92,7 +92,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       [true, 16, 1, 1, [0, 1, 0, 1, 0]],
       # Single failed request that escalates without logs being dropped with
       # several entries.
-      [true, 13, 1, 2, [0, 1, 0, 0, 2]]
+      [true, 13, 1, 2, [0, 0, 0, 0, 2]]
     ].each do |should_fail, code, request_count, entry_count, metric_values|
       setup_prometheus
       (1..request_count).each do

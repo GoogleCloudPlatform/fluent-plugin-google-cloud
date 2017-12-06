@@ -603,7 +603,6 @@ module Fluent
           rescue Google::Gax::GaxError => gax_error
             # GRPC::BadStatus is wrapped in error.cause.
             error = gax_error.cause
-            increment_failed_requests_count(error.code)
 
             # See the mapping between HTTP status and gRPC status code at:
             # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
@@ -649,12 +648,14 @@ module Fluent
                 # This decision is made to avoid retrying forever due to client
                 # errors.
                 GRPC::Unknown
+              increment_failed_requests_count(error.code)
               increment_dropped_entries_count(entries_count, error.code)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error: error.to_s, error_code: error.code.to_s
 
             else
               # Assume it is a problem with the request itself and don't retry.
+              increment_failed_requests_count(error.code)
               increment_dropped_entries_count(entries_count, error.code)
               @log.error "Unknown response code #{error.code} from the "\
                          "server, dropping #{entries_count} log message(s)",
@@ -671,16 +672,10 @@ module Fluent
                 partial_success: @partial_success,
                 entries: entries)
             entries_count = entries.length
-
-            begin
-              client.write_entry_log_entries(
-                write_request,
-                options: { api_format_version: '2' }
-              )
-            rescue Google::Apis::Error => error
-              increment_failed_requests_count(error.status_code)
-              raise error
-            end
+            client.write_entry_log_entries(
+              write_request,
+              options: { api_format_version: '2' }
+            )
 
             increment_successful_requests_count
             increment_ingested_entries_count(entries_count)
@@ -703,6 +698,7 @@ module Fluent
             # 401 authorization error.
             # These are usually solved via a `gcloud auth` call, or by modifying
             # the permissions on the Google Cloud project.
+            increment_failed_requests_count(error.status_code)
             increment_dropped_entries_count(entries_count, error.status_code)
             @log.warn "Dropping #{entries_count} log message(s)",
                       error_class: error.class.to_s, error: error.to_s
@@ -712,6 +708,7 @@ module Fluent
             # request itself and should not be retried.
             error_details_map = construct_error_details_map(error)
             if error_details_map.empty?
+              increment_failed_requests_count(error.status_code)
               increment_dropped_entries_count(entries_count, error.status_code)
               @log.warn "Dropping #{entries_count} log message(s)",
                         error_class: error.class.to_s, error: error.to_s
@@ -724,6 +721,8 @@ module Fluent
                           error_code: "google.rpc.Code[#{error_code}]",
                           error: error_message
               end
+              # Consider partially successful requests successful.
+              increment_successful_requests_count
               increment_ingested_entries_count(entries_count)
             end
           end
