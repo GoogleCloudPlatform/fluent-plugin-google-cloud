@@ -1769,10 +1769,8 @@ module Fluent
     def api_client
       if @use_grpc
         ssl_creds = GRPC::Core::ChannelCredentials.new
-        authentication = Google::Auth.get_application_default(LOGGING_SCOPE)
-        creds = GRPC::Core::CallCredentials.new(lambda do |a_hash|
-          authentication.apply(a_hash, use_configured_scope: true)
-        end)
+        authentication = Google::Auth.get_application_default
+        creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
         creds = ssl_creds.compose(creds)
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
           channel: GRPC::Core::Channel.new(
@@ -1780,8 +1778,7 @@ module Fluent
       else
         unless @client.authorization.expired?
           begin
-            @client.authorization.fetch_access_token!(
-              use_configured_scope: true)
+            @client.authorization.fetch_access_token!
           rescue MultiJson::ParseError
             # Workaround an issue in the API client; just re-raise a more
             # descriptive error for the user (which will still cause a retry).
