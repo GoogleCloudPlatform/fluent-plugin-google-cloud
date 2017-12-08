@@ -776,6 +776,13 @@ module Fluent
             return Platform::EC2
           end
         end
+        open('http://' + METADATA_SERVICE_ADDR +
+                '/latest/meta-data/services/domain') do |f|
+          if f.read == 'amazonaws.com'
+            @log.info 'Detected EC2 platform'
+            return Platform::EC2
+          end
+        end
       rescue StandardError => e
         @log.error 'Failed to access metadata service: ', error: e
       end
