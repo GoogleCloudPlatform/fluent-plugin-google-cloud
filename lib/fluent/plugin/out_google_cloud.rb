@@ -656,6 +656,15 @@ module Fluent
                          "server, dropping #{entries_count} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
             end
+
+          # Got an unexpected error (not Google::Gax::GaxError) from the
+          # google-cloud-logging lib.
+          rescue StandardError => error
+            increment_failed_requests_count(error.code)
+            increment_dropped_entries_count(entries_count, error.code)
+            @log.error "Unexpected error type #{error.class.name} from the "\
+                       "client lib, dropping #{entries_count} log message(s)",
+                       error: error.to_s
           end
         else
           begin
