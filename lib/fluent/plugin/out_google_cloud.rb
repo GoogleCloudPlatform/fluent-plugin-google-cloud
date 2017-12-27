@@ -473,6 +473,7 @@ module Fluent
     def write(chunk)
       grouped_entries = group_log_entries_by_tag_and_local_resource_id(chunk)
 
+      requests_to_send = []
       grouped_entries.each do |(tag, local_resource_id), arr|
         entries = []
         group_level_resource, group_level_common_labels =
@@ -568,175 +569,187 @@ module Fluent
           tag, group_level_resource)}"
 
         # Does the actual write to the cloud logging api.
+        if @use_grpc
+          labels_utf8_pairs = group_level_common_labels.map do |k, v|
+            [k.encode('utf-8'), convert_to_utf8(v)]
+          end
+
+          requests_to_send << Google::Logging::V2::WriteLogEntriesRequest.new(
+            entries: entries,
+            log_name: log_name,
+            resource: Google::Api::MonitoredResource.new(
+              type: group_level_resource.type,
+              labels: group_level_resource.labels.to_h
+            ),
+            labels: labels_utf8_pairs.to_h)
+        else
+          requests_to_send << \
+            Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
+              log_name: log_name,
+              resource: group_level_resource,
+              labels: group_level_common_labels,
+              partial_success: @partial_success,
+              entries: entries)
+        end
+      end
+      requests_to_send.each do |request|
         client = api_client
         if @use_grpc
-          begin
-            labels_utf8_pairs = group_level_common_labels.map do |k, v|
-              [k.encode('utf-8'), convert_to_utf8(v)]
-            end
-
-            entries_count = entries.length
-            client.write_log_entries(
-              entries,
-              log_name: log_name,
-              resource: Google::Api::MonitoredResource.new(
-                type: group_level_resource.type,
-                labels: group_level_resource.labels.to_h
-              ),
-              labels: labels_utf8_pairs.to_h
-            )
-            increment_successful_requests_count
-            increment_ingested_entries_count(entries_count)
-
-            # Let the user explicitly know when the first call succeeded, to aid
-            # with verification and troubleshooting.
-            unless @successful_call
-              @successful_call = true
-              @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
-            end
-
-          rescue Google::Gax::GaxError => gax_error
-            # GRPC::BadStatus is wrapped in error.cause.
-            error = gax_error.cause
-
-            # See the mapping between HTTP status and gRPC status code at:
-            # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
-            case error
-            # Server error, so retry via re-raising the error.
-            when \
-                # HTTP status 500 (Internal Server Error).
-                GRPC::Internal,
-                # HTTP status 501 (Not Implemented).
-                GRPC::Unimplemented,
-                # HTTP status 503 (Service Unavailable).
-                GRPC::Unavailable,
-                # HTTP status 504 (Gateway Timeout).
-                GRPC::DeadlineExceeded
-              increment_retried_entries_count(entries_count, error.code)
-              @log.debug "Retrying #{entries_count} log message(s) later.",
-                         error: error.to_s, error_code: error.code.to_s
-              raise error
-
-            # Most client errors indicate a problem with the request itself and
-            # should not be retried.
-            when \
-                # HTTP status 400 (Bad Request).
-                GRPC::InvalidArgument,
-                # HTTP status 401 (Unauthorized).
-                # These are usually solved via a `gcloud auth` call, or by
-                # modifying the permissions on the Google Cloud project.
-                GRPC::Unauthenticated,
-                # HTTP status 403 (Forbidden).
-                GRPC::PermissionDenied,
-                # HTTP status 404 (Not Found).
-                GRPC::NotFound,
-                # HTTP status 409 (Conflict).
-                GRPC::Aborted,
-                # HTTP status 412 (Precondition Failed).
-                GRPC::FailedPrecondition,
-                # HTTP status 429 (Too Many Requests).
-                GRPC::ResourceExhausted,
-                # HTTP status 499 (Client Closed Request).
-                GRPC::Cancelled,
-                # the remaining http codes in both 4xx and 5xx category.
-                # It's debatable whether to retry or drop these log entries.
-                # This decision is made to avoid retrying forever due to client
-                # errors.
-                GRPC::Unknown
-              increment_failed_requests_count(error.code)
-              increment_dropped_entries_count(entries_count, error.code)
-              @log.warn "Dropping #{entries_count} log message(s)",
-                        error: error.to_s, error_code: error.code.to_s
-
-            else
-              # Assume it is a problem with the request itself and don't retry.
-              increment_failed_requests_count(error.code)
-              increment_dropped_entries_count(entries_count, error.code)
-              @log.error "Unknown response code #{error.code} from the" \
-                         " server, dropping #{entries_count} log message(s)",
-                         error: error.to_s, error_code: error.code.to_s
-            end
-
-          # Got an unexpected error (not Google::Gax::GaxError) from the
-          # google-cloud-logging lib.
-          rescue StandardError => error
-            increment_failed_requests_count(GRPC::Core::StatusCodes::UNKNOWN)
-            increment_dropped_entries_count(entries_count,
-                                            GRPC::Core::StatusCodes::UNKNOWN)
-            @log.error "Unexpected error type #{error.class.name} from the" \
-                       " client library, dropping #{entries_count}" \
-                       ' log message(s)',
-                       error: error.to_s
-          end
+          write_request_via_grpc(client, request)
         else
-          begin
-            write_request =
-              Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
-                log_name: log_name,
-                resource: group_level_resource,
-                labels: group_level_common_labels,
-                partial_success: @partial_success,
-                entries: entries)
-            entries_count = entries.length
-            client.write_entry_log_entries(
-              write_request,
-              options: { api_format_version: '2' }
-            )
-
-            increment_successful_requests_count
-            increment_ingested_entries_count(entries_count)
-
-            # Let the user explicitly know when the first call succeeded, to aid
-            # with verification and troubleshooting.
-            unless @successful_call
-              @successful_call = true
-              @log.info 'Successfully sent to Stackdriver Logging API.'
-            end
-
-          rescue Google::Apis::ServerError => error
-            # 5xx server errors. Retry via re-raising the error.
-            increment_retried_entries_count(entries_count, error.status_code)
-            @log.debug "Retrying #{entries_count} log message(s) later.",
-                       error: error.to_s, error_code: error.status_code.to_s
-            raise error
-
-          rescue Google::Apis::AuthorizationError => error
-            # 401 authorization error.
-            # These are usually solved via a `gcloud auth` call, or by modifying
-            # the permissions on the Google Cloud project.
-            increment_failed_requests_count(error.status_code)
-            increment_dropped_entries_count(entries_count, error.status_code)
-            @log.warn "Dropping #{entries_count} log message(s)",
-                      error_class: error.class.to_s, error: error.to_s
-
-          rescue Google::Apis::ClientError => error
-            # 4xx client errors. Most client errors indicate a problem with the
-            # request itself and should not be retried.
-            error_details_map = construct_error_details_map(error)
-            if error_details_map.empty?
-              increment_failed_requests_count(error.status_code)
-              increment_dropped_entries_count(entries_count, error.status_code)
-              @log.warn "Dropping #{entries_count} log message(s)",
-                        error_class: error.class.to_s, error: error.to_s
-            else
-              error_details_map.each do |(error_code, error_message), indexes|
-                partial_error_count = indexes.length
-                increment_dropped_entries_count(partial_error_count, error_code)
-                entries_count -= partial_error_count
-                @log.warn "Dropping #{partial_error_count} log message(s)",
-                          error_code: "google.rpc.Code[#{error_code}]",
-                          error: error_message
-              end
-              # Consider partially successful requests successful.
-              increment_successful_requests_count
-              increment_ingested_entries_count(entries_count)
-            end
-          end
+          write_request_via_http(client, request)
         end
       end
     end
 
     private
+
+    def write_request_via_grpc(client, request)
+      entries_count = request.entries.length
+      client.write_log_entries(
+        request.entries.to_a,
+        log_name: request.log_name,
+        resource: request.resource,
+        labels: request.labels.to_h
+      )
+      increment_successful_requests_count
+      increment_ingested_entries_count(entries_count)
+
+      # Let the user explicitly know when the first call succeeded, to
+      # aid with verification and troubleshooting.
+      unless @successful_call
+        @successful_call = true
+        @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
+      end
+
+    rescue Google::Gax::GaxError => gax_error
+      # GRPC::BadStatus is wrapped in error.cause.
+      error = gax_error.cause
+
+      # See the mapping between HTTP status and gRPC status code at:
+      # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
+      case error
+      # Server error, so retry via re-raising the error.
+      when \
+          # HTTP status 500 (Internal Server Error).
+          GRPC::Internal,
+          # HTTP status 501 (Not Implemented).
+          GRPC::Unimplemented,
+          # HTTP status 503 (Service Unavailable).
+          GRPC::Unavailable,
+          # HTTP status 504 (Gateway Timeout).
+          GRPC::DeadlineExceeded
+        increment_retried_entries_count(entries_count, error.code)
+        @log.debug "Retrying #{entries_count} log message(s) later.",
+                   error: error.to_s, error_code: error.code.to_s
+        raise error
+
+      # Most client errors indicate a problem with the request itself and
+      # should not be retried.
+      when \
+          # HTTP status 400 (Bad Request).
+          GRPC::InvalidArgument,
+          # HTTP status 401 (Unauthorized).
+          # These are usually solved via a `gcloud auth` call, or by
+          # modifying the permissions on the Google Cloud project.
+          GRPC::Unauthenticated,
+          # HTTP status 403 (Forbidden).
+          GRPC::PermissionDenied,
+          # HTTP status 404 (Not Found).
+          GRPC::NotFound,
+          # HTTP status 409 (Conflict).
+          GRPC::Aborted,
+          # HTTP status 412 (Precondition Failed).
+          GRPC::FailedPrecondition,
+          # HTTP status 429 (Too Many Requests).
+          GRPC::ResourceExhausted,
+          # HTTP status 499 (Client Closed Request).
+          GRPC::Cancelled,
+          # the remaining http codes in both 4xx and 5xx category.
+          # It's debatable whether to retry or drop these log entries.
+          # This decision is made to avoid retrying forever due to
+          # client errors.
+          GRPC::Unknown
+        increment_failed_requests_count(error.code)
+        increment_dropped_entries_count(entries_count, error.code)
+        @log.warn "Dropping #{entries_count} log message(s)",
+                  error: error.to_s, error_code: error.code.to_s
+
+      else
+        # Assume it's a problem with the request itself and don't retry.
+        increment_failed_requests_count(error.code)
+        increment_dropped_entries_count(entries_count, error.code)
+        @log.error "Unknown response code #{error.code} from the server," \
+                   " dropping #{entries_count} log message(s)",
+                   error: error.to_s, error_code: error.code.to_s
+      end
+
+    # Got an unexpected error (not Google::Gax::GaxError) from the
+    # google-cloud-logging lib.
+    rescue StandardError => error
+      increment_failed_requests_count(GRPC::Core::StatusCodes::UNKNOWN)
+      increment_dropped_entries_count(entries_count,
+                                      GRPC::Core::StatusCodes::UNKNOWN)
+      @log.error "Unexpected error type #{error.class.name} from the client" \
+                 " library, dropping #{entries_count} log message(s)",
+                 error: error.to_s
+    end
+
+    def write_request_via_http(client, request)
+      entries_count = request.entries.length
+      client.write_entry_log_entries(
+        request,
+        options: { api_format_version: '2' }
+      )
+      increment_successful_requests_count
+      increment_ingested_entries_count(entries_count)
+
+      # Let the user explicitly know when the first call succeeded, to aid
+      # with verification and troubleshooting.
+      unless @successful_call
+        @successful_call = true
+        @log.info 'Successfully sent to Stackdriver Logging API.'
+      end
+
+    rescue Google::Apis::ServerError => error
+      # 5xx server errors. Retry via re-raising the error.
+      increment_retried_entries_count(entries_count, error.status_code)
+      @log.debug "Retrying #{entries_count} log message(s) later.",
+                 error: error.to_s, error_code: error.status_code.to_s
+      raise error
+
+    rescue Google::Apis::AuthorizationError => error
+      # 401 authorization error.
+      # These are usually solved via a `gcloud auth` call, or by modifying
+      # the permissions on the Google Cloud project.
+      increment_failed_requests_count(error.status_code)
+      increment_dropped_entries_count(entries_count, error.status_code)
+      @log.warn "Dropping #{entries_count} log message(s)",
+                error_class: error.class.to_s, error: error.to_s
+
+    rescue Google::Apis::ClientError => error
+      # 4xx client errors. Most client errors indicate a problem with the
+      # request itself and should not be retried.
+      error_details_map = construct_error_details_map(error)
+      if error_details_map.empty?
+        increment_failed_requests_count(error.status_code)
+        increment_dropped_entries_count(entries_count, error.status_code)
+        @log.warn "Dropping #{entries_count} log message(s)",
+                  error_class: error.class.to_s, error: error.to_s
+      else
+        error_details_map.each do |(error_code, error_message), indexes|
+          partial_error_count = indexes.length
+          increment_dropped_entries_count(partial_error_count, error_code)
+          entries_count -= partial_error_count
+          @log.warn "Dropping #{partial_error_count} log message(s)",
+                    error_code: "google.rpc.Code[#{error_code}]",
+                    error: error_message
+        end
+        # Consider partially successful requests successful.
+        increment_successful_requests_count
+        increment_ingested_entries_count(entries_count)
+      end
+    end
 
     def parse_json_or_nil(input)
       # Only here to please rubocop...
