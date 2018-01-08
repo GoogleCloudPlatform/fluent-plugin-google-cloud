@@ -652,10 +652,21 @@ module Fluent
               # Assume it is a problem with the request itself and don't retry.
               increment_failed_requests_count(error.code)
               increment_dropped_entries_count(entries_count, error.code)
-              @log.error "Unknown response code #{error.code} from the "\
-                         "server, dropping #{entries_count} log message(s)",
+              @log.error "Unknown response code #{error.code} from the" \
+                         " server, dropping #{entries_count} log message(s)",
                          error: error.to_s, error_code: error.code.to_s
             end
+
+          # Got an unexpected error (not Google::Gax::GaxError) from the
+          # google-cloud-logging lib.
+          rescue StandardError => error
+            increment_failed_requests_count(GRPC::Core::StatusCodes::UNKNOWN)
+            increment_dropped_entries_count(entries_count,
+                                            GRPC::Core::StatusCodes::UNKNOWN)
+            @log.error "Unexpected error type #{error.class.name} from the" \
+                       " client library, dropping #{entries_count}" \
+                       ' log message(s)',
+                       error: error.to_s
           end
         else
           begin
