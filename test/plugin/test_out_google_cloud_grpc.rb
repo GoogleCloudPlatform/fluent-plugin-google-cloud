@@ -15,6 +15,7 @@
 require 'grpc'
 
 require_relative 'base_test'
+require_relative 'test_driver'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
@@ -130,6 +131,29 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_log_name_when_split_logs_by_tag_disabled
+    setup_gce_metadata_stubs
+    log_entries_count = 5
+    setup_prometheus
+    setup_logging_stubs do
+      d = create_driver(DISABLE_SPLIT_LOGS_BY_TAG_CONFIG +
+                        PROMETHEUS_ENABLE_CONFIG, 'test', true)
+      log_entries_count.times do |i|
+        d.emit("tag#{i}", 'message' => log_entry(0))
+      end
+      d.run
+    end
+    emit_index = 0
+    @requests_sent.each do |request_sent|
+      assert_equal '', request_sent.log_name
+      request_sent.entries.each do |entry|
+        assert_equal "projects/test-project-id/logs/tag#{emit_index}",
+                     entry.log_name
+        emit_index += 1
+      end
+    end
+  end
+
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
@@ -219,14 +243,30 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   ).freeze
 
+  def use_grpc
+    true
+  end
+
+  def ok_status_code
+    GRPC::Core::StatusCodes::OK
+  end
+
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be
   # passed in to construct the mock used by the test driver.
-  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
+                    tag = 'test',
+                    multi_tags = false)
     conf += USE_GRPC_CONFIG
-    Fluent::Test::BufferedOutputTestDriver.new(
-      GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag).configure(conf, true)
+    driver = if multi_tags
+               Fluent::Test::MultiTagBufferedOutputTestDriver.new(
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub))
+             else
+               Fluent::Test::BufferedOutputTestDriver.new(
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag)
+             end
+    driver.configure(conf, true)
   end
 
   # Google Cloud Fluent output stub with grpc mock.

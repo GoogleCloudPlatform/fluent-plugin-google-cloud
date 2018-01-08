@@ -605,6 +605,42 @@ module BaseTest
     end
   end
 
+  def test_configure_split_logs_by_tag
+    setup_gce_metadata_stubs
+    {
+      APPLICATION_DEFAULT_CONFIG => true,
+      DISABLE_SPLIT_LOGS_BY_TAG_CONFIG => false
+    }.each do |(config, split_logs_by_tag)|
+      d = create_driver(config)
+      assert_equal split_logs_by_tag,
+                   d.instance.instance_variable_get(:@split_logs_by_tag)
+    end
+  end
+
+  def test_split_logs_by_tag
+    setup_gce_metadata_stubs
+    log_entries_count = 5
+    [
+      [APPLICATION_DEFAULT_CONFIG, log_entries_count, log_entries_count],
+      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1, log_entries_count]
+    ].each do |(config, successful_requests_count, ingested_entries_count)|
+      setup_prometheus
+      setup_logging_stubs do
+        d = create_driver(config + PROMETHEUS_ENABLE_CONFIG, 'test', true)
+        log_entries_count.times do |i|
+          d.emit("tag#{i}", 'message' => log_entry(0))
+        end
+        d.run
+      end
+      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                     successful_requests_count,
+                                     grpc: use_grpc, code: ok_status_code)
+      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
+                                     ingested_entries_count,
+                                     grpc: use_grpc, code: ok_status_code)
+    end
+  end
+
   def test_timestamps
     setup_gce_metadata_stubs
     current_time = Time.now
@@ -1751,6 +1787,16 @@ module BaseTest
   end
 
   # This module expects the methods below to be overridden.
+
+  # Whether use_grpc is enabled.
+  def use_grpc
+    _undefined
+  end
+
+  # Response code of OK status.
+  def ok_status_code
+    _undefined
+  end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(_conf = APPLICATION_DEFAULT_CONFIG, _tag = 'test')

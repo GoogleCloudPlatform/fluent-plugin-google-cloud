@@ -13,6 +13,7 @@
 # limitations under the License.
 
 require_relative 'base_test'
+require_relative 'test_driver'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
@@ -152,6 +153,29 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       assert_prometheus_metric_value(:stackdriver_retried_entries_count,
                                      retried_entries_count,
                                      grpc: false, code: code)
+    end
+  end
+
+  def test_log_name_when_split_logs_by_tag_disabled
+    setup_gce_metadata_stubs
+    log_entries_count = 5
+    setup_prometheus
+    setup_logging_stubs do
+      d = create_driver(DISABLE_SPLIT_LOGS_BY_TAG_CONFIG +
+                        PROMETHEUS_ENABLE_CONFIG, 'test', true)
+      log_entries_count.times do |i|
+        d.emit("tag#{i}", 'message' => log_entry(0))
+      end
+      d.run
+      emit_index = 0
+      @logs_sent.each do |request_sent|
+        assert_equal '', request_sent['logName']
+        request_sent['entries'].each do |entry|
+          assert_equal "projects/test-project-id/logs/tag#{emit_index}",
+                       entry['logName']
+          emit_index += 1
+        end
+      end
     end
   end
 
@@ -307,10 +331,26 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     yield
   end
 
+  def use_grpc
+    false
+  end
+
+  def ok_status_code
+    200
+  end
+
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
-  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
-    Fluent::Test::BufferedOutputTestDriver.new(
-      Fluent::GoogleCloudOutput, tag).configure(conf, true)
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
+                    tag = 'test',
+                    multi_tags = false)
+    driver = if multi_tags
+               Fluent::Test::MultiTagBufferedOutputTestDriver.new(
+                 Fluent::GoogleCloudOutput)
+             else
+               Fluent::Test::BufferedOutputTestDriver.new(
+                 Fluent::GoogleCloudOutput, tag)
+             end
+    driver.configure(conf, true)
   end
 
   # Verify the number and the content of the log entries match the expectation.
