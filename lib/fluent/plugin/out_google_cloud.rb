@@ -570,10 +570,6 @@ module Fluent
 
         # Does the actual write to the cloud logging api.
         if @use_grpc
-          labels_utf8_pairs = group_level_common_labels.map do |k, v|
-            [k.encode('utf-8'), convert_to_utf8(v)]
-          end
-
           requests_to_send << Google::Logging::V2::WriteLogEntriesRequest.new(
             entries: entries,
             log_name: log_name,
@@ -581,15 +577,16 @@ module Fluent
               type: group_level_resource.type,
               labels: group_level_resource.labels.to_h
             ),
-            labels: labels_utf8_pairs.to_h)
+            labels: group_level_common_labels,
+            partial_success: @partial_success)
         else
           requests_to_send << \
             Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
+              entries: entries,
               log_name: log_name,
               resource: group_level_resource,
               labels: group_level_common_labels,
-              partial_success: @partial_success,
-              entries: entries)
+              partial_success: @partial_success)
         end
       end
       requests_to_send.each do |request|
@@ -606,11 +603,14 @@ module Fluent
 
     def write_request_via_grpc(client, request)
       entries_count = request.entries.length
+      labels_utf8_pairs = request.labels.map do |k, v|
+        [k.encode('utf-8'), convert_to_utf8(v)]
+      end.to_h
       client.write_log_entries(
         request.entries.to_a,
         log_name: request.log_name,
         resource: request.resource,
-        labels: request.labels.to_h
+        labels: labels_utf8_pairs
       )
       increment_successful_requests_count
       increment_ingested_entries_count(entries_count)
