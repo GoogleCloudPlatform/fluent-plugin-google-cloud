@@ -568,29 +568,18 @@ module Fluent
         log_name = "projects/#{@project_id}/logs/#{log_name(
           tag, group_level_resource)}"
 
-        # Does the actual write to the cloud logging api.
-        if @use_grpc
-          requests_to_send << Google::Logging::V2::WriteLogEntriesRequest.new(
-            entries: entries,
-            log_name: log_name,
-            resource: Google::Api::MonitoredResource.new(
-              type: group_level_resource.type,
-              labels: group_level_resource.labels.to_h
-            ),
-            labels: group_level_common_labels,
-            partial_success: @partial_success)
-        else
-          requests_to_send << \
-            Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
-              entries: entries,
-              log_name: log_name,
-              resource: group_level_resource,
-              labels: group_level_common_labels,
-              partial_success: @partial_success)
-        end
+        # Pile up the requests in the REST format. The gRPC path will decompose
+        # them later.
+        requests_to_send << Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
+          entries: entries,
+          log_name: log_name,
+          resource: group_level_resource,
+          labels: group_level_common_labels,
+          partial_success: @partial_success)
       end
       requests_to_send.each do |request|
         client = api_client
+        # Does the actual write to the cloud logging api.
         if @use_grpc
           write_request_via_grpc(client, request)
         else
@@ -607,9 +596,13 @@ module Fluent
         [k.encode('utf-8'), convert_to_utf8(v)]
       end.to_h
       client.write_log_entries(
-        request.entries.to_a,
+        # Ignore partial_success for gRPC path.
+        request.entries,
         log_name: request.log_name,
-        resource: request.resource,
+        resource: Google::Api::MonitoredResource.new(
+          type: request.resource.type,
+          labels: request.resource.labels.to_h
+        ),
         labels: labels_utf8_pairs
       )
       increment_successful_requests_count
