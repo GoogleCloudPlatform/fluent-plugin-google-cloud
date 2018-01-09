@@ -580,15 +580,15 @@ module Fluent
       requests_to_send.each do |request|
         client = api_client
         # Does the actual write to the cloud logging api.
-        if @use_grpc
-          write_request_via_grpc(client, request)
-        else
-          write_request_via_http(client, request)
-        end
+        send(write_request_function, client, request)
       end
     end
 
     private
+
+    def write_request_function
+      @use_grpc ? 'write_request_via_grpc' : 'write_request_via_http'
+    end
 
     def write_request_via_grpc(client, request)
       entries_count = request.entries.length
