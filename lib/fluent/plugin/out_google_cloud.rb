@@ -578,9 +578,8 @@ module Fluent
           partial_success: @partial_success)
       end
       requests_to_send.each do |request|
-        client = api_client
         # Does the actual write to the cloud logging api.
-        send(write_request_function, client, request)
+        send(write_request_function, request)
       end
     end
 
@@ -590,7 +589,8 @@ module Fluent
       @use_grpc ? 'write_request_via_grpc' : 'write_request_via_http'
     end
 
-    def write_request_via_grpc(client, request)
+    def write_request_via_grpc(request)
+      client = api_client
       entries_count = request.entries.length
       utf8_encoded_labels = request.labels.map do |k, v|
         [k.encode('utf-8'), convert_to_utf8(v)]
@@ -688,7 +688,8 @@ module Fluent
                  error: error.to_s
     end
 
-    def write_request_via_http(client, request)
+    def write_request_via_http(request)
+      client = api_client
       entries_count = request.entries.length
       client.write_entry_log_entries(
         request,
