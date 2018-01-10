@@ -295,13 +295,13 @@ module Fluent
     config_param :labels, :hash, :default => nil
 
     # Whether to use gRPC instead of REST/JSON to communicate to the
-    # Cloud Logging API.
+    # Stackdriver Logging API.
     config_param :use_grpc, :bool, :default => false
 
     # Whether valid entries should be written even if some other entries fail
     # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
-    # the Cloud Logging API. This is highly recommended. Right now this only
-    # works with the REST path (use_grpc = false).
+    # the Stackdriver Logging API. This is highly recommended. Right now this
+    # only works with the REST path (use_grpc = false).
     config_param :partial_success, :bool, :default => false
 
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
@@ -578,7 +578,7 @@ module Fluent
           partial_success: @partial_success)
       end
       requests_to_send.each do |request|
-        # Does the actual write to the cloud logging api.
+        # Does the actual write to the Stackdriver Logging API.
         send(write_request_function, request)
       end
     end
