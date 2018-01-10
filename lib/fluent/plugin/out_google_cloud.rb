@@ -577,22 +577,18 @@ module Fluent
           labels: group_level_common_labels,
           partial_success: @partial_success)
       end
+      # Does the actual write to the Stackdriver Logging API.
       write_request = method(if @use_grpc
                                :write_request_via_grpc
                              else
                                :write_request_via_http
                              end)
       requests_to_send.each do |request|
-        # Does the actual write to the Stackdriver Logging API.
         write_request.call(request)
       end
     end
 
     private
-
-    def write_request_function
-      @use_grpc ? 'write_request_via_grpc' : 'write_request_via_http'
-    end
 
     def write_request_via_grpc(request)
       client = api_client
