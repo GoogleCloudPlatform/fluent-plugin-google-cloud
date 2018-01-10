@@ -592,7 +592,7 @@ module Fluent
 
     def write_request_via_grpc(client, request)
       entries_count = request.entries.length
-      labels_utf8_pairs = request.labels.map do |k, v|
+      utf8_encoded_labels = request.labels.map do |k, v|
         [k.encode('utf-8'), convert_to_utf8(v)]
       end.to_h
       client.write_log_entries(
@@ -603,7 +603,7 @@ module Fluent
           type: request.resource.type,
           labels: request.resource.labels.to_h
         ),
-        labels: labels_utf8_pairs
+        labels: utf8_encoded_labels
       )
       increment_successful_requests_count
       increment_ingested_entries_count(entries_count)
