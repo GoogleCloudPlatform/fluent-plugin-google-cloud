@@ -453,6 +453,16 @@ module Fluent
       @resource.labels.freeze
       @common_labels.freeze
 
+      if @use_grpc
+        @construct_log_entry = method(:construct_log_entry_in_grpc_format)
+        @construct_log_request = method(:construct_log_request_in_grpc_format)
+        @write_request = method(:write_request_via_grpc)
+      else
+        @construct_log_entry = method(:construct_log_entry_in_rest_format)
+        @construct_log_request = method(:construct_log_request_in_rest_format)
+        @write_request = method(:write_request_via_rest)
+      end
+
       # Log an informational message containing the Logs viewer URL
       @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
                 "viewer?project=#{@project_id}&resource=#{@resource.type}/",
@@ -518,40 +528,11 @@ module Fluent
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
 
-          if @use_grpc
-            entry = Google::Logging::V2::LogEntry.new(
-              labels: entry_level_common_labels,
-              resource: Google::Api::MonitoredResource.new(
-                type: entry_level_resource.type,
-                labels: entry_level_resource.labels.to_h
-              ),
-              severity: grpc_severity(severity)
-            )
-            # If "seconds" is null or not an integer, we will omit the timestamp
-            # field and defer the decision on how to handle it to the downstream
-            # Logging API. If "nanos" is null or not an integer, it will be set
-            # to 0.
-            if ts_secs.is_a?(Integer)
-              ts_nanos = 0 unless ts_nanos.is_a?(Integer)
-              entry.timestamp = Google::Protobuf::Timestamp.new(
-                seconds: ts_secs,
-                nanos: ts_nanos
-              )
-            end
-          else
-            # Remove the labels if we didn't populate them with anything.
-            entry_level_resource.labels = nil if
-              entry_level_resource.labels.empty?
-            entry = Google::Apis::LoggingV2::LogEntry.new(
-              labels: entry_level_common_labels,
-              resource: entry_level_resource,
-              severity: severity,
-              timestamp: {
-                seconds: ts_secs,
-                nanos: ts_nanos
-              }
-            )
-          end
+          entry = @construct_log_entry.call(entry_level_common_labels,
+                                            entry_level_resource,
+                                            severity,
+                                            ts_secs,
+                                            ts_nanos)
 
           # Get fully-qualified trace id for LogEntry "trace" field.
           fq_trace_id = record.delete(@trace_key)
@@ -568,43 +549,104 @@ module Fluent
         log_name = "projects/#{@project_id}/logs/#{log_name(
           tag, group_level_resource)}"
 
-        # Pile up the requests in the REST format. The gRPC path will decompose
-        # them later.
-        requests_to_send << Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
-          entries: entries,
-          log_name: log_name,
-          resource: group_level_resource,
-          labels: group_level_common_labels,
-          partial_success: @partial_success)
+        requests_to_send << @construct_log_request.call(
+          entries,
+          log_name,
+          group_level_resource,
+          group_level_common_labels)
       end
-      # Does the actual write to the Stackdriver Logging API.
-      write_request = method(if @use_grpc
-                               :write_request_via_grpc
-                             else
-                               :write_request_via_http
-                             end)
+
       requests_to_send.each do |request|
-        write_request.call(request)
+        @write_request.call(request)
       end
     end
 
     private
 
+    def construct_log_entry_in_grpc_format(common_labels,
+                                           resource,
+                                           severity,
+                                           ts_secs,
+                                           ts_nanos)
+      entry = Google::Logging::V2::LogEntry.new(
+        labels: common_labels,
+        resource: Google::Api::MonitoredResource.new(
+          type: resource.type,
+          labels: resource.labels.to_h
+        ),
+        severity: grpc_severity(severity)
+      )
+      # If "seconds" is null or not an integer, we will omit the timestamp
+      # field and defer the decision on how to handle it to the downstream
+      # Logging API. If "nanos" is null or not an integer, it will be set
+      # to 0.
+      if ts_secs.is_a?(Integer)
+        ts_nanos = 0 unless ts_nanos.is_a?(Integer)
+        entry.timestamp = Google::Protobuf::Timestamp.new(
+          seconds: ts_secs,
+          nanos: ts_nanos
+        )
+      end
+      entry
+    end
+
+    def construct_log_entry_in_rest_format(common_labels,
+                                           resource,
+                                           severity,
+                                           ts_secs,
+                                           ts_nanos)
+      # Remove the labels if we didn't populate them with anything.
+      resource.labels = nil if resource.labels.empty?
+      Google::Apis::LoggingV2::LogEntry.new(
+        labels: common_labels,
+        resource: resource,
+        severity: severity,
+        timestamp: {
+          seconds: ts_secs,
+          nanos: ts_nanos
+        }
+      )
+    end
+
+    def construct_log_request_in_grpc_format(entries,
+                                             log_name,
+                                             resource,
+                                             labels)
+      utf8_encoded_labels = labels.map do |k, v|
+        [k.encode('utf-8'), convert_to_utf8(v)]
+      end.to_h
+      Google::Logging::V2::WriteLogEntriesRequest.new(
+        entries: entries,
+        log_name: log_name,
+        resource: Google::Api::MonitoredResource.new(
+          type: resource.type,
+          labels: resource.labels.to_h
+        ),
+        labels: utf8_encoded_labels,
+        partial_success: @partial_success)
+    end
+
+    def construct_log_request_in_rest_format(entries,
+                                             log_name,
+                                             resource,
+                                             labels)
+      Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
+        entries: entries,
+        log_name: log_name,
+        resource: resource,
+        labels: labels,
+        partial_success: @partial_success)
+    end
+
     def write_request_via_grpc(request)
       client = api_client
       entries_count = request.entries.length
-      utf8_encoded_labels = request.labels.map do |k, v|
-        [k.encode('utf-8'), convert_to_utf8(v)]
-      end.to_h
       client.write_log_entries(
         # Ignore partial_success for gRPC path.
         request.entries,
         log_name: request.log_name,
-        resource: Google::Api::MonitoredResource.new(
-          type: request.resource.type,
-          labels: request.resource.labels.to_h
-        ),
-        labels: utf8_encoded_labels
+        resource: request.resource,
+        labels: request.labels.to_h
       )
       increment_successful_requests_count
       increment_ingested_entries_count(entries_count)
@@ -689,7 +731,7 @@ module Fluent
                  error: error.to_s
     end
 
-    def write_request_via_http(request)
+    def write_request_via_rest(request)
       client = api_client
       entries_count = request.entries.length
       client.write_entry_log_entries(
