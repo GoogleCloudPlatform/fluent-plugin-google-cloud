@@ -455,11 +455,9 @@ module Fluent
 
       if @use_grpc
         @construct_log_entry = method(:construct_log_entry_in_grpc_format)
-        @construct_log_request = method(:construct_log_request_in_grpc_format)
         @write_request = method(:write_request_via_grpc)
       else
         @construct_log_entry = method(:construct_log_entry_in_rest_format)
-        @construct_log_request = method(:construct_log_request_in_rest_format)
         @write_request = method(:write_request_via_rest)
       end
 
@@ -549,11 +547,12 @@ module Fluent
         log_name = "projects/#{@project_id}/logs/#{log_name(
           tag, group_level_resource)}"
 
-        requests_to_send << @construct_log_request.call(
-          entries,
-          log_name,
-          group_level_resource,
-          group_level_common_labels)
+        requests_to_send << {
+          'entries' => entries,
+          'log_name' => log_name,
+          'resource' => group_level_resource,
+          'labels' => group_level_common_labels
+        }
       end
 
       requests_to_send.each do |request|
@@ -608,45 +607,20 @@ module Fluent
       )
     end
 
-    def construct_log_request_in_grpc_format(entries,
-                                             log_name,
-                                             resource,
-                                             labels)
-      utf8_encoded_labels = labels.map do |k, v|
-        [k.encode('utf-8'), convert_to_utf8(v)]
-      end.to_h
-      Google::Logging::V2::WriteLogEntriesRequest.new(
-        entries: entries,
-        log_name: log_name,
-        resource: Google::Api::MonitoredResource.new(
-          type: resource.type,
-          labels: resource.labels.to_h
-        ),
-        labels: utf8_encoded_labels,
-        partial_success: @partial_success)
-    end
-
-    def construct_log_request_in_rest_format(entries,
-                                             log_name,
-                                             resource,
-                                             labels)
-      Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
-        entries: entries,
-        log_name: log_name,
-        resource: resource,
-        labels: labels,
-        partial_success: @partial_success)
-    end
-
     def write_request_via_grpc(request)
       client = api_client
-      entries_count = request.entries.length
+      entries_count = request['entries'].length
       client.write_log_entries(
         # Ignore partial_success for gRPC path.
-        request.entries,
-        log_name: request.log_name,
-        resource: request.resource,
-        labels: request.labels.to_h
+        request['entries'],
+        log_name: request['log_name'],
+        resource: Google::Api::MonitoredResource.new(
+          type: request['resource'].type,
+          labels: request['resource'].labels.to_h
+        ),
+        labels: request['labels'].map do |k, v|
+          [k.encode('utf-8'), convert_to_utf8(v)]
+        end.to_h
       )
       increment_successful_requests_count
       increment_ingested_entries_count(entries_count)
@@ -733,9 +707,15 @@ module Fluent
 
     def write_request_via_rest(request)
       client = api_client
-      entries_count = request.entries.length
+      entries_count = request['entries'].length
       client.write_entry_log_entries(
-        request,
+        Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
+          entries: request['entries'],
+          log_name: request['log_name'],
+          resource: request['resource'],
+          labels: request['labels'],
+          partial_success: @partial_success
+        ),
         options: { api_format_version: '2' }
       )
       increment_successful_requests_count
