@@ -6,6 +6,7 @@
 # versions of RuboCop, may require this file to be generated again.
 
 AllCops:
+  TargetRubyVersion: 2.1
   Exclude:
     # Generated files.
     - lib/google/**/*
