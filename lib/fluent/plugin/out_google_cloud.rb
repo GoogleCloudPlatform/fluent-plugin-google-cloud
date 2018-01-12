@@ -548,10 +548,10 @@ module Fluent
           tag, group_level_resource)}"
 
         requests_to_send << {
-          'entries' => entries,
-          'log_name' => log_name,
-          'resource' => group_level_resource,
-          'labels' => group_level_common_labels
+          entries: entries,
+          log_name: log_name,
+          resource: group_level_resource,
+          labels: group_level_common_labels
         }
       end
 
@@ -562,13 +562,13 @@ module Fluent
 
     private
 
-    def construct_log_entry_in_grpc_format(common_labels,
+    def construct_log_entry_in_grpc_format(labels,
                                            resource,
                                            severity,
                                            ts_secs,
                                            ts_nanos)
       entry = Google::Logging::V2::LogEntry.new(
-        labels: common_labels,
+        labels: labels,
         resource: Google::Api::MonitoredResource.new(
           type: resource.type,
           labels: resource.labels.to_h
@@ -589,7 +589,7 @@ module Fluent
       entry
     end
 
-    def construct_log_entry_in_rest_format(common_labels,
+    def construct_log_entry_in_rest_format(labels,
                                            resource,
                                            severity,
                                            ts_secs,
@@ -597,7 +597,7 @@ module Fluent
       # Remove the labels if we didn't populate them with anything.
       resource.labels = nil if resource.labels.empty?
       Google::Apis::LoggingV2::LogEntry.new(
-        labels: common_labels,
+        labels: labels,
         resource: resource,
         severity: severity,
         timestamp: {
@@ -607,18 +607,18 @@ module Fluent
       )
     end
 
-    def write_request_via_grpc(request)
+    def write_request_via_grpc(entries:, log_name:, resource:, labels:)
       client = api_client
-      entries_count = request['entries'].length
+      entries_count = entries.length
       client.write_log_entries(
         # Ignore partial_success for gRPC path.
-        request['entries'],
-        log_name: request['log_name'],
+        entries,
+        log_name: log_name,
         resource: Google::Api::MonitoredResource.new(
-          type: request['resource'].type,
-          labels: request['resource'].labels.to_h
+          type: resource.type,
+          labels: resource.labels.to_h
         ),
-        labels: request['labels'].map do |k, v|
+        labels: labels.map do |k, v|
           [k.encode('utf-8'), convert_to_utf8(v)]
         end.to_h
       )
@@ -705,15 +705,15 @@ module Fluent
                  error: error.to_s
     end
 
-    def write_request_via_rest(request)
+    def write_request_via_rest(entries:, log_name:, resource:, labels:)
       client = api_client
-      entries_count = request['entries'].length
+      entries_count = entries.length
       client.write_entry_log_entries(
         Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
-          entries: request['entries'],
-          log_name: request['log_name'],
-          resource: request['resource'],
-          labels: request['labels'],
+          entries: entries,
+          log_name: log_name,
+          resource: resource,
+          labels: labels,
           partial_success: @partial_success
         ),
         options: { api_format_version: '2' }
