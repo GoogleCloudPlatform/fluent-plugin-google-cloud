@@ -156,29 +156,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  def test_log_name_when_split_logs_by_tag_disabled
-    setup_gce_metadata_stubs
-    log_entries_count = 5
-    setup_prometheus
-    setup_logging_stubs do
-      d = create_driver(DISABLE_SPLIT_LOGS_BY_TAG_CONFIG +
-                        PROMETHEUS_ENABLE_CONFIG, 'test', true)
-      log_entries_count.times do |i|
-        d.emit("tag#{i}", 'message' => log_entry(0))
-      end
-      d.run
-      emit_index = 0
-      @logs_sent.each do |request_sent|
-        assert_equal '', request_sent['logName']
-        request_sent['entries'].each do |entry|
-          assert_equal "projects/test-project-id/logs/tag#{emit_index}",
-                       entry['logName']
-          emit_index += 1
-        end
-      end
-    end
-  end
-
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
@@ -353,10 +330,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     driver.configure(conf, true)
   end
 
-  # Verify the number and the content of the log entries match the expectation.
-  # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
-    verify_json_log_entries(n, params, payload_type, &block)
+  def jsonify_log_entries
   end
 
   # For an optional field with default values, Protobuf omits the field when it

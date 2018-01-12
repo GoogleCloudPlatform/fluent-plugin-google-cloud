@@ -641,6 +641,30 @@ module BaseTest
     end
   end
 
+  def test_log_name_when_split_logs_by_tag_disabled
+    setup_gce_metadata_stubs
+    log_entries_count = 5
+    setup_prometheus
+    setup_logging_stubs do
+      d = create_driver(DISABLE_SPLIT_LOGS_BY_TAG_CONFIG +
+                        PROMETHEUS_ENABLE_CONFIG, 'test', true)
+      log_entries_count.times do |i|
+        d.emit("tag#{i}", 'message' => log_entry(0))
+      end
+      d.run
+    end
+    emit_index = 0
+    jsonify_log_entries
+    @logs_sent.each do |request_sent|
+      assert_equal '', request_sent['logName']
+      request_sent['entries'].each do |entry|
+        assert_equal "projects/test-project-id/logs/tag#{emit_index}",
+                     entry['logName']
+        emit_index += 1
+      end
+    end
+  end
+
   def test_timestamps
     setup_gce_metadata_stubs
     current_time = Time.now
@@ -1626,7 +1650,8 @@ module BaseTest
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_json_log_entries(n, params, payload_type = 'textPayload')
+  def verify_log_entries(n, params, payload_type = 'textPayload')
+    jsonify_log_entries
     i = 0
     @logs_sent.each do |request|
       request['entries'].each do |entry|
@@ -1808,9 +1833,8 @@ module BaseTest
     _undefined
   end
 
-  # Verify the number and the content of the log entries match the expectation.
-  # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(_n, _params, _payload_type = 'textPayload', &_block)
+  # Jsonify the log entries response if it is not in JSON format.
+  def jsonify_log_entries
     _undefined
   end
 
