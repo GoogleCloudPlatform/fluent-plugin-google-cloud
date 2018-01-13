@@ -621,46 +621,34 @@ module BaseTest
     setup_gce_metadata_stubs
     log_entries_count = 5
     [
-      [APPLICATION_DEFAULT_CONFIG, log_entries_count, log_entries_count],
-      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1, log_entries_count]
-    ].each do |(config, successful_requests_count, ingested_entries_count)|
+      [true, APPLICATION_DEFAULT_CONFIG, log_entries_count,
+       COMPUTE_PARAMS.merge(log_name: 'multi')],
+      # Request level log name should be '' if should_split is false.
+      [false, DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1,
+       COMPUTE_PARAMS.merge(log_name: 'multi', request: { log_name: '' })]
+    ].each do |(should_split, config, requests_count, params)|
       setup_prometheus
       setup_logging_stubs do
+        @logs_sent = []
         d = create_driver(config + PROMETHEUS_ENABLE_CONFIG, 'test', true)
         log_entries_count.times do |i|
-          d.emit("tag#{i}", 'message' => log_entry(0))
+          d.emit("tag#{i}", 'message' => log_entry(i))
         end
         d.run
-      end
-      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     successful_requests_count,
-                                     grpc: use_grpc, code: ok_status_code)
-      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     ingested_entries_count,
-                                     grpc: use_grpc, code: ok_status_code)
-    end
-  end
-
-  def test_log_name_when_split_logs_by_tag_disabled
-    setup_gce_metadata_stubs
-    log_entries_count = 5
-    setup_prometheus
-    setup_logging_stubs do
-      d = create_driver(DISABLE_SPLIT_LOGS_BY_TAG_CONFIG +
-                        PROMETHEUS_ENABLE_CONFIG, 'test', true)
-      log_entries_count.times do |i|
-        d.emit("tag#{i}", 'message' => log_entry(0))
-      end
-      d.run
-    end
-    emit_index = 0
-    jsonify_log_entries
-    @logs_sent.each do |request_sent|
-      assert_equal '', request_sent['logName']
-      request_sent['entries'].each do |entry|
-        assert_equal "projects/test-project-id/logs/tag#{emit_index}",
-                     entry['logName']
-        emit_index += 1
+        verify_log_entries(log_entries_count, params,
+                           'textPayload') do |entry, i|
+          verify_default_log_entry_text(entry['textPayload'], i, entry)
+          # expected_log_name should be nil if should_split is true.
+          expected_log_name =
+            "projects/test-project-id/logs/tag#{i}" unless should_split
+          assert_equal expected_log_name, entry['logName']
+        end
+        assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                       requests_count,
+                                       grpc: use_grpc, code: ok_status_code)
+        assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
+                                       log_entries_count,
+                                       grpc: use_grpc, code: ok_status_code)
       end
     end
   end
@@ -1654,6 +1642,9 @@ module BaseTest
     jsonify_log_entries
     i = 0
     @logs_sent.each do |request|
+      if params[:request]
+        assert_equal params[:request][:log_name], request['logName']
+      end
       request['entries'].each do |entry|
         unless payload_type.empty?
           assert entry.key?(payload_type), "Entry ##{i} did not contain " \
@@ -1669,8 +1660,16 @@ module BaseTest
         labels ||= request['labels']
         labels.merge!(entry['labels'] || {})
 
-        assert_equal \
-          "projects/#{params[:project_id]}/logs/#{params[:log_name]}", log_name
+        # For multi tag requests, each log name should match the index.
+        if params[:log_name] == 'multi'
+          assert_equal \
+            "projects/#{params[:project_id]}/logs/tag#{i}",
+            log_name
+        elsif params[:log_name]
+          assert_equal \
+            "projects/#{params[:project_id]}/logs/#{params[:log_name]}",
+            log_name
+        end
         assert_equal params[:resource][:type], resource['type']
         check_labels resource['labels'], params[:resource][:labels]
         check_labels labels, params[:labels]
