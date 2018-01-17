@@ -1817,9 +1817,9 @@ module Fluent
     end
 
     def api_client
-      # For gRPC side, the Channel will take care of tokens and their renewal.
-      # https://grpc.io/docs/guides/auth.html#authentication-api
-      if !@use_grpc and @client.authorization.expired?
+      # For gRPC side, the Channel will take care of tokens and their renewal
+      # (https://grpc.io/docs/guides/auth.html#authentication-api).
+      if !@use_grpc && @client.authorization.expired?
         begin
           @client.authorization.fetch_access_token!
         rescue MultiJson::ParseError
