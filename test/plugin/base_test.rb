@@ -620,14 +620,11 @@ module BaseTest
   def test_split_logs_by_tag
     setup_gce_metadata_stubs
     log_entries_count = 5
+    params = COMPUTE_PARAMS.reject { |k, _| k == :log_name }
     [
-      [true, APPLICATION_DEFAULT_CONFIG, log_entries_count,
-       COMPUTE_PARAMS.reject { |k, _| k == :log_name }],
-      # Request level log name should be '' if should_split is false.
-      [false, DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1,
-       COMPUTE_PARAMS.merge(
-         request: { log_name: '' }).reject { |k, _| k == :log_name }]
-    ].each do |(should_split, config, requests_count, params)|
+      [APPLICATION_DEFAULT_CONFIG, log_entries_count],
+      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1]
+    ].each do |(config, requests_count)|
       setup_prometheus
       setup_logging_stubs do
         @logs_sent = []
@@ -636,14 +633,7 @@ module BaseTest
           d.emit("tag#{i}", 'message' => log_entry(i))
         end
         d.run
-        verify_log_entries(log_entries_count, params,
-                           'textPayload') do |entry, i|
-          verify_default_log_entry_text(entry['textPayload'], i, entry)
-          # expected_log_name is nil if should_split is true.
-          expected_log_name =
-            "projects/test-project-id/logs/tag#{i}" unless should_split
-          assert_equal expected_log_name, entry['logName']
-        end
+        verify_log_entries(log_entries_count, params, 'textPayload')
         assert_prometheus_metric_value(:stackdriver_successful_requests_count,
                                        requests_count,
                                        grpc: use_grpc, code: ok_status_code)
@@ -1643,9 +1633,6 @@ module BaseTest
     jsonify_log_entries
     entries_count = 0
     @logs_sent.each do |request|
-      if params[:request] && params[:request][:log_name]
-        assert_equal params[:request][:log_name], request['logName']
-      end
       request['entries'].each do |entry|
         unless payload_type.empty?
           assert entry.key?(payload_type),
