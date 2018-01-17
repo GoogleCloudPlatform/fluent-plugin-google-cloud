@@ -622,10 +622,11 @@ module BaseTest
     log_entries_count = 5
     [
       [true, APPLICATION_DEFAULT_CONFIG, log_entries_count,
-       COMPUTE_PARAMS.merge(log_name: 'multi')],
+       COMPUTE_PARAMS.reject { |k, _| k == :log_name }],
       # Request level log name should be '' if should_split is false.
       [false, DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1,
-       COMPUTE_PARAMS.merge(log_name: 'multi', request: { log_name: '' })]
+       COMPUTE_PARAMS.merge(
+         request: { log_name: '' }).reject { |k, _| k == :log_name }]
     ].each do |(should_split, config, requests_count, params)|
       setup_prometheus
       setup_logging_stubs do
@@ -638,7 +639,7 @@ module BaseTest
         verify_log_entries(log_entries_count, params,
                            'textPayload') do |entry, i|
           verify_default_log_entry_text(entry['textPayload'], i, entry)
-          # expected_log_name should be nil if should_split is true.
+          # expected_log_name is nil if should_split is true.
           expected_log_name =
             "projects/test-project-id/logs/tag#{i}" unless should_split
           assert_equal expected_log_name, entry['logName']
@@ -1640,15 +1641,16 @@ module BaseTest
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload')
     jsonify_log_entries
-    i = 0
+    entries_count = 0
     @logs_sent.each do |request|
-      if params[:request]
+      if params[:request] && params[:request][:log_name]
         assert_equal params[:request][:log_name], request['logName']
       end
       request['entries'].each do |entry|
         unless payload_type.empty?
-          assert entry.key?(payload_type), "Entry ##{i} did not contain " \
-            "expected #{payload_type} key: #{entry}"
+          assert entry.key?(payload_type),
+                 "Entry ##{entries_count} did not contain expected" \
+                 " #{payload_type} key: #{entry}."
         end
 
         # per-entry resource or log_name overrides the corresponding field
@@ -1660,30 +1662,32 @@ module BaseTest
         labels ||= request['labels']
         labels.merge!(entry['labels'] || {})
 
-        # For multi tag requests, each log name should match the index.
-        if params[:log_name] == 'multi'
-          assert_equal \
-            "projects/#{params[:project_id]}/logs/tag#{i}",
-            log_name
-        elsif params[:log_name]
-          assert_equal \
-            "projects/#{params[:project_id]}/logs/#{params[:log_name]}",
-            log_name
-        end
+        expected_log_name = \
+          if params[:log_name]
+            "projects/#{params[:project_id]}/logs/#{params[:log_name]}"
+          else
+            # For a request with multiple tags, each entry's log name should be
+            # associated to the entry index.
+            "projects/#{params[:project_id]}/logs/tag#{entries_count}"
+          end
+        assert_equal expected_log_name, log_name
         assert_equal params[:resource][:type], resource['type']
         check_labels resource['labels'], params[:resource][:labels]
         check_labels labels, params[:labels]
         if block_given?
-          yield(entry, i)
+          yield(entry, entries_count)
         elsif payload_type == 'textPayload'
           # Check the payload for textPayload, otherwise it's up to the caller.
-          verify_default_log_entry_text(entry['textPayload'], i, entry)
+          verify_default_log_entry_text(entry['textPayload'], entries_count,
+                                        entry)
         end
-        i += 1
-        assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
+        entries_count += 1
+        assert entries_count <= n, "Number of entries #{entries_count}" \
+                                   " exceeds expected number #{n}."
       end
     end
-    assert i == n, "Number of entries #{i} does not match expected number #{n}"
+    assert entries_count == n, "Number of entries #{entries_count} does not" \
+                               " match expected number #{n}."
   end
 
   def verify_container_logs(log_entry_factory, expected_params)
