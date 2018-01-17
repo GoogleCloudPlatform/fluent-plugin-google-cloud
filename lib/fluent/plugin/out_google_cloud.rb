@@ -1798,16 +1798,6 @@ module Fluent
     end
 
     def init_api_client
-      return if @use_grpc
-      # TODO: Use a non-default ClientOptions object.
-      Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
-      Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
-      @client = Google::Apis::LoggingV2::LoggingService.new
-      @client.authorization = Google::Auth.get_application_default(
-        LOGGING_SCOPE)
-    end
-
-    def api_client
       if @use_grpc
         ssl_creds = GRPC::Core::ChannelCredentials.new
         authentication = Google::Auth.get_application_default
@@ -1816,7 +1806,20 @@ module Fluent
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
           channel: GRPC::Core::Channel.new(
             'logging.googleapis.com', nil, creds))
-      elsif @client.authorization.expired?
+      else
+        # TODO: Use a non-default ClientOptions object.
+        Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
+        Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
+        @client = Google::Apis::LoggingV2::LoggingService.new
+        @client.authorization = Google::Auth.get_application_default(
+          LOGGING_SCOPE)
+      end
+    end
+
+    def api_client
+      # For gRPC side, the Channel will take care of tokens and their renewal
+      # (https://grpc.io/docs/guides/auth.html#authentication-api).
+      if !@use_grpc && @client.authorization.expired?
         begin
           @client.authorization.fetch_access_token!
         rescue MultiJson::ParseError
