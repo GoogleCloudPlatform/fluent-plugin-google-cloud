@@ -269,6 +269,8 @@ module Constants
       }
     )
   ).freeze
+  COMPUTE_PARAMS_WITH_MULTI_TAGS =
+    COMPUTE_PARAMS.reject { |k, _| k == :log_name }.freeze
 
   # GAE.
   VMENGINE_PARAMS = {

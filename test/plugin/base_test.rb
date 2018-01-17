@@ -620,7 +620,6 @@ module BaseTest
   def test_split_logs_by_tag
     setup_gce_metadata_stubs
     log_entries_count = 5
-    params = COMPUTE_PARAMS.reject { |k, _| k == :log_name }
     [
       [APPLICATION_DEFAULT_CONFIG, log_entries_count],
       [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1]
@@ -633,7 +632,10 @@ module BaseTest
           d.emit("tag#{i}", 'message' => log_entry(i))
         end
         d.run
-        verify_log_entries(log_entries_count, params, 'textPayload')
+        verify_log_entries(log_entries_count, COMPUTE_PARAMS_WITH_MULTI_TAGS,
+                           'textPayload')
+        # Verify the number of requests is different based on whether the
+        # 'split_logs_by_tag' flag is enabled.
         assert_prometheus_metric_value(:stackdriver_successful_requests_count,
                                        requests_count,
                                        grpc: use_grpc, code: ok_status_code)
@@ -1631,12 +1633,12 @@ module BaseTest
   # The caller can optionally provide a block which is called for each entry.
   def verify_log_entries(n, params, payload_type = 'textPayload')
     jsonify_log_entries
-    entries_count = 0
+    entry_count = 0
     @logs_sent.each do |request|
       request['entries'].each do |entry|
         unless payload_type.empty?
           assert entry.key?(payload_type),
-                 "Entry ##{entries_count} did not contain expected" \
+                 "Entry ##{entry_count} did not contain expected" \
                  " #{payload_type} key: #{entry}."
         end
 
@@ -1655,26 +1657,25 @@ module BaseTest
           else
             # For a request with multiple tags, each entry's log name should be
             # associated to the entry index.
-            "projects/#{params[:project_id]}/logs/tag#{entries_count}"
+            "projects/#{params[:project_id]}/logs/tag#{entry_count}"
           end
         assert_equal expected_log_name, log_name
         assert_equal params[:resource][:type], resource['type']
         check_labels resource['labels'], params[:resource][:labels]
         check_labels labels, params[:labels]
         if block_given?
-          yield(entry, entries_count)
+          yield(entry, entry_count)
         elsif payload_type == 'textPayload'
           # Check the payload for textPayload, otherwise it's up to the caller.
-          verify_default_log_entry_text(entry['textPayload'], entries_count,
+          verify_default_log_entry_text(entry['textPayload'], entry_count,
                                         entry)
         end
-        entries_count += 1
-        assert entries_count <= n, "Number of entries #{entries_count}" \
-                                   " exceeds expected number #{n}."
+        entry_count += 1
+        assert entry_count <= n,
+               "Number of entries #{entry_count} exceeds expected number #{n}."
       end
     end
-    assert entries_count == n, "Number of entries #{entries_count} does not" \
-                               " match expected number #{n}."
+    assert_equal n, entry_count
   end
 
   def verify_container_logs(log_entry_factory, expected_params)
