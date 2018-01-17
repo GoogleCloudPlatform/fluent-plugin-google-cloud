@@ -1816,16 +1816,14 @@ module Fluent
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
           channel: GRPC::Core::Channel.new(
             'logging.googleapis.com', nil, creds))
-      else
-        unless @client.authorization.expired?
-          begin
-            @client.authorization.fetch_access_token!
-          rescue MultiJson::ParseError
-            # Workaround an issue in the API client; just re-raise a more
-            # descriptive error for the user (which will still cause a retry).
-            raise Google::APIClient::ClientError, 'Unable to fetch access ' \
-              'token (no scopes configured?)'
-          end
+      elsif @client.authorization.expired?
+        begin
+          @client.authorization.fetch_access_token!
+        rescue MultiJson::ParseError
+          # Workaround an issue in the API client; just re-raise a more
+          # descriptive error for the user (which will still cause a retry).
+          raise Google::APIClient::ClientError, 'Unable to fetch access ' \
+            'token (no scopes configured?)'
         end
       end
       @client
