@@ -620,10 +620,19 @@ module BaseTest
   def test_split_logs_by_tag
     setup_gce_metadata_stubs
     log_entries_count = 5
+    dynamic_log_names = Array(0..log_entries_count - 1).map do |index|
+      "projects/test-project-id/logs/tag#{index}"
+    end
     [
-      [APPLICATION_DEFAULT_CONFIG, log_entries_count],
-      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1]
-    ].each do |(config, requests_count)|
+      [APPLICATION_DEFAULT_CONFIG,
+       log_entries_count,
+       dynamic_log_names,
+       Array.new(log_entries_count, nil)],
+      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG,
+       1,
+       Array.new(log_entries_count, ''),
+       dynamic_log_names]
+    ].each do |(config, requests_count, request_log_names, entry_log_names)|
       setup_prometheus
       setup_logging_stubs do
         @logs_sent = []
@@ -632,8 +641,15 @@ module BaseTest
           d.emit("tag#{i}", 'message' => log_entry(i))
         end
         d.run
+        @logs_sent.each_with_index do |request, request_index|
+          assert_equal request_log_names[request_index], request['logName']
+        end
         verify_log_entries(log_entries_count, COMPUTE_PARAMS_WITH_MULTI_TAGS,
-                           'textPayload')
+                           'textPayload') do |entry, entry_index|
+          verify_default_log_entry_text(entry['textPayload'], entry_index,
+                                        entry)
+          assert_equal entry_log_names[entry_index], entry['logName']
+        end
         # Verify the number of requests is different based on whether the
         # 'split_logs_by_tag' flag is enabled.
         assert_prometheus_metric_value(:stackdriver_successful_requests_count,
@@ -1651,15 +1667,9 @@ module BaseTest
         labels ||= request['labels']
         labels.merge!(entry['labels'] || {})
 
-        expected_log_name = \
-          if params[:log_name]
-            "projects/#{params[:project_id]}/logs/#{params[:log_name]}"
-          else
-            # For a request with multiple tags, each entry's log name should be
-            # associated to the entry index.
-            "projects/#{params[:project_id]}/logs/tag#{entry_count}"
-          end
-        assert_equal expected_log_name, log_name
+        assert_equal \
+          "projects/#{params[:project_id]}/logs/#{params[:log_name]}",
+          log_name if params[:log_name]
         assert_equal params[:resource][:type], resource['type']
         check_labels resource['labels'], params[:resource][:labels]
         check_labels labels, params[:labels]
