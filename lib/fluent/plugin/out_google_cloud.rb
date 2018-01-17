@@ -1822,8 +1822,8 @@ module Fluent
         rescue MultiJson::ParseError
           # Workaround an issue in the API client; just re-raise a more
           # descriptive error for the user (which will still cause a retry).
-          raise Google::APIClient::ClientError, 'Unable to fetch access ' \
-            'token (no scopes configured?)'
+          raise Google::APIClient::ClientError,
+                'Unable to fetch access token (no scopes configured?)'
         end
       end
       @client
