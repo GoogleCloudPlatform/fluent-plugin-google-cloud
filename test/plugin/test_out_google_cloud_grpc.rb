@@ -220,14 +220,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     use_grpc true
   ).freeze
 
-  def use_grpc
-    true
-  end
-
-  def ok_status_code
-    GRPC::Core::StatusCodes::OK
-  end
-
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be

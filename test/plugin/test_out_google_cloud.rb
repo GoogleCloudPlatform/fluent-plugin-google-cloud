@@ -308,14 +308,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     yield
   end
 
-  def use_grpc
-    false
-  end
-
-  def ok_status_code
-    200
-  end
-
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
                     tag = 'test',

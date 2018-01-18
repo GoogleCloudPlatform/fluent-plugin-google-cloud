@@ -619,26 +619,20 @@ module BaseTest
 
   def test_split_logs_by_tag
     setup_gce_metadata_stubs
-    log_entries_count = 5
-    dynamic_log_names = (0..log_entries_count - 1).map do |index|
+    log_entry_count = 5
+    dynamic_log_names = (0..log_entry_count - 1).map do |index|
       "projects/test-project-id/logs/tag#{index}"
     end
     [
-      [APPLICATION_DEFAULT_CONFIG,
-       log_entries_count,
-       dynamic_log_names,
-       # An array that returns null for any index.
-       []],
-      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG,
-       1,
-       [''],
-       dynamic_log_names]
+      # [] returns nil for any index.
+      [APPLICATION_DEFAULT_CONFIG, log_entry_count, dynamic_log_names, []],
+      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1, [''], dynamic_log_names]
     ].each do |(config, request_count, request_log_names, entry_log_names)|
       setup_prometheus
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(config + PROMETHEUS_ENABLE_CONFIG, 'test', true)
-        log_entries_count.times do |i|
+        log_entry_count.times do |i|
           d.emit("tag#{i}", 'message' => log_entry(i))
         end
         d.run
@@ -646,7 +640,7 @@ module BaseTest
       @logs_sent.zip(request_log_names).each do |request, log_name|
         assert_equal log_name, request['logName']
       end
-      verify_log_entries(log_entries_count, COMPUTE_PARAMS_NO_LOG_NAME,
+      verify_log_entries(log_entry_count, COMPUTE_PARAMS_NO_LOG_NAME,
                          'textPayload') do |entry, entry_index|
         verify_default_log_entry_text(entry['textPayload'], entry_index,
                                       entry)
@@ -655,11 +649,9 @@ module BaseTest
       # Verify the number of requests is different based on whether the
       # 'split_logs_by_tag' flag is enabled.
       assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     request_count,
-                                     grpc: use_grpc, code: ok_status_code)
+                                     request_count)
       assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     log_entries_count,
-                                     grpc: use_grpc, code: ok_status_code)
+                                     log_entry_count)
     end
   end
 
@@ -1816,16 +1808,6 @@ module BaseTest
 
   # This module expects the methods below to be overridden.
 
-  # Whether use_grpc is enabled.
-  def use_grpc
-    _undefined
-  end
-
-  # Response code of OK status.
-  def ok_status_code
-    _undefined
-  end
-
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(_conf = APPLICATION_DEFAULT_CONFIG, _tag = 'test')
     _undefined
@@ -1852,10 +1834,15 @@ module BaseTest
     _undefined
   end
 
-  def assert_prometheus_metric_value(metric_name, expected_value, labels = {})
+  def assert_prometheus_metric_value(metric_name, expected_value, labels = nil)
     metric = Prometheus::Client.registry.get(metric_name)
     assert_not_nil(metric)
-    assert_equal(expected_value, metric.get(labels))
+    metric_value = if labels
+                     metric.get(labels)
+                   else
+                     metric.values.values.reduce(0.0, :+)
+                   end
+    assert_equal(expected_value, metric_value)
   end
 
   # Get the fields of the payload.
