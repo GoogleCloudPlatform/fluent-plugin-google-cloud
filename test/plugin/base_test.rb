@@ -627,7 +627,8 @@ module BaseTest
       [APPLICATION_DEFAULT_CONFIG,
        log_entries_count,
        dynamic_log_names,
-       Array.new(log_entries_count)],
+       # An array that returns null for any index.
+       []],
       [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG,
        1,
        [''],
@@ -642,10 +643,10 @@ module BaseTest
         end
         d.run
       end
-      @logs_sent.each_with_index do |request, request_index|
-        assert_equal request_log_names[request_index], request['logName']
+      @logs_sent.zip(request_log_names).each do |request, log_name|
+        assert_equal log_name, request['logName']
       end
-      verify_log_entries(log_entries_count, COMPUTE_PARAMS_WITH_MULTI_TAGS,
+      verify_log_entries(log_entries_count, COMPUTE_PARAMS_NO_LOG_NAME,
                          'textPayload') do |entry, entry_index|
         verify_default_log_entry_text(entry['textPayload'], entry_index,
                                       entry)
@@ -1666,9 +1667,11 @@ module BaseTest
         labels ||= request['labels']
         labels.merge!(entry['labels'] || {})
 
-        assert_equal \
-          "projects/#{params[:project_id]}/logs/#{params[:log_name]}",
-          log_name if params[:log_name]
+        if params[:log_name]
+          assert_equal \
+            "projects/#{params[:project_id]}/logs/#{params[:log_name]}",
+            log_name
+        end
         assert_equal params[:resource][:type], resource['type']
         check_labels resource['labels'], params[:resource][:labels]
         check_labels labels, params[:labels]

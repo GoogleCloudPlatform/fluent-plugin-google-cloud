@@ -247,7 +247,7 @@ module Constants
   # Service configurations for various services.
 
   # GCE.
-  COMPUTE_PARAMS = {
+  COMPUTE_PARAMS_NO_LOG_NAME = {
     resource: {
       type: COMPUTE_CONSTANTS[:resource_type],
       labels: {
@@ -255,12 +255,14 @@ module Constants
         'zone' => ZONE
       }
     },
-    log_name: 'test',
     project_id: PROJECT_ID,
     labels: {
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }.freeze
+  COMPUTE_PARAMS = COMPUTE_PARAMS_NO_LOG_NAME.merge(
+    log_name: 'test'
+  ).freeze
   COMPUTE_PARAMS_WITH_METADATA_VM_ID_AND_ZONE = COMPUTE_PARAMS.merge(
     resource: COMPUTE_PARAMS[:resource].merge(
       labels: {
@@ -269,8 +271,6 @@ module Constants
       }
     )
   ).freeze
-  COMPUTE_PARAMS_WITH_MULTI_TAGS =
-    COMPUTE_PARAMS.reject { |k, _| k == :log_name }.freeze
 
   # GAE.
   VMENGINE_PARAMS = {
