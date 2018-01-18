@@ -330,7 +330,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     driver.configure(conf, true)
   end
 
-  def jsonify_log_entries
+  # Verify the number and the content of the log entries match the expectation.
+  # The caller can optionally provide a block which is called for each entry.
+  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
+    verify_json_log_entries(n, params, payload_type, &block)
   end
 
   # For an optional field with default values, Protobuf omits the field when it

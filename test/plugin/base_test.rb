@@ -1647,8 +1647,7 @@ module BaseTest
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload')
-    jsonify_log_entries
+  def verify_json_log_entries(n, params, payload_type = 'textPayload')
     entry_count = 0
     @logs_sent.each do |request|
       request['entries'].each do |entry|
@@ -1834,8 +1833,9 @@ module BaseTest
     _undefined
   end
 
-  # Jsonify the log entries response if it is not in JSON format.
-  def jsonify_log_entries
+  # Verify the number and the content of the log entries match the expectation.
+  # The caller can optionally provide a block which is called for each entry.
+  def verify_log_entries(_n, _params, _payload_type = 'textPayload', &_block)
     _undefined
   end
 
