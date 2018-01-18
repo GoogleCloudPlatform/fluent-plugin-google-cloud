@@ -649,9 +649,9 @@ module BaseTest
       # Verify the number of requests is different based on whether the
       # 'split_logs_by_tag' flag is enabled.
       assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     request_count, :all)
+                                     request_count, :aggregate)
       assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     log_entry_count, :all)
+                                     log_entry_count, :aggregate)
     end
   end
 
@@ -1837,7 +1837,7 @@ module BaseTest
   def assert_prometheus_metric_value(metric_name, expected_value, labels = {})
     metric = Prometheus::Client.registry.get(metric_name)
     assert_not_nil(metric)
-    metric_value = if labels == :all
+    metric_value = if labels == :aggregate
                      # Sum up all metric values regardless of the labels.
                      metric.values.values.reduce(0.0, :+)
                    else
