@@ -605,6 +605,56 @@ module BaseTest
     end
   end
 
+  def test_configure_split_logs_by_tag
+    setup_gce_metadata_stubs
+    {
+      APPLICATION_DEFAULT_CONFIG => true,
+      DISABLE_SPLIT_LOGS_BY_TAG_CONFIG => false
+    }.each do |(config, split_logs_by_tag)|
+      d = create_driver(config)
+      assert_equal split_logs_by_tag,
+                   d.instance.instance_variable_get(:@split_logs_by_tag)
+    end
+  end
+
+  def test_split_logs_by_tag
+    setup_gce_metadata_stubs
+    log_entry_count = 5
+    dynamic_log_names = (0..log_entry_count - 1).map do |index|
+      "projects/test-project-id/logs/tag#{index}"
+    end
+    [
+      # [] returns nil for any index.
+      [APPLICATION_DEFAULT_CONFIG, log_entry_count, dynamic_log_names, []],
+      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1, [''], dynamic_log_names]
+    ].each do |(config, request_count, request_log_names, entry_log_names)|
+      setup_prometheus
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(config + PROMETHEUS_ENABLE_CONFIG, 'test', true)
+        log_entry_count.times do |i|
+          d.emit("tag#{i}", 'message' => log_entry(i))
+        end
+        d.run
+      end
+      @logs_sent.zip(request_log_names).each do |request, log_name|
+        assert_equal log_name, request['logName']
+      end
+      verify_log_entries(log_entry_count, COMPUTE_PARAMS_NO_LOG_NAME,
+                         'textPayload') do |entry, entry_index|
+        verify_default_log_entry_text(entry['textPayload'], entry_index,
+                                      entry)
+        assert_equal entry_log_names[entry_index], entry['logName']
+      end
+      # Verify the number of requests is different based on whether the
+      # 'split_logs_by_tag' flag is enabled.
+      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                     request_count, :aggregate)
+      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
+                                     log_entry_count, :aggregate)
+    end
+  end
+
   def test_timestamps
     setup_gce_metadata_stubs
     current_time = Time.now
@@ -1591,12 +1641,13 @@ module BaseTest
 
   # The caller can optionally provide a block which is called for each entry.
   def verify_json_log_entries(n, params, payload_type = 'textPayload')
-    i = 0
+    entry_count = 0
     @logs_sent.each do |request|
       request['entries'].each do |entry|
         unless payload_type.empty?
-          assert entry.key?(payload_type), "Entry ##{i} did not contain " \
-            "expected #{payload_type} key: #{entry}"
+          assert entry.key?(payload_type),
+                 "Entry ##{entry_count} did not contain expected" \
+                 " #{payload_type} key: #{entry}."
         end
 
         # per-entry resource or log_name overrides the corresponding field
@@ -1608,22 +1659,27 @@ module BaseTest
         labels ||= request['labels']
         labels.merge!(entry['labels'] || {})
 
-        assert_equal \
-          "projects/#{params[:project_id]}/logs/#{params[:log_name]}", log_name
+        if params[:log_name]
+          assert_equal \
+            "projects/#{params[:project_id]}/logs/#{params[:log_name]}",
+            log_name
+        end
         assert_equal params[:resource][:type], resource['type']
         check_labels resource['labels'], params[:resource][:labels]
         check_labels labels, params[:labels]
         if block_given?
-          yield(entry, i)
+          yield(entry, entry_count)
         elsif payload_type == 'textPayload'
           # Check the payload for textPayload, otherwise it's up to the caller.
-          verify_default_log_entry_text(entry['textPayload'], i, entry)
+          verify_default_log_entry_text(entry['textPayload'], entry_count,
+                                        entry)
         end
-        i += 1
-        assert i <= n, "Number of entries #{i} exceeds expected number #{n}"
+        entry_count += 1
+        assert entry_count <= n,
+               "Number of entries #{entry_count} exceeds expected number #{n}."
       end
     end
-    assert i == n, "Number of entries #{i} does not match expected number #{n}"
+    assert_equal n, entry_count
   end
 
   def verify_container_logs(log_entry_factory, expected_params)
@@ -1781,7 +1837,13 @@ module BaseTest
   def assert_prometheus_metric_value(metric_name, expected_value, labels = {})
     metric = Prometheus::Client.registry.get(metric_name)
     assert_not_nil(metric)
-    assert_equal(expected_value, metric.get(labels))
+    metric_value = if labels == :aggregate
+                     # Sum up all metric values regardless of the labels.
+                     metric.values.values.reduce(0.0, :+)
+                   else
+                     metric.get(labels)
+                   end
+    assert_equal(expected_value, metric_value)
   end
 
   # Get the fields of the payload.

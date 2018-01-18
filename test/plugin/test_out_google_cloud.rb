@@ -13,6 +13,7 @@
 # limitations under the License.
 
 require_relative 'base_test'
+require_relative 'test_driver'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
@@ -308,9 +309,17 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
-  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
-    Fluent::Test::BufferedOutputTestDriver.new(
-      Fluent::GoogleCloudOutput, tag).configure(conf, true)
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
+                    tag = 'test',
+                    multi_tags = false)
+    driver = if multi_tags
+               Fluent::Test::MultiTagBufferedOutputTestDriver.new(
+                 Fluent::GoogleCloudOutput)
+             else
+               Fluent::Test::BufferedOutputTestDriver.new(
+                 Fluent::GoogleCloudOutput, tag)
+             end
+    driver.configure(conf, true)
   end
 
   # Verify the number and the content of the log entries match the expectation.

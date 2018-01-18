@@ -166,6 +166,10 @@ module Constants
     detect_subservice false
   ).freeze
 
+  DISABLE_SPLIT_LOGS_BY_TAG_CONFIG = %(
+    split_logs_by_tag false
+  ).freeze
+
   PROMETHEUS_ENABLE_CONFIG = %(
     enable_monitoring true
     monitoring_type prometheus
@@ -243,7 +247,7 @@ module Constants
   # Service configurations for various services.
 
   # GCE.
-  COMPUTE_PARAMS = {
+  COMPUTE_PARAMS_NO_LOG_NAME = {
     resource: {
       type: COMPUTE_CONSTANTS[:resource_type],
       labels: {
@@ -251,12 +255,14 @@ module Constants
         'zone' => ZONE
       }
     },
-    log_name: 'test',
     project_id: PROJECT_ID,
     labels: {
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }.freeze
+  COMPUTE_PARAMS = COMPUTE_PARAMS_NO_LOG_NAME.merge(
+    log_name: 'test'
+  ).freeze
   COMPUTE_PARAMS_WITH_METADATA_VM_ID_AND_ZONE = COMPUTE_PARAMS.merge(
     resource: COMPUTE_PARAMS[:resource].merge(
       labels: {

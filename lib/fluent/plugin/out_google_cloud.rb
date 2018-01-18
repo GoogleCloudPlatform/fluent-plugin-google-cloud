@@ -341,6 +341,10 @@ module Fluent
     config_param :metadata_agent_url, :string,
                  :default => DEFAULT_METADATA_AGENT_URL
 
+    # Whether to split log entries with different log tags into different
+    # requests when talking to Stackdriver Logging API.
+    config_param :split_logs_by_tag, :bool, :default => true
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -555,8 +559,24 @@ module Fluent
         }
       end
 
-      requests_to_send.each do |request|
-        @write_request.call(request)
+      if @split_logs_by_tag
+        requests_to_send.each do |request|
+          @write_request.call(request)
+        end
+      else
+        # Combine all requests into one. The request level "log_name" will be
+        # ported to the entry level. The request level "resource" and "labels"
+        # are ignored as they should have been folded into the entry level
+        # "resource" and "labels" already anyway.
+        combined_entries = []
+        requests_to_send.each do |request|
+          request[:entries].each do |entry|
+            # Modify entries in-place as they are not needed later on.
+            entry.log_name = request[:log_name]
+          end
+          combined_entries.concat(request[:entries])
+        end
+        @write_request.call(entries: combined_entries)
       end
     end
 
@@ -607,17 +627,23 @@ module Fluent
       )
     end
 
-    def write_request_via_grpc(entries:, log_name:, resource:, labels:)
+    def write_request_via_grpc(entries:,
+                               log_name: '',
+                               resource: nil,
+                               labels: {})
       client = api_client
       entries_count = entries.length
       client.write_log_entries(
         # Ignore partial_success for gRPC path.
         entries,
         log_name: log_name,
-        resource: Google::Api::MonitoredResource.new(
-          type: resource.type,
-          labels: resource.labels.to_h
-        ),
+        # Leave resource nil if it's nil.
+        resource: if resource
+                    Google::Api::MonitoredResource.new(
+                      type: resource.type,
+                      labels: resource.labels.to_h
+                    )
+                  end,
         labels: labels.map do |k, v|
           [k.encode('utf-8'), convert_to_utf8(v)]
         end.to_h
@@ -705,7 +731,10 @@ module Fluent
                  error: error.to_s
     end
 
-    def write_request_via_rest(entries:, log_name:, resource:, labels:)
+    def write_request_via_rest(entries:,
+                               log_name: '',
+                               resource: nil,
+                               labels: {})
       client = api_client
       entries_count = entries.length
       client.write_entry_log_entries(

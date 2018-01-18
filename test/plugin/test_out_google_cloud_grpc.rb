@@ -15,6 +15,7 @@
 require 'grpc'
 
 require_relative 'base_test'
+require_relative 'test_driver'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
@@ -223,10 +224,18 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # grpc enabled. The signature of this method is different between the grpc
   # path and the non-grpc path. For grpc, an additional grpc stub class can be
   # passed in to construct the mock used by the test driver.
-  def create_driver(conf = APPLICATION_DEFAULT_CONFIG, tag = 'test')
+  def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
+                    tag = 'test',
+                    multi_tags = false)
     conf += USE_GRPC_CONFIG
-    Fluent::Test::BufferedOutputTestDriver.new(
-      GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag).configure(conf, true)
+    driver = if multi_tags
+               Fluent::Test::MultiTagBufferedOutputTestDriver.new(
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub))
+             else
+               Fluent::Test::BufferedOutputTestDriver.new(
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag)
+             end
+    driver.configure(conf, true)
   end
 
   # Google Cloud Fluent output stub with grpc mock.
