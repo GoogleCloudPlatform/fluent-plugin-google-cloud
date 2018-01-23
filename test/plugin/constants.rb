@@ -244,6 +244,10 @@ module Constants
     trace_key custom_trace_key
   ).freeze
 
+  CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED = %(
+    span_id_key custom_span_id_key
+  ).freeze
+
   # Service configurations for various services.
 
   # GCE.
