@@ -2036,8 +2036,7 @@ module Fluent
     end
 
     # Extract a map of error details from an potentially partially successful
-    # request for gRPC request. Return an empty map if @partial_success is not
-    # enabled.
+    # gRPC request. Return an empty map if @partial_success is not enabled.
     #
     # The keys in this map are [error_code, error_message] pairs, and the values
     # are a list of indexes of log entries that failed due to this error.
