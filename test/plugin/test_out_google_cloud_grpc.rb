@@ -249,17 +249,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       @use_secure_channel = use_secure_channel
     end
 
-    def init_api_client
-      if @use_secure_channel
-        ssl_creds = GRPC::Core::ChannelCredentials.new
-        authentication = Google::Auth.get_application_default
-        creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
-        ssl_creds.compose(creds)
-      else
-        :this_channel_is_insecure
-      end
-    end
-
     def api_client
       @grpc_stub
     end

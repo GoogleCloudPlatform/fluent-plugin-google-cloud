@@ -141,7 +141,6 @@ module Constants
 
   CUSTOM_LOGGING_API_URL_CONFIG = %(
     logging_api_url #{CUSTOM_LOGGING_API_URL}
-    use_secure_channel false
   ).freeze
 
   DETECT_JSON_CONFIG = %(
