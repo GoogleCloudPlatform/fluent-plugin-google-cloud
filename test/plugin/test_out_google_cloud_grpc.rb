@@ -51,6 +51,39 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_partial_success
+    setup_gce_metadata_stubs
+    setup_prometheus
+    setup_logging_stubs(
+      true, GRPC::Core::StatusCodes::PERMISSION_DENIED,
+      'User not authorized.', PARTIAL_SUCCESS_GRPC_METADATA) do
+      # The API Client should not retry this and the plugin should consume
+      # the exception.
+      d = create_driver(PROMETHEUS_ENABLE_CONFIG + PARTIAL_SUCCESS_CONFIG)
+      4.times do |i|
+        d.emit('message' => log_entry(i.to_s))
+      end
+      d.run
+      assert_prometheus_metric_value(
+        :stackdriver_successful_requests_count, 0,
+        grpc: true, code: GRPC::Core::StatusCodes::OK)
+      assert_prometheus_metric_value(
+        :stackdriver_failed_requests_count, 0,
+        grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+      assert_prometheus_metric_value(
+        :stackdriver_ingested_entries_count, 1,
+        grpc: true, code: GRPC::Core::StatusCodes::OK)
+      assert_prometheus_metric_value(
+        :stackdriver_dropped_entries_count, 2,
+        grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+      assert_prometheus_metric_value(
+        :stackdriver_dropped_entries_count, 1,
+        grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+      assert_prometheus_metric_value(
+        :stackdriver_retried_entries_count, 0, grpc: true)
+    end
+  end
+
   def test_server_error
     setup_gce_metadata_stubs
     {
@@ -258,12 +291,17 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       @requests_received = requests_received
     end
 
-    def write_log_entries(entries, log_name: nil, resource: nil, labels: nil)
+    def write_log_entries(entries,
+                          log_name: nil,
+                          resource: nil,
+                          labels: nil,
+                          partial_success: nil)
       request = Google::Apis::LoggingV2::WriteLogEntriesRequest.new(
         log_name: log_name,
         resource: resource,
         labels: labels,
-        entries: entries
+        entries: entries,
+        partial_success: partial_success
       )
       @requests_received << request
       WriteLogEntriesResponse.new
@@ -273,18 +311,23 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # GRPC logging mock that fails and returns server side or client side errors.
   class GRPCLoggingMockFailingService <
       Google::Cloud::Logging::V2::LoggingServiceV2Client
-    def initialize(code, message, failed_attempts)
+    def initialize(code, message, metadata, failed_attempts)
       @code = code
       @message = message
+      @metadata = metadata
       @failed_attempts = failed_attempts
       super()
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
-    def write_log_entries(entries, log_name: nil, resource: nil, labels: nil)
+    def write_log_entries(entries,
+                          log_name: nil,
+                          resource: nil,
+                          labels: nil,
+                          partial_success: nil)
       @failed_attempts << 1
       begin
-        raise GRPC::BadStatus.new_status_exception(@code, @message)
+        raise GRPC::BadStatus.new_status_exception(@code, @message, @metadata)
       rescue
         # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
         raise Google::Gax::GaxError, @message
@@ -294,11 +337,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # Set up grpc stubs to mock the external calls.
-  def setup_logging_stubs(should_fail = false, code = nil, message = nil)
+  def setup_logging_stubs(should_fail = false,
+                          code = nil,
+                          message = nil,
+                          metadata = {})
     if should_fail
       @failed_attempts = []
       @grpc_stub = GRPCLoggingMockFailingService.new(
-        code, message, @failed_attempts)
+        code, message, metadata, @failed_attempts)
     else
       @requests_sent = []
       @grpc_stub = GRPCLoggingMockService.new(@requests_sent)
