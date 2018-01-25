@@ -44,6 +44,8 @@ module Constants
   EC2_PROJECT_ID = 'test-ec2-project-id'.freeze
   EC2_ZONE = 'us-west-2b'.freeze
   EC2_PREFIXED_ZONE = "aws:#{EC2_ZONE}".freeze
+  EC2_REGION = 'us-west-2'.freeze
+  EC2_PREFIXED_REGION = "aws:#{EC2_REGION}".freeze
   EC2_VM_ID = 'i-81c16767'.freeze
   EC2_ACCOUNT_ID = '123456789012'.freeze
 
@@ -51,6 +53,7 @@ module Constants
   EC2_IDENTITY_DOCUMENT = %({
     "accountId" : "#{EC2_ACCOUNT_ID}",
     "availabilityZone" : "#{EC2_ZONE}",
+    "region" : "#{EC2_REGION}",
     "instanceId" : "#{EC2_VM_ID}"
   }).freeze
 
@@ -223,6 +226,11 @@ module Constants
   CONFIG_EC2_PROJECT_ID_AND_CUSTOM_VM_ID = %(
     project_id #{EC2_PROJECT_ID}
     vm_id #{CUSTOM_VM_ID}
+  ).freeze
+
+  CONFIG_EC2_PROJECT_ID_USE_REGION = %(
+    project_id #{EC2_PROJECT_ID}
+    use_aws_availability_zone false
   ).freeze
 
   CONFIG_DATAFLOW = %(
@@ -515,12 +523,12 @@ module Constants
     }
   }.freeze
 
-  EC2_PARAMS = {
+  EC2_REGION_PARAMS = {
     resource: {
       type: EC2_CONSTANTS[:resource_type],
       labels: {
         'instance_id' => EC2_VM_ID,
-        'region' => EC2_PREFIXED_ZONE,
+        'region' => EC2_PREFIXED_REGION,
         'aws_account' => EC2_ACCOUNT_ID
       }
     },
@@ -530,6 +538,14 @@ module Constants
       "#{EC2_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }.freeze
+
+  EC2_ZONE_PARAMS = EC2_REGION_PARAMS.merge(
+    resource: EC2_REGION_PARAMS[:resource].merge(
+      labels: EC2_REGION_PARAMS[:resource][:labels].merge(
+        'region' => EC2_PREFIXED_ZONE
+      )
+    )
+  ).freeze
 
   HTTP_REQUEST_MESSAGE = {
     'requestMethod' => 'POST',
