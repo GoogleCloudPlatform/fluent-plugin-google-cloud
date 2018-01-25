@@ -328,9 +328,9 @@ module Fluent
                  :secret => true
 
     # The URL of Stackdriver Logging API. Right now this only works with the
-    # gRPC path (use_grpc = true).
-    # One common usage of this config is to provide a mocked / stubbed Logging
-    # API, e.g., http://localhost:52000.
+    # gRPC path (use_grpc = true). An unsecured channel is used if the url
+    # scheme is 'http' instead of 'https'. One common use case of this config is
+    # to provide a mocked / stubbed Logging API, e.g., http://localhost:52000.
     config_param :logging_api_url, :string, :default => DEFAULT_LOGGING_API_URL
 
     # Whether to collect metrics about the plugin usage. The mechanism for
