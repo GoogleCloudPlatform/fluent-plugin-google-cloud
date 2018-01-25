@@ -647,7 +647,6 @@ module Fluent
       client = api_client
       entries_count = entries.length
       client.write_log_entries(
-        # Ignore partial_success for gRPC path.
         entries,
         log_name: log_name,
         # Leave resource nil if it's nil.
@@ -2035,7 +2034,7 @@ module Fluent
       {}
     end
 
-    # Extract a map of error details from an potentially partially successful
+    # Extract a map of error details from a potentially partially successful
     # gRPC request. Return an empty map if @partial_success is not enabled.
     #
     # The keys in this map are [error_code, error_message] pairs, and the values
