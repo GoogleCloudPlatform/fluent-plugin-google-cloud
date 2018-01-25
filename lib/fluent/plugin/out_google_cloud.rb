@@ -38,6 +38,27 @@ module Google
   end
 end
 
+module Google
+  module Auth
+    # Extract project_id in initialize.
+    class ServiceAccountCredentials
+      singleton_class.send(:alias_method, :super_make_creds, :make_creds)
+      def self.make_creds(options = {})
+        json_key_io, scope = options.values_at(:json_key_io, :scope)
+        if json_key_io
+          json_key = MultiJson.load(json_key_io.read)
+          project_id = json_key['project_id']
+        end
+        creds = super_make_creds(
+          json_key_io: StringIO.new(MultiJson.dump(json_key)), scope: scope)
+        creds.instance_variable_set(:@project_id, project_id) if project_id
+        creds
+      end
+      attr_reader :project_id
+    end
+  end
+end
+
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
@@ -1393,6 +1414,9 @@ module Fluent
       # Returns the project ID (as a string) on success, or nil on failure.
       def self.project_id
         creds = Google::Auth.get_application_default(LOGGING_SCOPE)
+        if creds.respond_to?(:project_id)
+          return creds.project_id if creds.project_id
+        end
         if creds.issuer
           id = extract_project_id(creds.issuer)
           return id unless id.nil?

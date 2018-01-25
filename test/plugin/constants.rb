@@ -129,6 +129,10 @@ module Constants
     path: 'test/plugin/data/iam-credentials.json',
     project_id: 'fluent-test-project'
   }.freeze
+  NEW_STYLE_CREDENTIALS = {
+    path: 'test/plugin/data/new-style-credentials.json',
+    project_id: 'fluent-test-project'
+  }.freeze
   LEGACY_CREDENTIALS = {
     path: 'test/plugin/data/credentials.json',
     project_id: '847859579879'
