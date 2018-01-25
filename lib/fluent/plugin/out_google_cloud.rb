@@ -1850,7 +1850,14 @@ module Fluent
 
     def init_api_client
       if @use_grpc
-        if use_secure_channel
+        uri = URI.parse(@logging_api_url)
+        host = uri.host
+        unless host
+          raise Fluent::ConfigError,
+                'The logging_api_url option specifies an invalid URL:' \
+                " #{@logging_api_url}."
+        end
+        if uri.scheme == 'https'
           ssl_creds = GRPC::Core::ChannelCredentials.new
           authentication = Google::Auth.get_application_default
           creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
@@ -1858,8 +1865,9 @@ module Fluent
         else
           creds = :this_channel_is_insecure
         end
+        port = ":#{uri.port}" if uri.port
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
-          channel: GRPC::Core::Channel.new(grpc_channel_name, nil, creds))
+          channel: GRPC::Core::Channel.new("#{host}#{port}", nil, creds))
       else
         # TODO: Use a non-default ClientOptions object.
         Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
@@ -1884,22 +1892,6 @@ module Fluent
         end
       end
       @client
-    end
-
-    def use_secure_channel
-      @logging_api_url.start_with?('https')
-    end
-
-    def grpc_channel_name
-      uri = URI.parse(@logging_api_url)
-      host = uri.host
-      unless host
-        raise Fluent::ConfigError,
-              'The logging_api_url option specifies an invalid URL:' \
-              " #{@logging_api_url}."
-      end
-      port = ":#{uri.port}" if uri.port
-      "#{host}#{port}"
     end
 
     # Encode as UTF-8. If 'coerce_to_utf8' is set to true in the config, any

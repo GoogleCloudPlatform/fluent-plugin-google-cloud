@@ -228,25 +228,21 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
                     tag = 'test',
                     multi_tags = false)
     conf += USE_GRPC_CONFIG
-    use_secure_channel = !conf.include?('use_secure_channel false')
     driver = if multi_tags
                Fluent::Test::MultiTagBufferedOutputTestDriver.new(
-                 GoogleCloudOutputWithGRPCMock.new(
-                   @grpc_stub, use_secure_channel))
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub))
              else
                Fluent::Test::BufferedOutputTestDriver.new(
-                 GoogleCloudOutputWithGRPCMock.new(
-                   @grpc_stub, use_secure_channel), tag)
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag)
              end
     driver.configure(conf, true)
   end
 
   # Google Cloud Fluent output stub with grpc mock.
   class GoogleCloudOutputWithGRPCMock < Fluent::GoogleCloudOutput
-    def initialize(grpc_stub, use_secure_channel)
+    def initialize(grpc_stub)
       super()
       @grpc_stub = grpc_stub
-      @use_secure_channel = use_secure_channel
     end
 
     def api_client
