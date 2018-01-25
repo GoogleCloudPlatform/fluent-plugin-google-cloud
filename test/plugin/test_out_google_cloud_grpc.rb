@@ -246,11 +246,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     def api_client
-      ssl_creds = GRPC::Core::ChannelCredentials.new
-      authentication = Google::Auth.get_application_default
-      creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
-      ssl_creds.compose(creds)
-
       @grpc_stub
     end
   end

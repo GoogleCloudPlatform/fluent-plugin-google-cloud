@@ -62,6 +62,17 @@ module BaseTest
     assert_equal 1, exception_count
   end
 
+  def test_configure_logging_api_url
+    setup_gce_metadata_stubs
+    {
+      APPLICATION_DEFAULT_CONFIG => DEFAULT_LOGGING_API_URL,
+      CUSTOM_LOGGING_API_URL_CONFIG => CUSTOM_LOGGING_API_URL
+    }.each do |(config, url)|
+      d = create_driver(config)
+      assert_equal url, d.instance.instance_variable_get(:@logging_api_url)
+    end
+  end
+
   def test_configure_custom_metadata
     setup_no_metadata_service_stubs
     d = create_driver(CUSTOM_METADATA_CONFIG)

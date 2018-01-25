@@ -128,6 +128,8 @@ module Fluent
 
     # Internal constants.
     module InternalConstants
+      DEFAULT_LOGGING_API_URL = 'https://logging.googleapis.com'.freeze
+
       # The label name of local_resource_id in the json payload. When a record
       # has this field in the payload, we will use the value to retrieve
       # monitored resource from Stackdriver Metadata agent.
@@ -325,6 +327,12 @@ module Fluent
                  :default => nil,
                  :secret => true
 
+    # The URL of Stackdriver Logging API. Right now this only works with the
+    # gRPC path (use_grpc = true). An unsecured channel is used if the URL
+    # scheme is 'http' instead of 'https'. One common use case of this config is
+    # to provide a mocked / stubbed Logging API, e.g., http://localhost:52000.
+    config_param :logging_api_url, :string, :default => DEFAULT_LOGGING_API_URL
+
     # Whether to collect metrics about the plugin usage. The mechanism for
     # collecting and exposing metrics is controlled by the monitoring_type
     # parameter.
@@ -375,6 +383,15 @@ module Fluent
                   ' enabled. The support for partial success in the gRPC path' \
                   ' is to be added in the near future. For now the ' \
                   ' partial_success flag will be ignored.'
+      end
+
+      # TODO(qingling128): Remove this warning after the support is added. Also
+      # remove the comment in the description of this configuration.
+      unless @logging_api_url == DEFAULT_LOGGING_API_URL || @use_grpc
+        @log.warn 'Detected customized logging_api_url while use_grpc is not' \
+                  ' enabled. Customized logging_api_url for the non-gRPC path' \
+                  ' is not supported. The logging_api_url option will be' \
+                  ' ignored.'
       end
 
       # If monitoring is enabled, register metrics in the default registry
@@ -1833,13 +1850,24 @@ module Fluent
 
     def init_api_client
       if @use_grpc
-        ssl_creds = GRPC::Core::ChannelCredentials.new
-        authentication = Google::Auth.get_application_default
-        creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
-        creds = ssl_creds.compose(creds)
+        uri = URI.parse(@logging_api_url)
+        host = uri.host
+        unless host
+          raise Fluent::ConfigError,
+                'The logging_api_url option specifies an invalid URL:' \
+                " #{@logging_api_url}."
+        end
+        if uri.scheme == 'https'
+          ssl_creds = GRPC::Core::ChannelCredentials.new
+          authentication = Google::Auth.get_application_default
+          creds = GRPC::Core::CallCredentials.new(authentication.updater_proc)
+          creds = ssl_creds.compose(creds)
+        else
+          creds = :this_channel_is_insecure
+        end
+        port = ":#{uri.port}" if uri.port
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
-          channel: GRPC::Core::Channel.new(
-            'logging.googleapis.com', nil, creds))
+          channel: GRPC::Core::Channel.new("#{host}#{port}", nil, creds))
       else
         # TODO: Use a non-default ClientOptions object.
         Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
