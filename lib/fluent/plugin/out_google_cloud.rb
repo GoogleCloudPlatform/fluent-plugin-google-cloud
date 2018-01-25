@@ -745,6 +745,8 @@ module Fluent
             @log.warn "Dropping #{partial_errors_count} log message(s)",
                       error: error_message, error_code: error_code.to_s
           end
+          # Consider partially successful requests successful.
+          increment_successful_requests_count
           increment_ingested_entries_count(entries_count)
         end
 
