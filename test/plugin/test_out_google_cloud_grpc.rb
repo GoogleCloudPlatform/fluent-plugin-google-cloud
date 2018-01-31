@@ -59,7 +59,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       'User not authorized.', PARTIAL_SUCCESS_GRPC_METADATA) do
       # The API Client should not retry this and the plugin should consume
       # the exception.
-      d = create_driver(PROMETHEUS_ENABLE_CONFIG + PARTIAL_SUCCESS_CONFIG)
+      d = create_driver(PROMETHEUS_ENABLE_CONFIG)
       4.times do |i|
         d.emit('message' => log_entry(i.to_s))
       end
