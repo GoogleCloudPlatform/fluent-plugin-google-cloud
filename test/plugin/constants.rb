@@ -150,8 +150,8 @@ module Constants
     detect_json true
   ).freeze
 
-  PARTIAL_SUCCESS_CONFIG = %(
-    partial_success true
+  PARTIAL_SUCCESS_DISABLED_CONFIG = %(
+    partial_success false
   ).freeze
 
   # rubocop:disable Metrics/LineLength
