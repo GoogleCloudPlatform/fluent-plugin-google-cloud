@@ -308,7 +308,7 @@ module Fluent
     # Whether valid entries should be written even if some other entries fail
     # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
     # the Stackdriver Logging API. This is highly recommended.
-    config_param :partial_success, :bool, :default => false
+    config_param :partial_success, :bool, :default => true
 
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
     # non-UTF-8 character would be replaced by the string specified by
