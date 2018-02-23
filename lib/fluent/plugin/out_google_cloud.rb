@@ -1181,11 +1181,9 @@ module Fluent
       # inferred from the tag) if failed to get a monitored resource from
       # Metadata Agent with this key.
       #
-      # Docker container:
+      # Examples:
       #   "container.<container_id>"
-      #   "containerName.<container_name>"
-      # GKE container:
-      #   "gke_containerName.<namespace_id>.<pod_name>.<container_name>"
+      #   "k8s_pod.<cluster_name>.<namespace_name>.<pod_name>.<location>"
       if @enable_metadata_agent && local_resource_id
         @log.debug 'Calling metadata agent with local_resource_id: ' \
                   "#{local_resource_id}."

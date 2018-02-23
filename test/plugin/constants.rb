@@ -71,6 +71,7 @@ module Constants
   DOCKER_CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'.freeze
   DOCKER_CONTAINER_SECONDS_EPOCH = 1_234_567_890
   DOCKER_CONTAINER_NANOS = 987_654_321
+  DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'container'.freeze
 
   # Container Engine / Kubernetes specific labels.
   CONTAINER_CLUSTER_NAME = 'cluster-1'.freeze
@@ -87,6 +88,7 @@ module Constants
   CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'.freeze
   CONTAINER_SECONDS_EPOCH = 1_234_567_890
   CONTAINER_NANOS = 987_654_321
+  CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'gke_container'.freeze
 
   # Cloud Functions specific labels.
   CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'.freeze
@@ -605,7 +607,7 @@ module Constants
   # Map from the local_resource_id to the retrieved monitored resource.
   MONITORED_RESOURCE_STUBS = {
     # Docker container stderr / stdout logs.
-    "container.#{DOCKER_CONTAINER_ID}" =>
+    "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_ID}" =>
       {
         'type' => DOCKER_CONSTANTS[:resource_type],
         'labels' => {
@@ -614,7 +616,7 @@ module Constants
         }
       }.to_json,
     # Docker container application logs.
-    "containerName.#{DOCKER_CONTAINER_NAME}" =>
+    "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_NAME}" =>
       {
         'type' => DOCKER_CONSTANTS[:resource_type],
         'labels' => {
@@ -623,8 +625,8 @@ module Constants
         }
       }.to_json,
     # GKE container logs.
-    "gke_containerName.#{CONTAINER_NAMESPACE_ID}.#{CONTAINER_POD_NAME}." \
-    "#{CONTAINER_CONTAINER_NAME}" =>
+    "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
+    ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}" =>
       {
         'type' => GKE_CONSTANTS[:resource_type],
         'labels' => {
