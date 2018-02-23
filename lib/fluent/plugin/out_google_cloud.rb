@@ -124,6 +124,7 @@ module Fluent
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
+      METADATA_AGENT_URL_ENV_VAR_NAME = 'STACKDRIVER_METADATA_AGENT_URL'.freeze
     end
 
     # Internal constants.
@@ -385,6 +386,17 @@ module Fluent
                   ' enabled. Customized logging_api_url for the non-gRPC path' \
                   ' is not supported. The logging_api_url option will be' \
                   ' ignored.'
+      end
+
+      if @enable_metadata_agent
+        # 1. If @metadata_agent_url is customized, use that.
+        # 2. Otherwise check the environment variable
+        #    STACKDRIVER_METADATA_AGENT_URL.
+        # 3. Fall back to the default
+        if @metadata_agent_url == DEFAULT_METADATA_AGENT_URL && \
+           !ENV[METADATA_AGENT_URL_ENV_VAR_NAME].to_s.empty?
+          @metadata_agent_url = ENV[METADATA_AGENT_URL_ENV_VAR_NAME]
+        end
       end
 
       # If monitoring is enabled, register metrics in the default registry
@@ -1384,7 +1396,7 @@ module Fluent
         return parsed_hash
       end
     rescue StandardError => e
-      @log.error 'Error calling Metadata Agent.', error: e
+      @log.error "Error calling Metadata Agent at #{url}.", error: e
     end
 
     # TODO: This functionality should eventually be available in another

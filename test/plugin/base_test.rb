@@ -116,6 +116,26 @@ module BaseTest
     end
   end
 
+  def test_metadata_agent_url_customization
+    [
+      # If @metadata_agent_url is customized, use that even if the environment
+      # variable is set.
+      [CUSTOM_METADATA_AGENT_URL_CONFIG, true, CUSTOM_METADATA_AGENT_URL],
+      # If metadata_agent_url is not customized and the environment variable is
+      # set, use the env.
+      [APPLICATION_DEFAULT_CONFIG, true, METADATA_AGENT_URL_FROM_ENV],
+      # Fall back to the default.
+      [APPLICATION_DEFAULT_CONFIG, false, DEFAULT_METADATA_AGENT_URL]
+    ].each do |(config, url_from_env, expected_url)|
+      ENV[METADATA_AGENT_URL_ENV_VAR_NAME] = METADATA_AGENT_URL_FROM_ENV if
+        url_from_env
+      setup_gce_metadata_stubs
+      d = create_driver(ENABLE_METADATA_AGENT_CONFIG + config)
+      assert_equal expected_url, d.instance.metadata_agent_url
+      ENV.delete(METADATA_AGENT_URL_ENV_VAR_NAME)
+    end
+  end
+
   def test_metadata_loading
     setup_gce_metadata_stubs
     d = create_driver
