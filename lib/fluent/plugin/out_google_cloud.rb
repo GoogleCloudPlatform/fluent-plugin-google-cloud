@@ -352,12 +352,11 @@ module Fluent
     # Whether to call metadata agent to retrieve monitored resource.
     config_param :enable_metadata_agent, :bool, :default => false
 
-    # The URL of Metadata Agent.
-    # If this option is not nil, its value will be used.
-    # If this option is nil, we will first check if the environment variable
-    # STACKDRIVER_METADATA_AGENT_URL is set and use that if possible.
-    # If that environment variable is also absent, the default url
-    # 'http://local-metadata-agent.stackdriver.com:8000' will be used.
+    # The URL of the Metadata Agent.
+    # If this option is set, its value is used to contact the Metadata Agent.
+    # Otherwise, the value of the STACKDRIVER_METADATA_AGENT_URL environment
+    # variable is used. If that is also unset, this defaults to
+    # 'http://local-metadata-agent.stackdriver.com:8000'.
     config_param :metadata_agent_url, :string, :default => nil
 
     # Whether to split log entries with different log tags into different
