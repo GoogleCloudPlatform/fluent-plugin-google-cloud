@@ -131,12 +131,12 @@ module BaseTest
       # not set, fall back to the default.
       [APPLICATION_DEFAULT_CONFIG, false, DEFAULT_METADATA_AGENT_URL]
     ].each do |(config, url_from_env, expected_url)|
-      ENV[METADATA_AGENT_URL_ENV_VAR_NAME] = METADATA_AGENT_URL_FROM_ENV if
+      ENV[METADATA_AGENT_URL_ENV_VAR] = METADATA_AGENT_URL_FROM_ENV if
         url_from_env
       setup_gce_metadata_stubs
       d = create_driver(ENABLE_METADATA_AGENT_CONFIG + config)
       assert_equal expected_url, d.instance.metadata_agent_url
-      ENV.delete(METADATA_AGENT_URL_ENV_VAR_NAME)
+      ENV.delete(METADATA_AGENT_URL_ENV_VAR)
     end
   end
 

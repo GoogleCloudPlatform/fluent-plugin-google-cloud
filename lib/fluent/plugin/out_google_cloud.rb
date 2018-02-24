@@ -124,7 +124,7 @@ module Fluent
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
-      METADATA_AGENT_URL_ENV_VAR_NAME = 'STACKDRIVER_METADATA_AGENT_URL'.freeze
+      METADATA_AGENT_URL_ENV_VAR = 'STACKDRIVER_METADATA_AGENT_URL'.freeze
     end
 
     # Internal constants.
@@ -400,10 +400,10 @@ module Fluent
       if @enable_metadata_agent
         # Convert to string to capture empty string.
         @metadata_agent_url ||=
-          if ENV[METADATA_AGENT_URL_ENV_VAR_NAME].to_s.empty?
+          if ENV[METADATA_AGENT_URL_ENV_VAR].to_s.empty?
             DEFAULT_METADATA_AGENT_URL
           else
-            ENV[METADATA_AGENT_URL_ENV_VAR_NAME]
+            ENV[METADATA_AGENT_URL_ENV_VAR]
           end
       end
 
