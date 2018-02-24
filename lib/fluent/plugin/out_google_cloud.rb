@@ -124,6 +124,7 @@ module Fluent
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
+      METADATA_AGENT_URL_ENV_VAR = 'STACKDRIVER_METADATA_AGENT_URL'.freeze
     end
 
     # Internal constants.
@@ -350,8 +351,13 @@ module Fluent
 
     # Whether to call metadata agent to retrieve monitored resource.
     config_param :enable_metadata_agent, :bool, :default => false
-    config_param :metadata_agent_url, :string,
-                 :default => DEFAULT_METADATA_AGENT_URL
+
+    # The URL of the Metadata Agent.
+    # If this option is set, its value is used to contact the Metadata Agent.
+    # Otherwise, the value of the STACKDRIVER_METADATA_AGENT_URL environment
+    # variable is used. If that is also unset, this defaults to
+    # 'http://local-metadata-agent.stackdriver.com:8000'.
+    config_param :metadata_agent_url, :string, :default => nil
 
     # Whether to split log entries with different log tags into different
     # requests when talking to Stackdriver Logging API.
@@ -385,6 +391,20 @@ module Fluent
                   ' enabled. Customized logging_api_url for the non-gRPC path' \
                   ' is not supported. The logging_api_url option will be' \
                   ' ignored.'
+      end
+
+      # 1. If @metadata_agent_url is customized (aka not nil), use that.
+      # 2. Otherwise check the presence of the environment variable
+      #    STACKDRIVER_METADATA_AGENT_URL and use that if set.
+      # 3. Fall back to the default if neither is set.
+      if @enable_metadata_agent
+        # Convert to string to capture empty string.
+        @metadata_agent_url ||=
+          if ENV[METADATA_AGENT_URL_ENV_VAR].to_s.empty?
+            DEFAULT_METADATA_AGENT_URL
+          else
+            ENV[METADATA_AGENT_URL_ENV_VAR]
+          end
       end
 
       # If monitoring is enabled, register metrics in the default registry
@@ -1382,7 +1402,7 @@ module Fluent
         return parsed_hash
       end
     rescue StandardError => e
-      @log.error 'Error calling Metadata Agent.', error: e
+      @log.error "Error calling Metadata Agent at #{url}.", error: e
     end
 
     # TODO: This functionality should eventually be available in another
