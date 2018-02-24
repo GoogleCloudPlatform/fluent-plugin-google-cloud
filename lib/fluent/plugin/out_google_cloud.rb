@@ -351,6 +351,11 @@ module Fluent
 
     # Whether to call metadata agent to retrieve monitored resource.
     config_param :enable_metadata_agent, :bool, :default => false
+
+    # The url of Metadata Agent. If this config is not customized (left as
+    # default instead) while an environment variable
+    # STACKDRIVER_METADATA_AGENT_URL is set, the value of that variable will
+    # take precedence. Otherwise the value of this config will be used.
     config_param :metadata_agent_url, :string,
                  :default => DEFAULT_METADATA_AGENT_URL
 
