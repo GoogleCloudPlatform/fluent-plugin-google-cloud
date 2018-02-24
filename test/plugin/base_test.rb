@@ -118,16 +118,16 @@ module BaseTest
 
   def test_metadata_agent_url_customization
     [
-      # If @metadata_agent_url is customized, use that even if the environment
+      # If @metadata_agent_url is set, use that even if the environment
       # variable is set.
       [CUSTOM_METADATA_AGENT_URL_CONFIG, true, CUSTOM_METADATA_AGENT_URL],
-      # If @metadata_agent_url is customized and the environment variable is
+      # If @metadata_agent_url is set and the environment variable is
       # not set, use @metadata_agent_url.
       [CUSTOM_METADATA_AGENT_URL_CONFIG, false, CUSTOM_METADATA_AGENT_URL],
-      # If @metadata_agent_url is not customized and the environment variable is
-      # set, use the env.
+      # If @metadata_agent_url is not set and the environment variable is set,
+      # use the env.
       [APPLICATION_DEFAULT_CONFIG, true, METADATA_AGENT_URL_FROM_ENV],
-      # If @metadata_agent_url is not customized and the environment variable is
+      # If @metadata_agent_url is not set and the environment variable is
       # not set, fall back to the default.
       [APPLICATION_DEFAULT_CONFIG, false, DEFAULT_METADATA_AGENT_URL]
     ].each do |(config, url_from_env, expected_url)|

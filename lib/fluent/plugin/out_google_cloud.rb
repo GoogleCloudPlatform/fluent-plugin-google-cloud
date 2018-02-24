@@ -352,12 +352,13 @@ module Fluent
     # Whether to call metadata agent to retrieve monitored resource.
     config_param :enable_metadata_agent, :bool, :default => false
 
-    # The url of Metadata Agent. If this config is not customized (left as
-    # default instead) while an environment variable
-    # STACKDRIVER_METADATA_AGENT_URL is set, the value of that variable will
-    # take precedence. Otherwise the value of this config will be used.
-    config_param :metadata_agent_url, :string,
-                 :default => DEFAULT_METADATA_AGENT_URL
+    # The URL of Metadata Agent.
+    # If this option is not nil, its value will be used.
+    # If this option is nil, we will first check if the environment variable
+    # STACKDRIVER_METADATA_AGENT_URL is set and use that if possible.
+    # If that environment variable is also absent, the default url
+    # 'http://local-metadata-agent.stackdriver.com:8000' will be used.
+    config_param :metadata_agent_url, :string, :default => nil
 
     # Whether to split log entries with different log tags into different
     # requests when talking to Stackdriver Logging API.
@@ -393,15 +394,18 @@ module Fluent
                   ' ignored.'
       end
 
+      # 1. If @metadata_agent_url is customized (aka not nil), use that.
+      # 2. Otherwise check the presence of the environment variable
+      #    STACKDRIVER_METADATA_AGENT_URL and use that if set.
+      # 3. Fall back to the default if neither is set.
       if @enable_metadata_agent
-        # 1. If @metadata_agent_url is customized, use that.
-        # 2. Otherwise check the environment variable
-        #    STACKDRIVER_METADATA_AGENT_URL.
-        # 3. Fall back to the default
-        if @metadata_agent_url == DEFAULT_METADATA_AGENT_URL && \
-           !ENV[METADATA_AGENT_URL_ENV_VAR_NAME].to_s.empty?
-          @metadata_agent_url = ENV[METADATA_AGENT_URL_ENV_VAR_NAME]
-        end
+        # Convert to string to capture empty string.
+        @metadata_agent_url ||=
+          if ENV[METADATA_AGENT_URL_ENV_VAR_NAME].to_s.empty?
+            DEFAULT_METADATA_AGENT_URL
+          else
+            ENV[METADATA_AGENT_URL_ENV_VAR_NAME]
+          end
       end
 
       # If monitoring is enabled, register metrics in the default registry
