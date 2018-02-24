@@ -1260,7 +1260,7 @@ module BaseTest
 
   # Test logs from applications running in Docker containers. These logs have
   # the label "logging.googleapis.com/local_resource_id" set in the format of
-  # "containerName.<container_name>".
+  # "container.<container_name>".
   def test_docker_container_application_logs
     new_stub_context do
       setup_gce_metadata_stubs
@@ -1274,7 +1274,7 @@ module BaseTest
       end
       verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM)
       assert_requested_metadata_agent_stub(
-        "containerName.#{DOCKER_CONTAINER_NAME}")
+        "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_NAME}")
     end
   end
 
@@ -1298,7 +1298,7 @@ module BaseTest
                      entry['timestamp']['nanos'], entry
       end
       assert_requested_metadata_agent_stub(
-        "containerName.#{DOCKER_CONTAINER_NAME}")
+        "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_NAME}")
     end
   end
 
@@ -1333,7 +1333,7 @@ module BaseTest
 
   # Test GKE container logs. These logs have the label
   # "logging.googleapis.com/local_resource_id" set in the format of
-  # "gke_containerName.<namespace_id>.<pod_name>.<container_name>".
+  # "gke_container.<namespace_id>.<pod_name>.<container_name>".
   def test_gke_container_logs
     [1, 2, 3, 5, 11, 50].each do |n|
       new_stub_context do
@@ -1349,8 +1349,8 @@ module BaseTest
         end
         verify_log_entries(n, CONTAINER_FROM_APPLICATION_PARAMS)
         assert_requested_metadata_agent_stub(
-          "gke_containerName.#{CONTAINER_NAMESPACE_ID}.#{CONTAINER_POD_NAME}." \
-          "#{CONTAINER_CONTAINER_NAME}")
+          "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
+          ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}")
       end
     end
   end
@@ -1533,7 +1533,7 @@ module BaseTest
     {
       log: log,
       LOCAL_RESOURCE_ID_KEY =>
-        "gke_containerName.#{CONTAINER_NAMESPACE_ID}" \
+        "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
         ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}"
     }
   end
@@ -1559,7 +1559,8 @@ module BaseTest
     {
       log: log,
       time: DOCKER_CONTAINER_TIMESTAMP,
-      LOCAL_RESOURCE_ID_KEY => "containerName.#{DOCKER_CONTAINER_NAME}"
+      LOCAL_RESOURCE_ID_KEY => "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}." \
+                               "#{DOCKER_CONTAINER_NAME}"
     }
   end
 
