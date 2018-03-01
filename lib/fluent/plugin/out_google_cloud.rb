@@ -199,7 +199,7 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
-    PLUGIN_VERSION = '0.6.15'.freeze
+    PLUGIN_VERSION = '0.6.16'.freeze
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'.freeze
