@@ -657,8 +657,8 @@ module BaseTest
   def test_configure_split_logs_by_tag
     setup_gce_metadata_stubs
     {
-      APPLICATION_DEFAULT_CONFIG => true,
-      DISABLE_SPLIT_LOGS_BY_TAG_CONFIG => false
+      APPLICATION_DEFAULT_CONFIG => false,
+      SPLIT_LOGS_BY_TAG_ENABLE_CONFIG => true
     }.each do |(config, split_logs_by_tag)|
       d = create_driver(config)
       assert_equal split_logs_by_tag,
@@ -674,8 +674,8 @@ module BaseTest
     end
     [
       # [] returns nil for any index.
-      [APPLICATION_DEFAULT_CONFIG, log_entry_count, dynamic_log_names, []],
-      [DISABLE_SPLIT_LOGS_BY_TAG_CONFIG, 1, [''], dynamic_log_names]
+      [SPLIT_LOGS_BY_TAG_ENABLE_CONFIG, log_entry_count, dynamic_log_names, []],
+      [APPLICATION_DEFAULT_CONFIG, 1, [''], dynamic_log_names]
     ].each do |(config, request_count, request_log_names, entry_log_names)|
       setup_prometheus
       setup_logging_stubs do
