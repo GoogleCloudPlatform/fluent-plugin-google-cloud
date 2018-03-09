@@ -61,7 +61,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: root_error_code,
                  body: PARTIAL_SUCCESS_RESPONSE_BODY.to_json)
-    d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+    d = create_driver(ENABLE_PROMETHEUS_CONFIG)
     4.times do |i|
       d.emit('message' => log_entry(i.to_s))
     end
@@ -123,7 +123,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       stub_request(:post, WRITE_LOG_ENTRIES_URI)
         .to_return(status: code, body: 'Some Message')
       (1..request_count).each do
-        d = create_driver(PROMETHEUS_ENABLE_CONFIG)
+        d = create_driver(ENABLE_PROMETHEUS_CONFIG)
         (1..entry_count).each do |i|
           d.emit('message' => log_entry(i.to_s))
         end

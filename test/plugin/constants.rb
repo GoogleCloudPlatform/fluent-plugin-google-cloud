@@ -186,11 +186,11 @@ module Constants
     detect_subservice false
   ).freeze
 
-  SPLIT_LOGS_BY_TAG_ENABLE_CONFIG = %(
+  ENABLE_SPLIT_LOGS_BY_TAG_CONFIG = %(
     split_logs_by_tag true
   ).freeze
 
-  PROMETHEUS_ENABLE_CONFIG = %(
+  ENABLE_PROMETHEUS_CONFIG = %(
     enable_monitoring true
     monitoring_type prometheus
   ).freeze
