@@ -382,7 +382,7 @@ module Fluent
 
     # Whether to split log entries with different log tags into different
     # requests when talking to Stackdriver Logging API.
-    config_param :split_logs_by_tag, :bool, :default => true
+    config_param :split_logs_by_tag, :bool, :default => false
 
     # rubocop:enable Style/HashSyntax
 
@@ -632,7 +632,8 @@ module Fluent
           end
           combined_entries.concat(request[:entries])
         end
-        @write_request.call(entries: combined_entries)
+        @write_request.call(entries: combined_entries) unless
+          combined_entries.empty?
       end
     end
 
