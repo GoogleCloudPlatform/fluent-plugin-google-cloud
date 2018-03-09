@@ -632,7 +632,8 @@ module Fluent
           end
           combined_entries.concat(request[:entries])
         end
-        @write_request.call(entries: combined_entries)
+        @write_request.call(entries: combined_entries) unless
+          combined_entries.empty?
       end
     end
 

@@ -673,9 +673,9 @@ module BaseTest
       "projects/test-project-id/logs/tag#{index}"
     end
     [
+      [APPLICATION_DEFAULT_CONFIG, 1, [''], dynamic_log_names],
       # [] returns nil for any index.
-      [SPLIT_LOGS_BY_TAG_ENABLE_CONFIG, log_entry_count, dynamic_log_names, []],
-      [APPLICATION_DEFAULT_CONFIG, 1, [''], dynamic_log_names]
+      [SPLIT_LOGS_BY_TAG_ENABLE_CONFIG, log_entry_count, dynamic_log_names, []]
     ].each do |(config, request_count, request_log_names, entry_log_names)|
       setup_prometheus
       setup_logging_stubs do
