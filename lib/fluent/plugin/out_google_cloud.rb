@@ -1238,6 +1238,34 @@ module Fluent
           # TODO(qingling128): Fix this temporary renaming from 'gke_container'
           # to 'container'.
           resource.type = 'container' if resource.type == 'gke_container'
+        else
+          # Failing to get monitored resource from Metadata Agent. It might be
+          # restarting. Let's construct the monitored resource on our own for
+          # now.
+          # We will regex match the local_resource_id to make sure we only do this for 'k8s_container' and 'k8s_node'
+          resource_type = decide_resource_type_by_regex_matching_local_resource_id(local_resource_id)
+          if resource_type = 'k8s_container'
+            resource = MonitoredResource(
+              type: 'k8s_container'
+              labels: {
+                'namespace_name': # It's part of local_resource_id ('k8s_container.<namespace_name>.<pod_name>.<container_name>')
+                'pod_name': # It's part of local_resource_id ('k8s_container.<namespace_name>.<pod_name>.<container_name>')
+                'container_name': # It's part of local_resource_id ('k8s_container.<namespace_name>.<pod_name>.<container_name>')
+								'cluster_name': # Get this from Metadata server (we are already doing this for legacy monitored resource).
+								'location': # Get this from Metadata server (This is new).
+              }
+            )
+          elsif resource_type = 'k8s_node'
+            resource = MonitoredResource(
+              type: 'k8s_node',
+              labels: {
+                'namespace_name': # It's part of local_resource_id ('k8s_pod.<namespace_name>.<pod_name>')
+                'pod_name': # It's part of local_resource_id ('k8s_pod.<namespace_name>.<pod_name>')
+                'node_name': # Get this from Metadata server (This is new).
+                # maybe some other labels as well. Need to check. But this is the rough idea. We should not need to talk to an additional dependency like Kubernetes master API.
+              }
+            )
+          end
         end
       end
 
