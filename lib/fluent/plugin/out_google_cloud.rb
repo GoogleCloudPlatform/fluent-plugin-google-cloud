@@ -974,6 +974,15 @@ module Fluent
 
       @compiled_http_latency_regexp =
         /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
+
+      @compiled_k8s_container_local_resource_id_regexp = /^
+        (?<resource_type>k8s_container)
+        .(?<namespace_name>[-0-9a-z]+)
+        .(?<pod_name>[-0-9a-z]+)
+        .(?<container_name>[-0-9a-z]+)$/x
+      @compiled_k8s_node_local_resource_id_regexp = /^
+        (?<resource_type>k8s_node)
+        .(?<node_name>[-0-9a-z]+)$/x
     end
 
     # Set required variables like @project_id, @vm_id, @vm_name and @zone.
@@ -1238,6 +1247,15 @@ module Fluent
           # TODO(qingling128): Fix this temporary renaming from 'gke_container'
           # to 'container'.
           resource.type = 'container' if resource.type == 'gke_container'
+        else
+          # TODO(qingling128): This entire else clause is temporary before we
+          # implement buffering and caching.
+          @log.error('Failing to retrieve monitored resource from Metadata' \
+                     " Agent with local_resource_id #{local_resource_id}. Try" \
+                     ' to construct resource locally if it is a k8s resource.')
+          constructed_k8s_resource = contruct_k8s_resource_locally(
+            local_resource_id)
+          resource = constructed_k8s_resource if constructed_k8s_resource
         end
       end
 
@@ -1472,6 +1490,11 @@ module Fluent
       return gke_name_match.captures[0] if gke_name_match &&
                                            !gke_name_match.captures.empty?
       instance_prefix
+    end
+
+    def location_from_kube_env(kube_env)
+      # If 'ZONE' is not present return nil.
+      return kube_env['ZONE'] if kube_env.key?('ZONE')
     end
 
     def time_or_nil(ts_secs, ts_nanos)
@@ -2143,6 +2166,102 @@ module Fluent
       @log.warn 'Failed to extract log entry errors from the error details:' \
                 " #{gax_error.details.inspect}.", error: e
       {}
+    end
+
+    # Construct monitored resource locally for k8s resources.
+    def contruct_k8s_resource_locally(local_resource_id)
+      matched_regexp_group = nil
+      # Regex match the local_resource_id to make sure we only do
+      # this for 'k8s_container' and 'k8s_node'.
+      [@compiled_k8s_node_local_resource_id_regexp,
+       @compiled_k8s_container_local_resource_id_regexp].each do |id_regexp|
+        matched_regexp_group ||= id_regexp.match(local_resource_id)
+      end
+      case matched_regexp_group['resource_type']
+      when 'k8s_container'
+        @log.debug('Detected local_resource_id in k8s_container format.' \
+                   "Constructing resource locally with #{local_resource_id}.")
+        return construct_k8s_container_resource(matched_regexp_group)
+      when 'k8s_node'
+        @log.debug('Detected local_resource_id in k8s_node format.' \
+                   "Constructing resource locally with #{local_resource_id}.")
+        return construct_k8s_node_resource(matched_regexp_group)
+      end
+    end
+
+    # Construct the k8s_container monitored resource locally. In case of any
+    # exception, return nil.
+    def construct_k8s_container_resource(matched_regexp_group)
+      constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
+        type: 'k8s_container',
+        labels: {
+          'namespace_name' => matched_regexp_group['namespace_name'],
+          'pod_name' => matched_regexp_group['pod_name'],
+          'container_name' => matched_regexp_group['container_name'],
+          'cluster_name' => retrieve_k8s_cluster_name,
+          'location' => retrieve_k8s_location
+        }
+      )
+      @log.debug('Constructed k8s_container resource locally:\n' \
+                 "#{constructed_resource.inspect}")
+      constructed_resource
+    rescue StandardError => e
+      @log.error 'Failed to construct "k8s_container" resource locally. Fall' \
+                 ' back to write logs to instance resource.', error: e
+      # Fall back to default instance resource.
+      return nil
+    end
+
+    # Construct the k8s_node monitored resource locally. In case of any
+    # exception, return nil.
+    def construct_k8s_node_resource(matched_regexp_group)
+      constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
+        type: 'k8s_node',
+        labels: {
+          'node_name' => matched_regexp_group['node_name'],
+          'cluster_name' => retrieve_k8s_cluster_name,
+          'location' => retrieve_k8s_location
+        }
+      )
+      @log.debug('Constructed k8s_node resource locally:\n' \
+                 "#{constructed_resource.inspect}")
+      constructed_resource
+    rescue StandardError
+      @log.error 'Failed to construct "k8s_node" resource locally. Fall' \
+                 ' back to write logs to instance resource.', error: e
+      # Fall back to default instance resource.
+      return nil
+    end
+
+    # Only retrieve kube env once since the cluster name and location info
+    # we care about is not changing for this agent instance's life time.
+    # Throw an error if the endpoint is not available
+    def retrieve_kube_env
+      @kube_env ||= YAML.load(
+        fetch_gce_metadata('instance/attributes/kube-env'))
+      @kube_env
+    end
+
+    # Only retrieve cluster name once since it's not changing for this
+    # agent instance's life time.
+    # Throw an error if failed to retrieve the cluster name.
+    def retrieve_k8s_cluster_name
+      @k8s_cluster_name ||= cluster_name_from_kube_env(retrieve_kube_env)
+      @k8s_cluster_name
+    end
+
+    # Only retrieve location once since it is the location of K8s Master which
+    # is not changing for this agent instance's life time.
+    # Throw an error if neither endpoint is available.
+    def retrieve_k8s_location
+      begin
+        @k8s_location ||= fetch_gce_metadata(
+          'instance/attributes/cluster-location')
+      rescue
+        # If the previous endpoint is not available, simply move on.
+        @k8s_location ||= location_from_kube_env(retrieve_kube_env)
+      end
+      @k8s_location
     end
 
     def ensure_array(value)
