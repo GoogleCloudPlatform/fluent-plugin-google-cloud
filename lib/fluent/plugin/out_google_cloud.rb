@@ -975,14 +975,15 @@ module Fluent
       @compiled_http_latency_regexp =
         /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
 
+      # TODO(qingling128): Temporary fallback for metadata agent restarts.
       @compiled_k8s_container_local_resource_id_regexp = /^
         (?<resource_type>k8s_container)
-        .(?<namespace_name>[-0-9a-z]+)
-        .(?<pod_name>[-0-9a-z]+)
-        .(?<container_name>[-0-9a-z]+)$/x
+        \.(?<namespace_name>[-0-9a-z]+)
+        \.(?<pod_name>[.-0-9a-z]+)
+        \.(?<container_name>[-0-9a-z]+)$/x
       @compiled_k8s_node_local_resource_id_regexp = /^
         (?<resource_type>k8s_node)
-        .(?<node_name>[-0-9a-z]+)$/x
+        \.(?<node_name>[-0-9a-z]+)$/x
     end
 
     # Set required variables like @project_id, @vm_id, @vm_name and @zone.
@@ -1250,10 +1251,11 @@ module Fluent
         else
           # TODO(qingling128): This entire else clause is temporary before we
           # implement buffering and caching.
-          @log.error('Failing to retrieve monitored resource from Metadata' \
-                     " Agent with local_resource_id #{local_resource_id}. Try" \
-                     ' to construct resource locally if it is a k8s resource.')
-          constructed_k8s_resource = contruct_k8s_resource_locally(
+          @log.warn('Failing to retrieve monitored resource from Metadata' \
+                     " Agent with local_resource_id #{local_resource_id}." \
+                     ' Trying to construct resource locally if it is a k8s' \
+                     ' resource.')
+          constructed_k8s_resource = construct_k8s_resource_locally(
             local_resource_id)
           resource = constructed_k8s_resource if constructed_k8s_resource
         end
@@ -1490,11 +1492,6 @@ module Fluent
       return gke_name_match.captures[0] if gke_name_match &&
                                            !gke_name_match.captures.empty?
       instance_prefix
-    end
-
-    def location_from_kube_env(kube_env)
-      # If 'ZONE' is not present return nil.
-      return kube_env['ZONE'] if kube_env.key?('ZONE')
     end
 
     def time_or_nil(ts_secs, ts_nanos)
@@ -2169,7 +2166,7 @@ module Fluent
     end
 
     # Construct monitored resource locally for k8s resources.
-    def contruct_k8s_resource_locally(local_resource_id)
+    def construct_k8s_resource_locally(local_resource_id)
       matched_regexp_group = nil
       # Regex match the local_resource_id to make sure we only do
       # this for 'k8s_container' and 'k8s_node'.
@@ -2177,6 +2174,7 @@ module Fluent
        @compiled_k8s_container_local_resource_id_regexp].each do |id_regexp|
         matched_regexp_group ||= id_regexp.match(local_resource_id)
       end
+      return unless matched_regexp_group
       case matched_regexp_group['resource_type']
       when 'k8s_container'
         @log.debug('Detected local_resource_id in k8s_container format.' \
@@ -2206,10 +2204,10 @@ module Fluent
                  "#{constructed_resource.inspect}")
       constructed_resource
     rescue StandardError => e
-      @log.error 'Failed to construct "k8s_container" resource locally. Fall' \
-                 ' back to write logs to instance resource.', error: e
+      @log.error 'Failed to construct "k8s_container" resource locally.' \
+                 ' Falling back to write logs to instance resource.', error: e
       # Fall back to default instance resource.
-      return nil
+      return
     end
 
     # Construct the k8s_node monitored resource locally. In case of any
@@ -2227,10 +2225,10 @@ module Fluent
                  "#{constructed_resource.inspect}")
       constructed_resource
     rescue StandardError
-      @log.error 'Failed to construct "k8s_node" resource locally. Fall' \
-                 ' back to write logs to instance resource.', error: e
+      @log.error 'Failed to construct "k8s_node" resource locally. Falling' \
+                 ' back to writing logs to instance resource.', error: e
       # Fall back to default instance resource.
-      return nil
+      return
     end
 
     # Only retrieve kube env once since the cluster name and location info
@@ -2239,29 +2237,25 @@ module Fluent
     def retrieve_kube_env
       @kube_env ||= YAML.load(
         fetch_gce_metadata('instance/attributes/kube-env'))
-      @kube_env
     end
 
     # Only retrieve cluster name once since it's not changing for this
     # agent instance's life time.
     # Throw an error if failed to retrieve the cluster name.
     def retrieve_k8s_cluster_name
-      @k8s_cluster_name ||= cluster_name_from_kube_env(retrieve_kube_env)
-      @k8s_cluster_name
+      @k8s_cluster_name ||= fetch_gce_metadata(
+        'instance/attributes/cluster-name')
     end
 
     # Only retrieve location once since it is the location of K8s Master which
     # is not changing for this agent instance's life time.
     # Throw an error if neither endpoint is available.
     def retrieve_k8s_location
-      begin
-        @k8s_location ||= fetch_gce_metadata(
-          'instance/attributes/cluster-location')
-      rescue
-        # If the previous endpoint is not available, simply move on.
-        @k8s_location ||= location_from_kube_env(retrieve_kube_env)
-      end
-      @k8s_location
+      @k8s_location ||= fetch_gce_metadata(
+        'instance/attributes/cluster-location')
+    rescue
+      # If the previous endpoint is not available, simply move on.
+      @k8s_location ||= retrieve_kube_env['ZONE']
     end
 
     def ensure_array(value)
