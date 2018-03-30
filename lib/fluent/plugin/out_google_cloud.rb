@@ -980,16 +980,6 @@ module Fluent
 
       @compiled_http_latency_regexp =
         /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
-
-      # TODO(qingling128): Temporary fallback for metadata agent restarts.
-      @compiled_k8s_container_local_resource_id_regexp = /^
-        (?<resource_type>k8s_container)
-        \.(?<namespace_name>[0-9a-z-]+)
-        \.(?<pod_name>[.0-9a-z-]+)
-        \.(?<container_name>[0-9a-z-]+)$/x
-      @compiled_k8s_node_local_resource_id_regexp = /^
-        (?<resource_type>k8s_node)
-        \.(?<node_name>[0-9a-z-]+)$/x
     end
 
     # Set required variables like @project_id, @vm_id, @vm_name and @zone.
@@ -1320,6 +1310,7 @@ module Fluent
       when K8S_CONTAINER_CONSTANTS[:resource_type],
            K8S_NODE_CONSTANTS[:resource_type]
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
+
       end
 
       # Cloud Dataflow and Cloud ML.
@@ -2177,69 +2168,59 @@ module Fluent
 
     # Construct monitored resource locally for k8s resources.
     def construct_k8s_resource_locally(local_resource_id)
-      matched_regexp_group = nil
-      # Regex match the local_resource_id to make sure we only do
-      # this for 'k8s_container' and 'k8s_node'.
-      [@compiled_k8s_node_local_resource_id_regexp,
-       @compiled_k8s_container_local_resource_id_regexp].each do |id_regexp|
-        matched_regexp_group ||= id_regexp.match(local_resource_id)
-      end
-      return unless matched_regexp_group
-      case matched_regexp_group['resource_type']
-      when 'k8s_container'
-        @log.debug('Detected local_resource_id in k8s_container format.' \
-                   "Constructing resource locally with #{local_resource_id}.")
-        return construct_k8s_container_resource(matched_regexp_group)
-      when 'k8s_node'
-        @log.debug('Detected local_resource_id in k8s_node format.' \
-                   "Constructing resource locally with #{local_resource_id}.")
-        return construct_k8s_node_resource(matched_regexp_group)
-      end
-    end
+      return unless
+        /^
+          (?<resource_type>k8s_container)
+          \.(?<namespace_name>[0-9a-z-]+)
+          \.(?<pod_name>[.0-9a-z-]+)
+          \.(?<container_name>[0-9a-z-]+)$/x =~ local_resource_id ||
+        /^
+          (?<resource_type>k8s_node)
+          \.(?<node_name>[0-9a-z-]+)$/x =~ local_resource_id
+      case resource_type
+      when K8S_CONTAINER_CONSTANTS[:resource_type]
+        begin
+          labels = {
+            'namespace_name' => namespace_name,
+            'pod_name' => pod_name,
+            'container_name' => container_name,
+            'cluster_name' => retrieve_k8s_cluster_name,
+            'location' => retrieve_k8s_location
+          }
+        rescue StandardError => e
+          @log.error "Failed to construct #{resource_type} resource locally." \
+                     ' Falling back to writing logs against gke_container' \
+                     ' resource.', error: e
+          return
+        end
+      when K8S_NODE_CONSTANTS[:resource_type]
+        begin
+          labels = {
+            'node_name' => node_name,
+            'cluster_name' => retrieve_k8s_cluster_name,
+            'location' => retrieve_k8s_location
+          }
+        rescue StandardError => e
+          @log.error "Failed to construct #{resource_type} resource locally." \
+                     ' Falling back to writing logs against instance resource.',
+                     error: e
+          return
+        end
 
-    # Construct the k8s_container monitored resource locally. In case of any
-    # exception, return nil.
-    def construct_k8s_container_resource(matched_regexp_group)
+      else
+        # Skip for anything that is not k8s related.
+        return
+      end
+
+      @log.debug("Detected local_resource_id in #{resource_type} format." \
+                 "Constructing resource locally with #{local_resource_id}.")
       constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
-        type: 'k8s_container',
-        labels: {
-          'namespace_name' => matched_regexp_group['namespace_name'],
-          'pod_name' => matched_regexp_group['pod_name'],
-          'container_name' => matched_regexp_group['container_name'],
-          'cluster_name' => retrieve_k8s_cluster_name,
-          'location' => retrieve_k8s_location
-        }
+        type: resource_type,
+        labels: labels
       )
-      @log.debug('Constructed k8s_container resource locally:\n' \
+      @log.debug("Constructed #{resource_type} resource locally:\n" \
                  "#{constructed_resource.inspect}")
       constructed_resource
-    rescue StandardError => e
-      # TODO(qingling128): Remove the gke_container part and replace with the
-      # right resource then after gke_container is deprecated.
-      @log.error 'Failed to construct "k8s_container" resource locally.' \
-                 ' Falling back to writing logs against gke_container' \
-                 ' resource.', error: e
-      return
-    end
-
-    # Construct the k8s_node monitored resource locally. In case of any
-    # exception, return nil.
-    def construct_k8s_node_resource(matched_regexp_group)
-      constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
-        type: 'k8s_node',
-        labels: {
-          'node_name' => matched_regexp_group['node_name'],
-          'cluster_name' => retrieve_k8s_cluster_name,
-          'location' => retrieve_k8s_location
-        }
-      )
-      @log.debug('Constructed k8s_node resource locally:\n' \
-                 "#{constructed_resource.inspect}")
-      constructed_resource
-    rescue StandardError => e
-      @log.error 'Failed to construct "k8s_node" resource locally. Falling' \
-                 ' back to writing logs against instance resource.', error: e
-      return
     end
 
     # Only retrieve cluster name once since it's not changing for this
