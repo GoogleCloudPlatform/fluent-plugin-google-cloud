@@ -1381,7 +1381,7 @@ module BaseTest
         set_up_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0),
-          local_resource_id = RANDOM_LOCAL_RESOURCE_ID),
+          local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
         expected_params: COMPUTE_PARAMS
       },
       # Specific cases for k8s_node.
@@ -1753,7 +1753,7 @@ module BaseTest
   # k8s resources.
 
   def k8s_container_log_entry(log,
-                              local_resource_id = K8S_LOCAL_RESOURCE_ID)
+                              local_resource_id: K8S_LOCAL_RESOURCE_ID)
     {
       log: log,
       stream: K8S_STREAM,
