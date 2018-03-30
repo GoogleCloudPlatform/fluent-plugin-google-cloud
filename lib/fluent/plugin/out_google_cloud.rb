@@ -2184,7 +2184,7 @@ module Fluent
         @k8s_location ||= fetch_gce_metadata(
           'instance/attributes/cluster-location')
       rescue StandardError => e
-        @log.error "Failed to retrieve k8s cluster name and location.", \
+        @log.error 'Failed to retrieve k8s cluster name and location.', \
                    error: e
       end
       case resource_type
