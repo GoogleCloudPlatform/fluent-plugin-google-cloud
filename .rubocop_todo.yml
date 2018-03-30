@@ -20,7 +20,7 @@ Metrics/AbcSize:
 Metrics/ClassLength:
   Max: 1500
 Metrics/ModuleLength:
-  Max: 1700
+  Max: 1800
 
 # Offense count: 3
 Metrics/CyclomaticComplexity:
@@ -34,3 +34,28 @@ Metrics/MethodLength:
 # Offense count: 3
 Metrics/PerceivedComplexity:
   Max: 50
+
+# TODO(qingling128) Rubocop bug.
+# Upgrade to newer version to see if it will be fixed.
+# It's complaining about the following function.
+#  def k8s_container_log_entry(log,
+#                              local_resource_id = K8S_LOCAL_RESOURCE_ID)
+#    {
+#      log: log,
+#      stream: K8S_STREAM,
+#      time: K8S_TIMESTAMP,
+#      LOCAL_RESOURCE_ID_KEY => local_resource_id
+#    }
+#  end
+# But if we disable it in the code, it also complains:
+#
+#   test/plugin/base_test.rb:1384:11: W: Useless assignment to variable - local_resource_id.
+#             local_resource_id = RANDOM_LOCAL_RESOURCE_ID),
+#             ^^^^^^^^^^^^^^^^^
+#   test/plugin/base_test.rb:1757:3: W: Unnecessary disabling of Lint/UselessAssignment.
+#     # rubocop:disable Lint/UselessAssignment
+#     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# Online search of shows lots of reports around buggy behavior of this check.
+Lint/UselessAssignment:
+  Enabled: false

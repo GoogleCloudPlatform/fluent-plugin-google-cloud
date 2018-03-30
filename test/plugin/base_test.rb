@@ -1303,6 +1303,143 @@ module BaseTest
     end
   end
 
+  # Test k8s monitored resource including the fallback when Metadata Agent
+  # restarts.
+  def test_k8s_monitored_resource_fallback
+    [
+      # k8s_container.
+      # When enable_metadata_agent is false.
+      {
+        enable_metadata_agent: false,
+        set_up_metadata_agent_stub: false,
+        set_up_k8s_stub: false,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: COMPUTE_PARAMS
+      },
+      {
+        enable_metadata_agent: false,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: false,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: COMPUTE_PARAMS
+      },
+      {
+        enable_metadata_agent: false,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: true,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: COMPUTE_PARAMS
+      },
+      {
+        enable_metadata_agent: false,
+        set_up_metadata_agent_stub: false,
+        set_up_k8s_stub: true,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: COMPUTE_PARAMS
+      },
+      # When enable_metadata_agent is true.
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: false,
+        set_up_k8s_stub: false,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: COMPUTE_PARAMS
+      },
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: false,
+        set_up_k8s_stub: true,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
+      },
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: false,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: K8S_CONTAINER_PARAMS
+      },
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: true,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: K8S_CONTAINER_PARAMS
+      },
+      # When local_resource_id is not present or does not match k8s regexes.
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: true,
+        log_entry: k8s_container_log_entry(
+          log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
+        expected_params: COMPUTE_PARAMS
+      },
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: true,
+        log_entry: k8s_container_log_entry(
+          log_entry(0),
+          local_resource_id = RANDOM_LOCAL_RESOURCE_ID),
+        expected_params: COMPUTE_PARAMS
+      },
+      # Specific cases for k8s_node.
+      {
+        enable_metadata_agent: false,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: true,
+        log_entry: k8s_node_log_entry(log_entry(0)),
+        expected_params: COMPUTE_PARAMS
+      },
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: true,
+        log_entry: k8s_node_log_entry(log_entry(0)),
+        expected_params: K8S_NODE_PARAMS
+      },
+      {
+        enable_metadata_agent: true,
+        set_up_metadata_agent_stub: true,
+        set_up_k8s_stub: true,
+        log_entry: k8s_node_log_entry(log_entry(0)),
+        expected_params: K8S_NODE_PARAMS
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        if test_params[:set_up_metadata_agent_stub]
+          setup_metadata_agent_stubs
+        else
+          setup_no_metadata_agent_stubs
+        end
+        if test_params[:set_up_k8s_stub]
+          set_up_k8s_metadata_stubs
+        else
+          set_up_no_k8s_metadata_stubs
+        end
+        setup_logging_stubs do
+          config = if test_params[:enable_metadata_agent]
+                     ENABLE_METADATA_AGENT_CONFIG
+                   else
+                     APPLICATION_DEFAULT_CONFIG
+                   end
+          d = create_driver(config)
+          d.emit(test_params[:log_entry])
+          d.run
+        end
+        verify_log_entries(1, test_params[:expected_params],
+                           'jsonPayload') do |entry|
+          fields = get_fields(entry['jsonPayload'])
+          assert_equal 2, fields.size, entry
+          assert_equal 'test log entry 0', get_string(fields['log']), entry
+          assert_equal K8S_STREAM, get_string(fields['stream']), entry
+        end
+      end
+    end
+  end
+
   # Test that the 'time' field from the json record is extracted and set to
   # entry.timestamp for Docker container logs.
   def test_time_field_extraction_for_docker_container_logs
@@ -1466,6 +1603,22 @@ module BaseTest
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
   end
 
+  def set_up_k8s_metadata_stubs
+    stub_metadata_request(
+      'instance/attributes/',
+      "attribute1\ncluster-name\ncluster-location\nlast_attribute")
+    stub_metadata_request('instance/attributes/cluster-location', K8S_LOCATION2)
+    stub_metadata_request('instance/attributes/cluster-name', K8S_CLUSTER_NAME)
+  end
+
+  def set_up_no_k8s_metadata_stubs
+    # Simulate an environment with no new k8s endpoints present.
+    stub_request(:get, %r{.*instance/attributes/cluster-location.*})
+      .to_raise(Errno::EHOSTUNREACH)
+    stub_request(:get, %r{.*instance/attributes/cluster-name.*})
+      .to_raise(Errno::EHOSTUNREACH)
+  end
+
   def setup_cloudfunctions_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
@@ -1514,6 +1667,14 @@ module BaseTest
       stub_request(:get, metadata_request_url(local_resource_id))
         .to_return(status: 200, body: resource)
     end
+    stub_request(:get, metadata_request_url(RANDOM_LOCAL_RESOURCE_ID))
+      .to_return(status: 404, body: '')
+  end
+
+  def setup_no_metadata_agent_stubs
+    # Simulate an environment with no metadata agent endpoint present.
+    stub_request(:get, %r{#{DEFAULT_METADATA_AGENT_URL}\/monitoredResource/.*})
+      .to_raise(Errno::EHOSTUNREACH)
   end
 
   def assert_requested_metadata_agent_stub(local_resource_id)
@@ -1589,6 +1750,29 @@ module BaseTest
     }
   end
 
+  # k8s resources.
+
+  def k8s_container_log_entry(log,
+                              local_resource_id = K8S_LOCAL_RESOURCE_ID)
+    {
+      log: log,
+      stream: K8S_STREAM,
+      time: K8S_TIMESTAMP,
+      LOCAL_RESOURCE_ID_KEY => local_resource_id
+    }
+  end
+
+  def k8s_node_log_entry(log)
+    {
+      log: log,
+      stream: K8S_STREAM,
+      time: K8S_TIMESTAMP,
+      LOCAL_RESOURCE_ID_KEY =>
+        "#{K8S_NODE_LOCAL_RESOURCE_ID_PREFIX}" \
+        ".#{K8S_NODE_NAME}"
+    }
+  end
+
   def cloudfunctions_log_entry(i)
     {
       stream: 'stdout',
@@ -1631,6 +1815,7 @@ module BaseTest
   end
 
   def check_labels(labels, expected_labels)
+    return if labels.empty? && expected_labels.empty?
     labels.each do |key, value|
       assert value.is_a?(String), "Value #{value} for label #{key} " \
         'is not a string: ' + value.class.name

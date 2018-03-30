@@ -92,6 +92,12 @@ module Fluent
           'stderr' => 'ERROR'
         }
       }.freeze
+      K8S_CONTAINER_CONSTANTS = {
+        resource_type: 'k8s_container'
+      }.freeze
+      K8S_NODE_CONSTANTS = {
+        resource_type: 'k8s_node'
+      }.freeze
       DOCKER_CONSTANTS = {
         service: 'docker.googleapis.com',
         resource_type: 'docker_container'
@@ -978,12 +984,12 @@ module Fluent
       # TODO(qingling128): Temporary fallback for metadata agent restarts.
       @compiled_k8s_container_local_resource_id_regexp = /^
         (?<resource_type>k8s_container)
-        \.(?<namespace_name>[-0-9a-z]+)
-        \.(?<pod_name>[.-0-9a-z]+)
-        \.(?<container_name>[-0-9a-z]+)$/x
+        \.(?<namespace_name>[0-9a-z-]+)
+        \.(?<pod_name>[0-9a-z-.]+)
+        \.(?<container_name>[0-9a-z-]+)$/x
       @compiled_k8s_node_local_resource_id_regexp = /^
         (?<resource_type>k8s_node)
-        \.(?<node_name>[-0-9a-z]+)$/x
+        \.(?<node_name>[0-9a-z-]+)$/x
     end
 
     # Set required variables like @project_id, @vm_id, @vm_name and @zone.
@@ -1308,7 +1314,11 @@ module Fluent
       # Docker container.
       # TODO(qingling128): Remove this logic once the resource is retrieved at a
       # proper time (b/65175256).
-      when DOCKER_CONSTANTS[:resource_type]
+      when DOCKER_CONSTANTS[:resource_type],
+           # TODO(qingling128): Temporary fallback for metadata agent restarts.
+           K8S_CONTAINER_CONSTANTS[:resource_type],
+           K8S_NODE_CONSTANTS[:resource_type]
+
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
       end
 
@@ -2205,8 +2215,9 @@ module Fluent
       constructed_resource
     rescue StandardError => e
       @log.error 'Failed to construct "k8s_container" resource locally.' \
-                 ' Falling back to write logs to instance resource.', error: e
-      # Fall back to default instance resource.
+                 ' Falling back to writing logs against instance resource.',
+                 error: e
+      # Fall back to legacy gke resource or default instance resource.
       return
     end
 
@@ -2224,19 +2235,11 @@ module Fluent
       @log.debug('Constructed k8s_node resource locally:\n' \
                  "#{constructed_resource.inspect}")
       constructed_resource
-    rescue StandardError
+    rescue StandardError => e
       @log.error 'Failed to construct "k8s_node" resource locally. Falling' \
-                 ' back to writing logs to instance resource.', error: e
+                 ' back to writing logs against instance resource.', error: e
       # Fall back to default instance resource.
       return
-    end
-
-    # Only retrieve kube env once since the cluster name and location info
-    # we care about is not changing for this agent instance's life time.
-    # Throw an error if the endpoint is not available
-    def retrieve_kube_env
-      @kube_env ||= YAML.load(
-        fetch_gce_metadata('instance/attributes/kube-env'))
     end
 
     # Only retrieve cluster name once since it's not changing for this
@@ -2253,9 +2256,6 @@ module Fluent
     def retrieve_k8s_location
       @k8s_location ||= fetch_gce_metadata(
         'instance/attributes/cluster-location')
-    rescue
-      # If the previous endpoint is not available, simply move on.
-      @k8s_location ||= retrieve_kube_env['ZONE']
     end
 
     def ensure_array(value)

@@ -31,6 +31,8 @@ module Constants
   FULLY_QUALIFIED_ZONE = "projects/#{PROJECT_ID}/zones/#{ZONE}".freeze
   VM_ID = '9876543210'.freeze
 
+  RANDOM_LOCAL_RESOURCE_ID = 'ehb.jjk.poq.ll'.freeze
+
   # Attributes used for the Metadata Agent resources.
   METADATA_ZONE = 'us-central1-c'.freeze
   METADATA_VM_ID = '0123456789'.freeze
@@ -74,6 +76,30 @@ module Constants
   DOCKER_CONTAINER_SECONDS_EPOCH = 1_234_567_890
   DOCKER_CONTAINER_NANOS = 987_654_321
   DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'container'.freeze
+
+  # New K8s resource constants.
+  K8S_LOCATION = 'us-central1-b'.freeze
+  K8S_LOCATION2 = 'us-central1-c'.freeze
+  K8S_CLUSTER_NAME = 'cluster-1'.freeze
+  K8S_NAMESPACE_NAME = 'kube-system'.freeze
+  K8S_NODE_NAME = 'performance--default-pool-cabf1342-08jc'.freeze
+  K8S_POD_NAME = 'redis-master-c0l82.foo.bar'.freeze
+  K8S_CONTAINER_NAME = 'redis'.freeze
+  K8S_STREAM = 'stdout'.freeze
+  # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch.
+  K8S_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'.freeze
+  K8S_SECONDS_EPOCH = 1_234_567_890
+  K8S_NANOS = 987_654_321
+  K8S_CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'k8s_container'.freeze
+  K8S_NODE_LOCAL_RESOURCE_ID_PREFIX = 'k8s_node'.freeze
+  K8S_TAG =
+    "var.log.containers.#{K8S_NAMESPACE_NAME}_#{K8S_POD_NAME}_" \
+    "#{K8S_CONTAINER_NAME}.log".freeze
+  K8S_LOCAL_RESOURCE_ID =
+    "#{K8S_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}" \
+    ".#{K8S_NAMESPACE_NAME}" \
+    ".#{K8S_POD_NAME}" \
+    ".#{K8S_CONTAINER_NAME}".freeze
 
   # Container Engine / Kubernetes specific labels.
   CONTAINER_CLUSTER_NAME = 'cluster-1'.freeze
@@ -392,6 +418,52 @@ module Constants
     }
   }.freeze
 
+  # K8s Container.
+  K8S_CONTAINER_PARAMS = {
+    resource: {
+      type: K8S_CONTAINER_CONSTANTS[:resource_type],
+      labels: {
+        'namespace_name' => K8S_NAMESPACE_NAME,
+        'pod_name' => K8S_POD_NAME,
+        'container_name' => K8S_CONTAINER_NAME,
+        'cluster_name' => K8S_CLUSTER_NAME,
+        'location' => K8S_LOCATION
+      }
+    },
+    log_name: 'test',
+    project_id: PROJECT_ID,
+    labels: {}
+  }.freeze
+  K8S_CONTAINER_PARAMS_FROM_LOCAL = K8S_CONTAINER_PARAMS.merge(
+    resource: K8S_CONTAINER_PARAMS[:resource].merge(
+      labels: K8S_CONTAINER_PARAMS[:resource][:labels].merge(
+        'location' => K8S_LOCATION2
+      )
+    )
+  ).freeze
+
+  # K8s Node.
+  K8S_NODE_PARAMS = {
+    resource: {
+      type: K8S_NODE_CONSTANTS[:resource_type],
+      labels: {
+        'node_name' => K8S_NODE_NAME,
+        'cluster_name' => K8S_CLUSTER_NAME,
+        'location' => K8S_LOCATION
+      }
+    },
+    log_name: 'test',
+    project_id: PROJECT_ID,
+    labels: {}
+  }.freeze
+  K8S_NODE_PARAMS_FROM_LOCAL = K8S_NODE_PARAMS.merge(
+    resource: K8S_NODE_PARAMS[:resource].merge(
+      labels: K8S_NODE_PARAMS[:resource][:labels].merge(
+        'location' => K8S_LOCATION2
+      )
+    )
+  ).freeze
+
   # Docker Container.
   DOCKER_CONTAINER_PARAMS = {
     resource: {
@@ -646,6 +718,29 @@ module Constants
           'namespace_id' => CONTAINER_NAMESPACE_ID,
           'pod_id' => CONTAINER_POD_ID,
           'zone' => ZONE
+        }
+      }.to_json,
+    # K8s container logs.
+    "#{K8S_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{K8S_NAMESPACE_NAME}" \
+    ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}" =>
+      {
+        'type' => K8S_CONTAINER_CONSTANTS[:resource_type],
+        'labels' => {
+          'namespace_name' => K8S_NAMESPACE_NAME,
+          'pod_name' => K8S_POD_NAME,
+          'container_name' => K8S_CONTAINER_NAME,
+          'cluster_name' => K8S_CLUSTER_NAME,
+          'location' => K8S_LOCATION
+        }
+      }.to_json,
+    # K8s node logs.
+    "#{K8S_NODE_LOCAL_RESOURCE_ID_PREFIX}.#{K8S_NODE_NAME}" =>
+      {
+        'type' => K8S_NODE_CONSTANTS[:resource_type],
+        'labels' => {
+          'node_name' => K8S_NODE_NAME,
+          'cluster_name' => K8S_CLUSTER_NAME,
+          'location' => K8S_LOCATION
         }
       }.to_json
   }.freeze
