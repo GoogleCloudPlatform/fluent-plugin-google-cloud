@@ -1311,113 +1311,115 @@ module BaseTest
       # When enable_metadata_agent is false.
       {
         enable_metadata_agent: false,
-        set_up_metadata_agent_stub: false,
-        set_up_k8s_stub: false,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
         enable_metadata_agent: false,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: false,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
         enable_metadata_agent: false,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
         enable_metadata_agent: false,
-        set_up_metadata_agent_stub: false,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       # When enable_metadata_agent is true.
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: false,
-        set_up_k8s_stub: false,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: false,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
       },
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: false,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS
       },
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS
       },
       # When local_resource_id is not present or does not match k8s regexes.
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
         expected_params: COMPUTE_PARAMS
       },
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0),
           local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
+        # When 'kube-env' is present, "compute.googleapis.com/resource_name" is
+        # not added.
         expected_params: COMPUTE_PARAMS
       },
       # Specific cases for k8s_node.
       {
         enable_metadata_agent: false,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: K8S_NODE_PARAMS
       },
       {
         enable_metadata_agent: true,
-        set_up_metadata_agent_stub: true,
-        set_up_k8s_stub: true,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: K8S_NODE_PARAMS
       }
     ].each do |test_params|
       new_stub_context do
         setup_gce_metadata_stubs
-        if test_params[:set_up_metadata_agent_stub]
+        if test_params[:setup_metadata_agent_stub]
           setup_metadata_agent_stubs
         else
           setup_no_metadata_agent_stubs
         end
-        if test_params[:set_up_k8s_stub]
-          set_up_k8s_metadata_stubs
+        if test_params[:setup_k8s_stub]
+          setup_k8s_metadata_stubs
         else
-          set_up_no_k8s_metadata_stubs
+          setup_no_k8s_metadata_stubs
         end
         setup_logging_stubs do
           config = if test_params[:enable_metadata_agent]
@@ -1603,7 +1605,7 @@ module BaseTest
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
   end
 
-  def set_up_k8s_metadata_stubs
+  def setup_k8s_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
       "attribute1\ncluster-name\ncluster-location\nlast_attribute")
@@ -1611,12 +1613,14 @@ module BaseTest
     stub_metadata_request('instance/attributes/cluster-name', K8S_CLUSTER_NAME)
   end
 
-  def set_up_no_k8s_metadata_stubs
-    # Simulate an environment with no new k8s endpoints present.
-    stub_request(:get, %r{.*instance/attributes/cluster-location.*})
-      .to_raise(Errno::EHOSTUNREACH)
-    stub_request(:get, %r{.*instance/attributes/cluster-name.*})
-      .to_raise(Errno::EHOSTUNREACH)
+  def setup_no_k8s_metadata_stubs
+    ['cluster-location', 'cluster-name'].each do |metadata_name|
+      stub_request(:get, %r{.*instance/attributes/#{metadata_name}.*})
+        .to_return(status: 404,
+                   body: 'The requested URL /computeMetadata/v1/instance/' \
+                         "attributes/#{metadata_name} was not found on this" \
+                         ' server.')
+    end
   end
 
   def setup_cloudfunctions_metadata_stubs
@@ -1750,6 +1754,7 @@ module BaseTest
     }
   end
 
+  # TODO(qingling128): Temporary fallback for metadata agent restarts.
   # k8s resources.
 
   def k8s_container_log_entry(log,

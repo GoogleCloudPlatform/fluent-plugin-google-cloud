@@ -985,7 +985,7 @@ module Fluent
       @compiled_k8s_container_local_resource_id_regexp = /^
         (?<resource_type>k8s_container)
         \.(?<namespace_name>[0-9a-z-]+)
-        \.(?<pod_name>[0-9a-z-.]+)
+        \.(?<pod_name>[.0-9a-z-]+)
         \.(?<container_name>[0-9a-z-]+)$/x
       @compiled_k8s_node_local_resource_id_regexp = /^
         (?<resource_type>k8s_node)
@@ -1257,10 +1257,8 @@ module Fluent
         else
           # TODO(qingling128): This entire else clause is temporary before we
           # implement buffering and caching.
-          @log.warn('Failing to retrieve monitored resource from Metadata' \
-                     " Agent with local_resource_id #{local_resource_id}." \
-                     ' Trying to construct resource locally if it is a k8s' \
-                     ' resource.')
+          @log.warn('Failed to retrieve monitored resource from Metadata' \
+                     " Agent with local_resource_id #{local_resource_id}.")
           constructed_k8s_resource = construct_k8s_resource_locally(
             local_resource_id)
           resource = constructed_k8s_resource if constructed_k8s_resource
@@ -1314,11 +1312,13 @@ module Fluent
       # Docker container.
       # TODO(qingling128): Remove this logic once the resource is retrieved at a
       # proper time (b/65175256).
-      when DOCKER_CONSTANTS[:resource_type],
-           # TODO(qingling128): Temporary fallback for metadata agent restarts.
-           K8S_CONTAINER_CONSTANTS[:resource_type],
-           K8S_NODE_CONSTANTS[:resource_type]
+      when DOCKER_CONSTANTS[:resource_type]
+        common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
 
+      # TODO(qingling128): Temporary fallback for metadata agent restarts.
+      # K8s resources.
+      when K8S_CONTAINER_CONSTANTS[:resource_type],
+           K8S_NODE_CONSTANTS[:resource_type]
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
       end
 
@@ -2214,10 +2214,11 @@ module Fluent
                  "#{constructed_resource.inspect}")
       constructed_resource
     rescue StandardError => e
+      # TODO(qingling128): Remove the gke_container part and replace with the
+      # right resource then after gke_container is deprecated.
       @log.error 'Failed to construct "k8s_container" resource locally.' \
-                 ' Falling back to writing logs against instance resource.',
-                 error: e
-      # Fall back to legacy gke resource or default instance resource.
+                 ' Falling back to writing logs against gke_container' \
+                 ' resource.', error: e
       return
     end
 
@@ -2238,7 +2239,6 @@ module Fluent
     rescue StandardError => e
       @log.error 'Failed to construct "k8s_node" resource locally. Falling' \
                  ' back to writing logs against instance resource.', error: e
-      # Fall back to default instance resource.
       return
     end
 
