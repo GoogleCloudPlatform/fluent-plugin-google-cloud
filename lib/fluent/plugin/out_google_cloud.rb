@@ -2214,8 +2214,8 @@ module Fluent
       constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
         type: resource_type,
         labels: labels)
-      @log.debug("Constructed #{resource_type} resource locally:\n" \
-               "#{constructed_resource.inspect}")
+      @log.debug("Constructed #{resource_type} resource locally: " \
+                 "#{constructed_resource.inspect}")
       constructed_resource
     end
 
