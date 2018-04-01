@@ -92,6 +92,12 @@ module Fluent
           'stderr' => 'ERROR'
         }
       }.freeze
+      K8S_CONTAINER_CONSTANTS = {
+        resource_type: 'k8s_container'
+      }.freeze
+      K8S_NODE_CONSTANTS = {
+        resource_type: 'k8s_node'
+      }.freeze
       DOCKER_CONSTANTS = {
         service: 'docker.googleapis.com',
         resource_type: 'docker_container'
@@ -1238,6 +1244,14 @@ module Fluent
           # TODO(qingling128): Fix this temporary renaming from 'gke_container'
           # to 'container'.
           resource.type = 'container' if resource.type == 'gke_container'
+        else
+          # TODO(qingling128): This entire else clause is temporary before we
+          # implement buffering and caching.
+          @log.warn('Failed to retrieve monitored resource from Metadata' \
+                     " Agent with local_resource_id #{local_resource_id}.")
+          constructed_k8s_resource = construct_k8s_resource_locally(
+            local_resource_id)
+          resource = constructed_k8s_resource if constructed_k8s_resource
         end
       end
 
@@ -1290,6 +1304,13 @@ module Fluent
       # proper time (b/65175256).
       when DOCKER_CONSTANTS[:resource_type]
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
+
+      # TODO(qingling128): Temporary fallback for metadata agent restarts.
+      # K8s resources.
+      when K8S_CONTAINER_CONSTANTS[:resource_type],
+           K8S_NODE_CONSTANTS[:resource_type]
+        common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
+
       end
 
       # Cloud Dataflow and Cloud ML.
@@ -2143,6 +2164,59 @@ module Fluent
       @log.warn 'Failed to extract log entry errors from the error details:' \
                 " #{gax_error.details.inspect}.", error: e
       {}
+    end
+
+    # Construct monitored resource locally for k8s resources.
+    def construct_k8s_resource_locally(local_resource_id)
+      return unless
+        /^
+          (?<resource_type>k8s_container)
+          \.(?<namespace_name>[0-9a-z-]+)
+          \.(?<pod_name>[.0-9a-z-]+)
+          \.(?<container_name>[0-9a-z-]+)$/x =~ local_resource_id ||
+        /^
+          (?<resource_type>k8s_node)
+          \.(?<node_name>[0-9a-z-]+)$/x =~ local_resource_id
+
+      begin
+        @k8s_cluster_name ||= fetch_gce_metadata(
+          'instance/attributes/cluster-name')
+        @k8s_location ||= fetch_gce_metadata(
+          'instance/attributes/cluster-location')
+      rescue StandardError => e
+        @log.error 'Failed to retrieve k8s cluster name and location.', \
+                   error: e
+      end
+      case resource_type
+      when K8S_CONTAINER_CONSTANTS[:resource_type]
+        labels = {
+          'namespace_name' => namespace_name,
+          'pod_name' => pod_name,
+          'container_name' => container_name,
+          'cluster_name' => @k8s_cluster_name,
+          'location' => @k8s_location
+        }
+        fallback_resource = GKE_CONSTANTS[:resource_type]
+      when K8S_NODE_CONSTANTS[:resource_type]
+        labels = {
+          'node_name' => node_name,
+          'cluster_name' => @k8s_cluster_name,
+          'location' => @k8s_location
+        }
+        fallback_resource = COMPUTE_CONSTANTS[:resource_type]
+      end
+      unless @k8s_cluster_name && @k8s_location
+        @log.error "Failed to construct #{resource_type} resource locally." \
+                   ' Falling back to writing logs against' \
+                   " #{fallback_resource} resource.", error: e
+        return
+      end
+      constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
+        type: resource_type,
+        labels: labels)
+      @log.debug("Constructed #{resource_type} resource locally: " \
+                 "#{constructed_resource.inspect}")
+      constructed_resource
     end
 
     def ensure_array(value)
