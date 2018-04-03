@@ -11,9 +11,9 @@ eos
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache-2.0'
   gem.version       = '0.6.18'
-  gem.authors       = ['Todd Derr', 'Alex Robinson']
-  gem.email         = ['salty@google.com']
-  gem.required_ruby_version = Gem::Requirement.new('>= 2.0')
+  gem.authors       = ['Ling Huang', 'Igor Peshansky']
+  gem.email         = ['stackdriver-agents@google.com']
+  gem.required_ruby_version = Gem::Requirement.new('>= 2.2')
 
   gem.files         = Dir['**/*'].keep_if { |file| File.file?(file) }
   gem.test_files    = gem.files.grep(/^(test)/)
