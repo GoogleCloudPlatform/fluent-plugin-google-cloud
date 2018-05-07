@@ -263,7 +263,7 @@ module Constants
   CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG = %(
     enable_metadata_agent true
     k8s_cluster_name #{CUSTOM_K8S_CLUSTER_NAME}
-    k8s_location #{CUSTOM_K8S_LOCATION}
+    k8s_cluster_location #{CUSTOM_K8S_LOCATION}
   ).freeze
 
   CONFIG_EC2_PROJECT_ID = %(

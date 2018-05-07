@@ -260,7 +260,7 @@ module Fluent
     config_param :vm_name, :string, :default => nil
     # Kubernetes-specific parameters.
     config_param :k8s_cluster_name, :string, :default => nil
-    config_param :k8s_location, :string, :default => nil
+    config_param :k8s_cluster_location, :string, :default => nil
 
     # Map keys from a JSON payload to corresponding LogEntry fields.
     config_param :http_request_key, :string, :default =>
@@ -2184,7 +2184,7 @@ module Fluent
       begin
         @k8s_cluster_name ||= fetch_gce_metadata(
           'instance/attributes/cluster-name')
-        @k8s_location ||= fetch_gce_metadata(
+        @k8s_cluster_location ||= fetch_gce_metadata(
           'instance/attributes/cluster-location')
       rescue StandardError => e
         @log.error 'Failed to retrieve k8s cluster name and location.', \
@@ -2197,18 +2197,18 @@ module Fluent
           'pod_name' => pod_name,
           'container_name' => container_name,
           'cluster_name' => @k8s_cluster_name,
-          'location' => @k8s_location
+          'location' => @k8s_cluster_location
         }
         fallback_resource = GKE_CONSTANTS[:resource_type]
       when K8S_NODE_CONSTANTS[:resource_type]
         labels = {
           'node_name' => node_name,
           'cluster_name' => @k8s_cluster_name,
-          'location' => @k8s_location
+          'location' => @k8s_cluster_location
         }
         fallback_resource = COMPUTE_CONSTANTS[:resource_type]
       end
-      unless @k8s_cluster_name && @k8s_location
+      unless @k8s_cluster_name && @k8s_cluster_location
         @log.error "Failed to construct #{resource_type} resource locally." \
                    ' Falling back to writing logs against' \
                    " #{fallback_resource} resource.", error: e
