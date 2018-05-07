@@ -1396,10 +1396,10 @@ module BaseTest
       },
       {
         enable_metadata_agent: true,
-        setup_metadata_agent_stub: true,
+        setup_metadata_agent_stub: false,
         setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
-        expected_params: K8S_NODE_PARAMS
+        expected_params: K8S_NODE_PARAMS_FROM_LOCAL
       },
       {
         enable_metadata_agent: true,
