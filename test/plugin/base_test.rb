@@ -1442,6 +1442,41 @@ module BaseTest
     end
   end
 
+  # Test k8s monitored resource fallback when Metadata Agent restarts
+  # without the metadata server.
+  def test_k8s_monitored_resource_fallback_custom
+    [
+      # k8s_container.
+      {
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: K8S_CONTAINER_PARAMS_CUSTOM
+      },
+      # k8s_node.
+      {
+        log_entry: k8s_node_log_entry(log_entry(0)),
+        expected_params: K8S_NODE_PARAMS_CUSTOM
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_no_metadata_agent_stubs
+        setup_no_k8s_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG)
+          d.emit(test_params[:log_entry])
+          d.run
+        end
+        verify_log_entries(1, test_params[:expected_params],
+                           'jsonPayload') do |entry|
+          fields = get_fields(entry['jsonPayload'])
+          assert_equal 2, fields.size, entry
+          assert_equal 'test log entry 0', get_string(fields['log']), entry
+          assert_equal K8S_STREAM, get_string(fields['stream']), entry
+        end
+      end
+    end
+  end
+
   # Test that the 'time' field from the json record is extracted and set to
   # entry.timestamp for Docker container logs.
   def test_time_field_extraction_for_docker_container_logs

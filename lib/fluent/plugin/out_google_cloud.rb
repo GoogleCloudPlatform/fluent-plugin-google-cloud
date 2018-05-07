@@ -258,6 +258,9 @@ module Fluent
     config_param :zone, :string, :default => nil
     config_param :vm_id, :string, :default => nil
     config_param :vm_name, :string, :default => nil
+    # Kubernetes-specific parameters.
+    config_param :k8s_cluster_name, :string, :default => nil
+    config_param :k8s_location, :string, :default => nil
 
     # Map keys from a JSON payload to corresponding LogEntry fields.
     config_param :http_request_key, :string, :default =>
