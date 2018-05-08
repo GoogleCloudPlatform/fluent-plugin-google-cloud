@@ -258,7 +258,9 @@ module Fluent
     config_param :zone, :string, :default => nil
     config_param :vm_id, :string, :default => nil
     config_param :vm_name, :string, :default => nil
-    # Kubernetes-specific parameters.
+    # Kubernetes-specific parameters, only used to override these values in
+    # the fallback path when the metadata agent is temporarily unavailable.
+    # They have to match the configuration of the metadata agent.
     config_param :k8s_cluster_name, :string, :default => nil
     config_param :k8s_cluster_location, :string, :default => nil
 
