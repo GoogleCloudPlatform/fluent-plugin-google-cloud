@@ -1310,28 +1310,28 @@ module BaseTest
       # k8s_container.
       # When enable_metadata_agent is false.
       {
-        enable_metadata_agent: false,
+        config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: false,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
-        enable_metadata_agent: false,
+        config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
-        enable_metadata_agent: false,
+        config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
-        enable_metadata_agent: false,
+        config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: false,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
@@ -1339,28 +1339,35 @@ module BaseTest
       },
       # When enable_metadata_agent is true.
       {
-        enable_metadata_agent: true,
+        config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: false,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
-        enable_metadata_agent: true,
+        config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: false,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
       },
       {
-        enable_metadata_agent: true,
+        config: CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: false,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: K8S_CONTAINER_PARAMS_CUSTOM
+      },
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS
       },
       {
-        enable_metadata_agent: true,
+        config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
@@ -1368,7 +1375,7 @@ module BaseTest
       },
       # When local_resource_id is not present or does not match k8s regexes.
       {
-        enable_metadata_agent: true,
+        config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
@@ -1376,7 +1383,7 @@ module BaseTest
         expected_params: COMPUTE_PARAMS
       },
       {
-        enable_metadata_agent: true,
+        config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
@@ -1388,21 +1395,28 @@ module BaseTest
       },
       # Specific cases for k8s_node.
       {
-        enable_metadata_agent: false,
+        config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: COMPUTE_PARAMS
       },
       {
-        enable_metadata_agent: true,
-        setup_metadata_agent_stub: true,
+        config: ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: false,
         setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
-        expected_params: K8S_NODE_PARAMS
+        expected_params: K8S_NODE_PARAMS_FROM_LOCAL
       },
       {
-        enable_metadata_agent: true,
+        config: CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: false,
+        log_entry: k8s_node_log_entry(log_entry(0)),
+        expected_params: K8S_NODE_PARAMS_CUSTOM
+      },
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
@@ -1422,12 +1436,7 @@ module BaseTest
           setup_no_k8s_metadata_stubs
         end
         setup_logging_stubs do
-          config = if test_params[:enable_metadata_agent]
-                     ENABLE_METADATA_AGENT_CONFIG
-                   else
-                     APPLICATION_DEFAULT_CONFIG
-                   end
-          d = create_driver(config)
+          d = create_driver(test_params[:config])
           d.emit(test_params[:log_entry])
           d.run
         end

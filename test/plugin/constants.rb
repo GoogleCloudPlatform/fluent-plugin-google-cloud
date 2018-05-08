@@ -43,6 +43,9 @@ module Constants
   CUSTOM_FULLY_QUALIFIED_ZONE = "projects/#{PROJECT_ID}/zones/#{ZONE}".freeze
   CUSTOM_VM_ID = 'C9876543210'.freeze
   CUSTOM_HOSTNAME = 'custom.hostname.org'.freeze
+  # Kubernetes-specific attributes.
+  CUSTOM_K8S_CLUSTER_NAME = 'kubernetes-cluster'.freeze
+  CUSTOM_K8S_LOCATION = 'kubernetes-location'.freeze
 
   # Attributes used for the EC2 metadata service.
   EC2_PROJECT_ID = 'test-ec2-project-id'.freeze
@@ -257,6 +260,12 @@ module Constants
   CONFIG_MISSING_METADATA_ALL = %(
   ).freeze
 
+  CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG = %(
+    enable_metadata_agent true
+    k8s_cluster_name #{CUSTOM_K8S_CLUSTER_NAME}
+    k8s_cluster_location #{CUSTOM_K8S_LOCATION}
+  ).freeze
+
   CONFIG_EC2_PROJECT_ID = %(
     project_id #{EC2_PROJECT_ID}
   ).freeze
@@ -441,6 +450,14 @@ module Constants
       )
     )
   ).freeze
+  K8S_CONTAINER_PARAMS_CUSTOM = K8S_CONTAINER_PARAMS.merge(
+    resource: K8S_CONTAINER_PARAMS[:resource].merge(
+      labels: K8S_CONTAINER_PARAMS[:resource][:labels].merge(
+        'cluster_name' => CUSTOM_K8S_CLUSTER_NAME,
+        'location' => CUSTOM_K8S_LOCATION
+      )
+    )
+  ).freeze
 
   # K8s Node.
   K8S_NODE_PARAMS = {
@@ -460,6 +477,14 @@ module Constants
     resource: K8S_NODE_PARAMS[:resource].merge(
       labels: K8S_NODE_PARAMS[:resource][:labels].merge(
         'location' => K8S_LOCATION2
+      )
+    )
+  ).freeze
+  K8S_NODE_PARAMS_CUSTOM = K8S_NODE_PARAMS.merge(
+    resource: K8S_NODE_PARAMS[:resource].merge(
+      labels: K8S_NODE_PARAMS[:resource][:labels].merge(
+        'cluster_name' => CUSTOM_K8S_CLUSTER_NAME,
+        'location' => CUSTOM_K8S_LOCATION
       )
     )
   ).freeze
