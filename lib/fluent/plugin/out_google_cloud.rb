@@ -1451,6 +1451,7 @@ module Fluent
       end
     rescue StandardError => e
       @log.error "Error calling Metadata Agent at #{url}.", error: e
+      nil
     end
 
     # TODO: This functionality should eventually be available in another
