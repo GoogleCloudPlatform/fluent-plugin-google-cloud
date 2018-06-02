@@ -52,6 +52,18 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_invalid_error
+    setup_gce_metadata_stubs
+    setup_logging_stubs(RuntimeError.new('Some non-gRPC error')) do
+      d = create_driver(USE_GRPC_CONFIG, 'test')
+      # The API Client should not retry this and the plugin should consume the
+      # exception.
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    assert_equal 1, @failed_attempts.size
+  end
+
   def test_partial_success
     setup_gce_metadata_stubs
     setup_prometheus
