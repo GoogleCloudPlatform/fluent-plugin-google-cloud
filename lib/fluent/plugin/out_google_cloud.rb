@@ -804,11 +804,16 @@ module Fluent
 
       else
         # Assume it's a problem with the request itself and don't retry.
-        increment_failed_requests_count(error.code)
-        increment_dropped_entries_count(entries_count, error.code)
-        @log.error "Unknown response code #{error.code} from the server," \
+        error_code = if error.respond_to?(:code)
+                       error.code
+                     else
+                       GRPC::Core::StatusCodes::UNKNOWN
+                     end
+        increment_failed_requests_count(error_code)
+        increment_dropped_entries_count(entries_count, error_code)
+        @log.error "Unknown response code #{error_code} from the server," \
                    " dropping #{entries_count} log message(s)",
-                   error: error.to_s, error_code: error.code.to_s
+                   error: error.to_s, error_code: error_code.to_s
       end
 
     # Got an unexpected error (not Google::Gax::GaxError) from the

@@ -40,7 +40,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       GRPC::Core::StatusCodes::ABORTED => 'Aborted',
       GRPC::Core::StatusCodes::UNAUTHENTICATED => 'Unauthenticated'
     }.each_with_index do |(code, message), index|
-      setup_logging_stubs(true, code, message) do
+      setup_logging_stubs(
+        GRPC::BadStatus.new_status_exception(code, message)) do
         d = create_driver(USE_GRPC_CONFIG, 'test')
         # The API Client should not retry this and the plugin should consume the
         # exception.
@@ -51,12 +52,24 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_invalid_error
+    setup_gce_metadata_stubs
+    setup_logging_stubs(RuntimeError.new('Some non-gRPC error')) do
+      d = create_driver(USE_GRPC_CONFIG, 'test')
+      # The API Client should not retry this and the plugin should consume the
+      # exception.
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    assert_equal 1, @failed_attempts.size
+  end
+
   def test_partial_success
     setup_gce_metadata_stubs
     setup_prometheus
     setup_logging_stubs(
-      true, GRPC::Core::StatusCodes::PERMISSION_DENIED,
-      'User not authorized.', PARTIAL_SUCCESS_GRPC_METADATA) do
+      GRPC::PermissionDenied.new('User not authorized.',
+                                 PARTIAL_SUCCESS_GRPC_METADATA)) do
       # The API Client should not retry this and the plugin should consume
       # the exception.
       d = create_driver(ENABLE_PROMETHEUS_CONFIG)
@@ -93,7 +106,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       GRPC::Core::StatusCodes::UNAVAILABLE => 'Unavailable'
     }.each_with_index do |(code, message), index|
       exception_count = 0
-      setup_logging_stubs(true, code, message) do
+      setup_logging_stubs(
+        GRPC::BadStatus.new_status_exception(code, message)) do
         d = create_driver(USE_GRPC_CONFIG, 'test')
         # The API client should retry this once, then throw an exception which
         # gets propagated through the plugin
@@ -130,7 +144,10 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     ].each do |should_fail, code, request_count, entry_count, metric_values|
       setup_prometheus
       (1..request_count).each do
-        setup_logging_stubs(should_fail, code, 'SomeMessage') do
+        setup_logging_stubs(
+          if should_fail
+            GRPC::BadStatus.new_status_exception(code, 'SomeMessage')
+          end) do
           d = create_driver(USE_GRPC_CONFIG + ENABLE_PROMETHEUS_CONFIG, 'test')
           (1..entry_count).each do |i|
             d.emit('message' => log_entry(i.to_s))
@@ -311,10 +328,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # GRPC logging mock that fails and returns server side or client side errors.
   class GRPCLoggingMockFailingService <
       Google::Cloud::Logging::V2::LoggingServiceV2Client
-    def initialize(code, message, metadata, failed_attempts)
-      @code = code
-      @message = message
-      @metadata = metadata
+    def initialize(error, failed_attempts)
+      @error = error
       @failed_attempts = failed_attempts
       super()
     end
@@ -327,7 +342,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
                           partial_success: nil)
       @failed_attempts << 1
       begin
-        raise GRPC::BadStatus.new_status_exception(@code, @message, @metadata)
+        raise @error
       rescue
         # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
         raise Google::Gax::GaxError, @message
@@ -337,17 +352,13 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # Set up grpc stubs to mock the external calls.
-  def setup_logging_stubs(should_fail = false,
-                          code = nil,
-                          message = nil,
-                          metadata = {})
-    if should_fail
-      @failed_attempts = []
-      @grpc_stub = GRPCLoggingMockFailingService.new(
-        code, message, metadata, @failed_attempts)
-    else
+  def setup_logging_stubs(error = nil)
+    if error.nil?
       @requests_sent = []
       @grpc_stub = GRPCLoggingMockService.new(@requests_sent)
+    else
+      @failed_attempts = []
+      @grpc_stub = GRPCLoggingMockFailingService.new(error, @failed_attempts)
     end
     yield
   end
