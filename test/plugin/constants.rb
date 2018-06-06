@@ -872,4 +872,33 @@ module Constants
       'grpc-status-details-bin' => status_details.to_proto
     }.freeze
   end
+
+  PARSE_ERROR_RESPONSE_BODY = {
+    'error' => {
+      'code' => 400,
+      'message' => 'Request contains an invalid argument.',
+      'status' => 'INVALID_ARGUMENT',
+      'details' => [
+        {
+          '@type' => 'type.googleapis.com/google.rpc.DebugInfo',
+          'detail' =>
+            '[ORIGINAL ERROR] RPC::CLIENT_ERROR: server could not parse' \
+              " request sent by client; initialization error is: ''"
+        }
+      ]
+    }
+  }.freeze
+
+  PARSE_ERROR_GRPC_METADATA = begin
+    debug_info = Google::Rpc::DebugInfo.new(
+      detail: '[ORIGINAL ERROR] RPC::CLIENT_ERROR: server could not parse' \
+        " request sent by client; initialization error is: ''")
+    status_details = Google::Rpc::Status.new(
+      code: 3, message: 'internal client error',
+      details: [Google::Protobuf::Any.pack(debug_info)])
+    {
+      'google.rpc.debuginfo-bin' => debug_info.to_proto,
+      'grpc-status-details-bin' => status_details.to_proto
+    }.freeze
+  end
 end
