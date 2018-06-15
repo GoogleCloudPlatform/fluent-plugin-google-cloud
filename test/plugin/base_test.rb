@@ -274,11 +274,14 @@ module BaseTest
     end
   end
 
-  def test_unset_empty_credential_env_var
-    ENV[CREDENTIALS_PATH_ENV_VAR] = ''
-    setup_gce_metadata_stubs
-    create_driver
-    assert_nil ENV[CREDENTIALS_PATH_ENV_VAR]
+  def test_unset_empty_credentials_path_env_var
+    # An empty string should be treated as if it's not set.
+    ['', nil].each do |env_var|
+      ENV[CREDENTIALS_PATH_ENV_VAR] = env_var
+      setup_gce_metadata_stubs
+      create_driver
+      assert_nil ENV[CREDENTIALS_PATH_ENV_VAR]
+    end
   end
 
   def test_one_log_custom_metadata
