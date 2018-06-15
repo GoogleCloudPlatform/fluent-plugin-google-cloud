@@ -156,7 +156,7 @@ module Fluent
 
     # Internal constants.
     module InternalConstants
-      CREDENTIAL_PATH_VAR = 'GOOGLE_APPLICATION_CREDENTIALS'.freeze
+      CREDENTIALS_PATH_ENV_VAR = 'GOOGLE_APPLICATION_CREDENTIALS'.freeze
       DEFAULT_LOGGING_API_URL = 'https://logging.googleapis.com'.freeze
 
       # The label name of local_resource_id in the json payload. When a record
@@ -483,9 +483,10 @@ module Fluent
 
       @platform = detect_platform
 
-      # Unset the credential file path environment variable if the value is set
-      # to an empty string.
-      ENV.delete(CREDENTIAL_PATH_VAR) if ENV[CREDENTIAL_PATH_VAR] == ''
+      # Treat an empty setting of the credentials file path environment variable
+      # as unset. This way the googleauth lib could fetch the credentials
+      # following the fallback path.
+      ENV.delete(CREDENTIALS_PATH_ENV_VAR) if ENV[CREDENTIALS_PATH_ENV_VAR] == ''
 
       # Set required variables: @project_id, @vm_id, @vm_name and @zone.
       set_required_metadata_variables
