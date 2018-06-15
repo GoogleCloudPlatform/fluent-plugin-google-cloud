@@ -395,6 +395,9 @@ module Fluent
     # requests when talking to Stackdriver Logging API.
     config_param :split_logs_by_tag, :bool, :default => false
 
+    # Whether to attempt adjusting invalid log entry timestamps.
+    config_param :adjust_invalid_timestamps, :bool, :default => true
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -1571,22 +1574,22 @@ module Fluent
                    ts_nanos
                  end
 
-      # Adjust timestamps from the future.
-      # There are two cases:
-      # 1. The parsed timestamp is later in the current year:
-      # This can happen when system log lines from previous years are missing
-      # the year, so the date parser assumes the current year.
-      # We treat these lines as coming from last year.  This could label
-      # 2-year-old logs incorrectly, but this probably isn't super important.
-      #
-      # 2. The parsed timestamp is past the end of the current year:
-      # Since the year is different from the current year, this isn't the
-      # missing year in system logs.  It is unlikely that users explicitly
-      # write logs at a future date.  This could result from an unsynchronized
-      # clock on a VM, or some random value being parsed as the timestamp.
-      # We reset the timestamp on those lines to the default value and let the
-      # downstream API handle it.
-      if timestamp
+      if @adjust_invalid_timestamps && timestamp
+        # Adjust timestamps from the future.
+        # There are two cases:
+        # 1. The parsed timestamp is later in the current year:
+        # This can happen when system log lines from previous years are missing
+        # the year, so the date parser assumes the current year.
+        # We treat these lines as coming from last year. This could label
+        # 2-year-old logs incorrectly, but this probably isn't super important.
+        #
+        # 2. The parsed timestamp is past the end of the current year:
+        # Since the year is different from the current year, this isn't the
+        # missing year in system logs. It is unlikely that users explicitly
+        # write logs at a future date. This could result from an unsynchronized
+        # clock on a VM, or some random value being parsed as the timestamp.
+        # We reset the timestamp on those lines to the default value and let the
+        # downstream API handle it.
         next_year = Time.mktime(current_time.year + 1)
         one_day_later = current_time.to_datetime.next_day.to_time
         if timestamp >= next_year # Case 2.
@@ -1598,6 +1601,7 @@ module Fluent
           # The value of ts_nanos should not change when subtracting a year.
         end
       end
+
       [ts_secs, ts_nanos]
     end
 
