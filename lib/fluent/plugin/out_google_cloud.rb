@@ -486,7 +486,8 @@ module Fluent
       # Treat an empty setting of the credentials file path environment variable
       # as unset. This way the googleauth lib could fetch the credentials
       # following the fallback path.
-      ENV.delete(CREDENTIALS_PATH_ENV_VAR) if ENV[CREDENTIALS_PATH_ENV_VAR] == ''
+      ENV.delete(CREDENTIALS_PATH_ENV_VAR) if
+        ENV[CREDENTIALS_PATH_ENV_VAR] == ''
 
       # Set required variables: @project_id, @vm_id, @vm_name and @zone.
       set_required_metadata_variables
