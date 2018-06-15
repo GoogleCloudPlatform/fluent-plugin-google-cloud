@@ -274,6 +274,13 @@ module BaseTest
     end
   end
 
+  def test_unset_empty_credential_env_var
+    ENV[CREDENTIAL_PATH_VAR] = ''
+    setup_gce_metadata_stubs
+    create_driver
+    assert_nil ENV[CREDENTIAL_PATH_VAR]
+  end
+
   def test_one_log_custom_metadata
     # don't set up any metadata stubs, so the test will fail if we try to
     # fetch metadata (and explicitly check this as well).
