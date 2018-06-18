@@ -27,7 +27,7 @@ module BaseTest
   def setup
     Fluent::Test.setup
     # delete environment variables that googleauth uses to find credentials.
-    ENV.delete('GOOGLE_APPLICATION_CREDENTIALS')
+    ENV.delete(CREDENTIALS_PATH_ENV_VAR)
     # service account env.
     ENV.delete('PRIVATE_KEY_VAR')
     ENV.delete('CLIENT_EMAIL_VAR')
@@ -229,7 +229,7 @@ module BaseTest
       send("setup_#{platform}_metadata_stubs")
       [IAM_CREDENTIALS, NEW_STYLE_CREDENTIALS, LEGACY_CREDENTIALS].each \
       do |creds|
-        ENV['GOOGLE_APPLICATION_CREDENTIALS'] = creds[:path]
+        ENV[CREDENTIALS_PATH_ENV_VAR] = creds[:path]
         d = create_driver
         d.run
         assert_equal creds[:project_id], d.instance.project_id
@@ -249,7 +249,7 @@ module BaseTest
 
   def test_one_log_with_json_credentials
     setup_gce_metadata_stubs
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
     setup_logging_stubs do
       d = create_driver
       d.emit('message' => log_entry(0))
@@ -263,7 +263,7 @@ module BaseTest
     %w(gce_metadata ec2_metadata no_metadata_service).each do |platform|
       send("setup_#{platform}_stubs")
       exception_count = 0
-      ENV['GOOGLE_APPLICATION_CREDENTIALS'] = INVALID_CREDENTIALS[:path]
+      ENV[CREDENTIALS_PATH_ENV_VAR] = INVALID_CREDENTIALS[:path]
       begin
         create_driver
       rescue RuntimeError => error
@@ -274,11 +274,21 @@ module BaseTest
     end
   end
 
+  def test_unset_or_empty_credentials_path_env_var
+    # An empty string should be treated as if it's not set.
+    [nil, ''].each do |value|
+      ENV[CREDENTIALS_PATH_ENV_VAR] = value
+      setup_gce_metadata_stubs
+      create_driver
+      assert_nil ENV[CREDENTIALS_PATH_ENV_VAR]
+    end
+  end
+
   def test_one_log_custom_metadata
     # don't set up any metadata stubs, so the test will fail if we try to
     # fetch metadata (and explicitly check this as well).
     Fluent::GoogleCloudOutput.any_instance.expects(:fetch_metadata).never
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
     setup_logging_stubs do
       d = create_driver(NO_METADATA_SERVICE_CONFIG + CUSTOM_METADATA_CONFIG)
       d.emit('message' => log_entry(0))
@@ -288,7 +298,7 @@ module BaseTest
   end
 
   def test_one_log_ec2
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
     setup_ec2_metadata_stubs
     setup_logging_stubs do
       d = create_driver(CONFIG_EC2_PROJECT_ID)
@@ -299,7 +309,7 @@ module BaseTest
   end
 
   def test_one_log_ec2_region
-    ENV['GOOGLE_APPLICATION_CREDENTIALS'] = IAM_CREDENTIALS[:path]
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
     setup_ec2_metadata_stubs
     setup_logging_stubs do
       d = create_driver(CONFIG_EC2_PROJECT_ID_USE_REGION)
