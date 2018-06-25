@@ -1334,30 +1334,27 @@ module Fluent
     # Take a locally unique resource id and convert it to the globel unique
     # monitored resource.
     def convert_local_resource_id_globally(local_resource_id)
-      return nil unless local_resource_id
+      return unless local_resource_id
       if @enable_metadata_agent
         @log.debug 'Calling metadata agent with local_resource_id: ' \
                   "#{local_resource_id}."
-        retrieved_resource = query_metadata_agent_for_monitored_resource(
+        resource = query_metadata_agent_for_monitored_resource(
           local_resource_id)
         @log.debug 'Retrieved monitored resource from metadata agent: ' \
-                  "#{retrieved_resource.inspect}."
-        if retrieved_resource
-          resource = retrieved_resource
+                  "#{resource.inspect}."
+        if resource
           # TODO(qingling128): Fix this temporary renaming from 'gke_container'
           # to 'container'.
           resource.type = 'container' if resource.type == 'gke_container'
-        else
-          # TODO(qingling128): This entire else clause is temporary before we
-          # implement buffering and caching.
-          @log.warn('Failed to retrieve monitored resource from Metadata' \
-                     " Agent with local_resource_id #{local_resource_id}.")
-          constructed_k8s_resource = construct_k8s_resource_locally(
-            local_resource_id)
-          resource = constructed_k8s_resource if constructed_k8s_resource
+          return resource
         end
-        resource
       end
+      # Fall back to construction monitored resource locally.
+      # TODO(qingling128): This entire else clause is temporary before we
+      # implement buffering and caching.
+      @log.debug('Failed to retrieve monitored resource from Metadata' \
+                 " Agent with local_resource_id #{local_resource_id}.")
+      construct_k8s_resource_locally(local_resource_id)
     end
 
     # Extract entry level monitored resource and common labels that should be
