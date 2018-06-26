@@ -1250,8 +1250,8 @@ module Fluent
       # "container.<container_id>" // Docker container.
       # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
       if local_resource_id
-        global_resource = convert_local_resource_id_to_monitored_resource(local_resource_id)
-        resource = global_resource if global_resource
+        converted_resource = convert_local_resource_id_to_monitored_resource(local_resource_id)
+        resource = converted_resource if converted_resource
       end
 
       # Once the resource type is settled down, determine the labels.
