@@ -1250,7 +1250,7 @@ module Fluent
       # "container.<container_id>" // Docker container.
       # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
       if local_resource_id
-        global_resource = convert_local_resource_id_globally(local_resource_id)
+        global_resource = convert_local_resource_id_to_monitored_resource(local_resource_id)
         resource = global_resource if global_resource
       end
 
@@ -1333,7 +1333,7 @@ module Fluent
 
     # Take a locally unique resource id and convert it to the globel unique
     # monitored resource.
-    def convert_local_resource_id_globally(local_resource_id)
+    def convert_local_resource_id_to_monitored_resource(local_resource_id)
       return unless local_resource_id
       if @enable_metadata_agent
         @log.debug 'Calling metadata agent with local_resource_id: ' \
