@@ -1332,7 +1332,7 @@ module Fluent
       [resource, common_labels]
     end
 
-    # Take a locally unique resource id and convert it to the globel unique
+    # Take a locally unique resource id and convert it to the globally unique
     # monitored resource.
     def convert_local_resource_id_to_monitored_resource(local_resource_id)
       return unless local_resource_id
@@ -1350,8 +1350,8 @@ module Fluent
           return resource
         end
       end
-      # Fall back to construction monitored resource locally.
-      # TODO(qingling128): This entire else clause is temporary before we
+      # Fall back to constructing monitored resource locally.
+      # TODO(qingling128): This entire else clause is temporary until we
       # implement buffering and caching.
       @log.debug('Failed to retrieve monitored resource from Metadata' \
                  " Agent with local_resource_id #{local_resource_id}.")
