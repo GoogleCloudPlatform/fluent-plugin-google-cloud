@@ -704,7 +704,7 @@ module BaseTest
     end
   end
 
-  def test_adjusted_timestamps
+  def test_timestamps
     setup_gce_metadata_stubs
     current_time = Time.now
     next_year = Time.mktime(current_time.year + 1)
@@ -714,123 +714,65 @@ module BaseTest
     one_second_into_next_year = next_year + 1
     one_day_into_next_year = next_year.to_date.next_day.to_time
     {
-      Time.at(123_456.789) => Time.at(123_456.789),
-      Time.at(0) => Time.at(0),
-      current_time => current_time,
-      one_second_before_next_year => adjusted_to_last_year,
-      next_year => Time.at(0),
-      one_second_into_next_year => Time.at(0),
-      one_day_into_next_year => Time.at(0)
-    }.each do |ts, adjusted_ts|
-      expected_ts = []
-      emit_index = 0
-      setup_logging_stubs do
-        @logs_sent = []
-        d = create_driver
-        # Test the "native" fluentd timestamp as well as our nanosecond tags.
-        d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
-        expected_ts.push(adjusted_ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
-        expected_ts.push(adjusted_ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timestamp' => { 'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec })
-        expected_ts.push(adjusted_ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec)
-        expected_ts.push(adjusted_ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timestampSeconds' => ts.tv_sec.to_s,
-               'timestampNanos' => ts.tv_nsec.to_s)
-        expected_ts.push(adjusted_ts)
-        emit_index += 1
-        d.run
-        verify_index = 0
-        verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
-          verify_default_log_entry_text(entry['textPayload'], i, entry)
-          assert_equal_with_default entry['timestamp']['seconds'],
-                                    expected_ts[verify_index].tv_sec, 0, entry
-          assert_equal_with_default \
-            entry['timestamp']['nanos'],
-            expected_ts[verify_index].tv_nsec, 0, entry do
-            # Fluentd v0.14 onwards supports nanosecond timestamp values.
-            # Added in 600 ns delta to avoid flaky tests introduced
-            # due to rounding error in double-precision floating-point numbers
-            # (to account for the missing 9 bits of precision ~ 512 ns).
-            # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
-            assert_in_delta expected_ts[verify_index].tv_nsec,
-                            entry['timestamp']['nanos'], 600, entry
+      APPLICATION_DEFAULT_CONFIG => {
+        Time.at(123_456.789) => Time.at(123_456.789),
+        Time.at(0) => Time.at(0),
+        current_time => current_time,
+        one_second_before_next_year => adjusted_to_last_year,
+        next_year => Time.at(0),
+        one_second_into_next_year => Time.at(0),
+        one_day_into_next_year => Time.at(0)
+      },
+      NO_ADJUST_TIMESTAMPS_CONFIG => {
+        Time.at(123_456.789) => Time.at(123_456.789),
+        Time.at(0) => Time.at(0),
+        current_time => current_time,
+        one_second_before_next_year => one_second_before_next_year,
+        next_year => next_year,
+        one_second_into_next_year => one_second_into_next_year,
+        one_day_into_next_year => one_day_into_next_year
+      }
+    }.each do |config, timestamps|
+      timestamps.each do |ts, expected_ts|
+        emit_index = 0
+        setup_logging_stubs do
+          @logs_sent = []
+          d = create_driver(config)
+          # Test the "native" fluentd timestamp as well as our nanosecond tags.
+          d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
+          emit_index += 1
+          d.emit('message' => log_entry(emit_index),
+                 'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
+          emit_index += 1
+          d.emit('message' => log_entry(emit_index),
+                 'timestamp' => { 'seconds' => ts.tv_sec,
+                                  'nanos' => ts.tv_nsec })
+          emit_index += 1
+          d.emit('message' => log_entry(emit_index),
+                 'timestampSeconds' => ts.tv_sec,
+                 'timestampNanos' => ts.tv_nsec)
+          emit_index += 1
+          d.emit('message' => log_entry(emit_index),
+                 'timestampSeconds' => ts.tv_sec.to_s,
+                 'timestampNanos' => ts.tv_nsec.to_s)
+          emit_index += 1
+          d.run
+          verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
+            verify_default_log_entry_text(entry['textPayload'], i, entry)
+            assert_equal_with_default entry['timestamp']['seconds'],
+                                      expected_ts.tv_sec, 0, entry
+            assert_equal_with_default \
+              entry['timestamp']['nanos'],
+              expected_ts.tv_nsec, 0, entry do
+              # Fluentd v0.14 onwards supports nanosecond timestamp values.
+              # Added in 600 ns delta to avoid flaky tests introduced
+              # due to rounding error in double-precision floating-point numbers
+              # (to account for the missing 9 bits of precision ~ 512 ns).
+              # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
+              assert_in_delta expected_ts.tv_nsec,
+                              entry['timestamp']['nanos'], 600, entry
+            end
           end
-          verify_index += 1
-        end
-      end
-    end
-  end
-
-  def test_unadjusted_timestamps
-    setup_gce_metadata_stubs
-    current_time = Time.now
-    next_year = Time.mktime(current_time.year + 1)
-    one_second_before_next_year = next_year - 1
-    one_second_into_next_year = next_year + 1
-    one_day_into_next_year = next_year.to_date.next_day.to_time
-    [
-      Time.at(123_456.789),
-      Time.at(0),
-      current_time,
-      one_second_before_next_year,
-      next_year,
-      one_second_into_next_year,
-      one_day_into_next_year
-    ].each do |ts|
-      expected_ts = []
-      emit_index = 0
-      setup_logging_stubs do
-        @logs_sent = []
-        d = create_driver(NO_ADJUST_TIMESTAMPS_CONFIG)
-        # Test the "native" fluentd timestamp as well as our nanosecond tags.
-        d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
-        expected_ts.push(ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
-        expected_ts.push(ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timestamp' => { 'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec })
-        expected_ts.push(ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timestampSeconds' => ts.tv_sec, 'timestampNanos' => ts.tv_nsec)
-        expected_ts.push(ts)
-        emit_index += 1
-        d.emit('message' => log_entry(emit_index),
-               'timestampSeconds' => ts.tv_sec.to_s,
-               'timestampNanos' => ts.tv_nsec.to_s)
-        expected_ts.push(ts)
-        emit_index += 1
-        d.run
-        verify_index = 0
-        verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
-          verify_default_log_entry_text(entry['textPayload'], i, entry)
-          assert_equal_with_default entry['timestamp']['seconds'],
-                                    expected_ts[verify_index].tv_sec, 0, entry
-          assert_equal_with_default \
-            entry['timestamp']['nanos'],
-            expected_ts[verify_index].tv_nsec, 0, entry do
-            # Fluentd v0.14 onwards supports nanosecond timestamp values.
-            # Added in 600 ns delta to avoid flaky tests introduced
-            # due to rounding error in double-precision floating-point numbers
-            # (to account for the missing 9 bits of precision ~ 512 ns).
-            # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
-            assert_in_delta expected_ts[verify_index].tv_nsec,
-                            entry['timestamp']['nanos'], 600, entry
-          end
-          verify_index += 1
         end
       end
     end
