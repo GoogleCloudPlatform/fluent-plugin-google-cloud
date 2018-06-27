@@ -1249,27 +1249,10 @@ module Fluent
       # Examples:
       # "container.<container_id>" // Docker container.
       # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
-      if @enable_metadata_agent && local_resource_id
-        @log.debug 'Calling metadata agent with local_resource_id: ' \
-                  "#{local_resource_id}."
-        retrieved_resource = query_metadata_agent_for_monitored_resource(
+      if local_resource_id
+        converted_resource = monitored_resource_from_local_resource_id(
           local_resource_id)
-        @log.debug 'Retrieved monitored resource from metadata agent: ' \
-                  "#{retrieved_resource.inspect}."
-        if retrieved_resource
-          resource = retrieved_resource
-          # TODO(qingling128): Fix this temporary renaming from 'gke_container'
-          # to 'container'.
-          resource.type = 'container' if resource.type == 'gke_container'
-        else
-          # TODO(qingling128): This entire else clause is temporary before we
-          # implement buffering and caching.
-          @log.warn('Failed to retrieve monitored resource from Metadata' \
-                     " Agent with local_resource_id #{local_resource_id}.")
-          constructed_k8s_resource = construct_k8s_resource_locally(
-            local_resource_id)
-          resource = constructed_k8s_resource if constructed_k8s_resource
-        end
+        resource = converted_resource if converted_resource
       end
 
       # Once the resource type is settled down, determine the labels.
@@ -1347,6 +1330,32 @@ module Fluent
       common_labels.freeze
 
       [resource, common_labels]
+    end
+
+    # Take a locally unique resource id and convert it to the globally unique
+    # monitored resource.
+    def monitored_resource_from_local_resource_id(local_resource_id)
+      return unless local_resource_id
+      if @enable_metadata_agent
+        @log.debug 'Calling metadata agent with local_resource_id: ' \
+                  "#{local_resource_id}."
+        resource = query_metadata_agent_for_monitored_resource(
+          local_resource_id)
+        @log.debug 'Retrieved monitored resource from metadata agent: ' \
+                  "#{resource.inspect}."
+        if resource
+          # TODO(qingling128): Fix this temporary renaming from 'gke_container'
+          # to 'container'.
+          resource.type = 'container' if resource.type == 'gke_container'
+          return resource
+        end
+      end
+      # Fall back to constructing monitored resource locally.
+      # TODO(qingling128): This entire else clause is temporary until we
+      # implement buffering and caching.
+      @log.debug('Failed to retrieve monitored resource from Metadata' \
+                 " Agent with local_resource_id #{local_resource_id}.")
+      construct_k8s_resource_locally(local_resource_id)
     end
 
     # Extract entry level monitored resource and common labels that should be
