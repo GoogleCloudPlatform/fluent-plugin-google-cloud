@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Constants used by unit tests for Google Cloud Logging plugin.
+# Add some helper methods to standard classes.
 module Google
   module Protobuf
     Any.class_eval do
@@ -40,6 +40,7 @@ String.class_eval do
   end
 end
 
+# Constants used by unit tests for Google Cloud Logging plugin.
 module Constants
   include Fluent::GoogleCloudOutput::ServiceConstants
   include Fluent::GoogleCloudOutput::ConfigConstants
