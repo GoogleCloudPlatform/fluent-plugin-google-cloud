@@ -792,6 +792,7 @@ module Fluent
           GRPC::PermissionDenied
         error_details_map = construct_error_details_map_grpc(gax_error)
         if error_details_map.empty?
+          increment_failed_requests_count(error.code)
           increment_dropped_entries_count(entries_count, error.code)
           @log.warn "Dropping #{entries_count} log message(s)",
                     error: error.to_s, error_code: error.code.to_s
@@ -2181,6 +2182,9 @@ module Fluent
       error_details = ensure_array(gax_error.status_details)
       raise JSON::ParserError, 'The error details are empty.' if
         error_details.empty?
+      raise JSON::ParserError, 'No partial error info in error details.' unless
+        error_details[0].is_a?(
+          Google::Logging::V2::WriteLogEntriesPartialErrors)
       log_entry_errors = ensure_hash(error_details[0].log_entry_errors)
       log_entry_errors.each do |index, log_entry_error|
         error_key = [log_entry_error[:code], log_entry_error[:message]].freeze

@@ -12,6 +12,36 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Add some helper methods to standard classes.
+module Google
+  module Protobuf
+    Any.class_eval do
+      # TODO(igorpeshansky): Remove this once
+      # https://github.com/google/protobuf/pull/4719 gets released.
+      def self.pack(msg, type_url_prefix = 'type.googleapis.com/')
+        any = Google::Protobuf::Any.new
+        any.pack(msg, type_url_prefix)
+        any
+      end
+    end
+  end
+end
+String.class_eval do
+  def inspect_octal
+    specials = {
+      'a' => '\\007',
+      'b' => '\\010',
+      'v' => '\\013',
+      'f' => '\\014',
+      'r' => '\\015'
+    }.freeze
+    inspect.gsub(/\\([abvfr])/) { specials[Regexp.last_match(1)] } \
+           .gsub(/\\x([0-9A-F][0-9A-F])/) do
+             format('\\%03o', Regexp.last_match(1).to_i(16))
+           end
+  end
+end
+
 # Constants used by unit tests for Google Cloud Logging plugin.
 module Constants
   include Fluent::GoogleCloudOutput::ServiceConstants
@@ -809,45 +839,69 @@ module Constants
     }
   }.freeze
 
-  # rubocop:disable Style/StringLiterals
-  PARTIAL_SUCCESS_GRPC_METADATA = {
-    'google.logging.v2.writelogentriespartialerrors-bin' =>
-      Google::Logging::V2::WriteLogEntriesPartialErrors.encode(
-        Google::Logging::V2::WriteLogEntriesPartialErrors.new(
-          log_entry_errors: {
-            0 => Google::Rpc::Status.new(
-              code: GRPC::Core::StatusCodes::PERMISSION_DENIED,
-              message: "User not authorized.",
-              details: []),
-            1 => Google::Rpc::Status.new(
-              code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
-              message: "Log name contains illegal character :",
-              details: []),
-            3 => Google::Rpc::Status.new(
-              code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
-              message: "Log name contains illegal character :",
-              details: []) })),
-    'google.rpc.debuginfo-bin' =>
-      "\x12\xA7\x03[ORIGINAL ERROR] generic::permission_denied: User not auth" \
-      "orized. [google.rpc.error_details_ext] { message: \"User not authorize" \
-      "d.\" details { type_url: \"type.googleapis.com/google.logging.v2.Write" \
-      "LogEntriesPartialErrors\" value: \"\\n\\034\\010\\000\\022\\030\\010\\" \
-      "007\\022\\024User not authorized.\\n-\\010\\001\\022)\\010\\003\\022%L" \
-      "og name contains illegal character :\\n-\\010\\002\\022)\\010\\003\\02" \
-      "2%Log name contains illegal character :\" } }",
-    'grpc-status-details-bin' =>
-      "\b\a\x12\x14User not authorized.\x1A\xC2\x01\nBtype.googleapis.com/goo" \
-      "gle.logging.v2.WriteLogEntriesPartialErrors\x12|\n\x1C\b\x00\x12\x18\b" \
-      "\a\x12\x14User not authorized.\n-\b\x01\x12)\b\x03\x12%Log name contai" \
-      "ns illegal character :\n-\b\x02\x12)\b\x03\x12%Log name contains illeg" \
-      "al character :\x1A\xD7\x03\n(type.googleapis.com/google.rpc.DebugInfo" \
-      "\x12\xAA\x03\x12\xA7\x03[ORIGINAL ERROR] generic::permission_denied: U" \
-      "ser not authorized. [google.rpc.error_details_ext] { message: \"User n" \
-      "ot authorized.\" details { type_url: \"type.googleapis.com/google.logg" \
-      "ing.v2.WriteLogEntriesPartialErrors\" value: \"\\n\\034\\010\\000\\022" \
-      "\\030\\010\\007\\022\\024User not authorized.\\n-\\010\\001\\022)\\010" \
-      "\\003\\022%Log name contains illegal character :\\n-\\010\\002\\022)" \
-      "\\010\\003\\022%Log name contains illegal character :\" } }"
+  PARTIAL_SUCCESS_GRPC_METADATA = begin
+    partial_errors = Google::Logging::V2::WriteLogEntriesPartialErrors.new(
+      log_entry_errors: {
+        0 => Google::Rpc::Status.new(
+          code: GRPC::Core::StatusCodes::PERMISSION_DENIED,
+          message: 'User not authorized.',
+          details: []),
+        1 => Google::Rpc::Status.new(
+          code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
+          message: 'Log name contains illegal character :',
+          details: []),
+        3 => Google::Rpc::Status.new(
+          code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
+          message: 'Log name contains illegal character :',
+          details: [])
+      })
+    status = Google::Rpc::Status.new(
+      message: 'User not authorized.',
+      details: [Google::Protobuf::Any.pack(partial_errors)])
+    debug_info = Google::Rpc::DebugInfo.new(
+      detail: '[ORIGINAL ERROR] generic::permission_denied: User not' \
+        ' authorized. [google.rpc.error_details_ext] { message:' \
+        " #{status.message.inspect} details { type_url:" \
+        " #{status.details[0].type_url.inspect} value:" \
+        " #{status.details[0].value.inspect_octal} } }")
+    status_details = Google::Rpc::Status.new(
+      code: 7, message: 'User not authorized.',
+      details: [Google::Protobuf::Any.pack(partial_errors),
+                Google::Protobuf::Any.pack(debug_info)])
+    {
+      'google.logging.v2.writelogentriespartialerrors-bin' =>
+        partial_errors.to_proto,
+      'google.rpc.debuginfo-bin' => debug_info.to_proto,
+      'grpc-status-details-bin' => status_details.to_proto
+    }.freeze
+  end
+
+  PARSE_ERROR_RESPONSE_BODY = {
+    'error' => {
+      'code' => 400,
+      'message' => 'Request contains an invalid argument.',
+      'status' => 'INVALID_ARGUMENT',
+      'details' => [
+        {
+          '@type' => 'type.googleapis.com/google.rpc.DebugInfo',
+          'detail' =>
+            '[ORIGINAL ERROR] RPC::CLIENT_ERROR: server could not parse' \
+              " request sent by client; initialization error is: ''"
+        }
+      ]
+    }
   }.freeze
-  # rubocop:enable Style/StringLiterals
+
+  PARSE_ERROR_GRPC_METADATA = begin
+    debug_info = Google::Rpc::DebugInfo.new(
+      detail: '[ORIGINAL ERROR] RPC::CLIENT_ERROR: server could not parse' \
+        " request sent by client; initialization error is: ''")
+    status_details = Google::Rpc::Status.new(
+      code: 3, message: 'internal client error',
+      details: [Google::Protobuf::Any.pack(debug_info)])
+    {
+      'google.rpc.debuginfo-bin' => debug_info.to_proto,
+      'grpc-status-details-bin' => status_details.to_proto
+    }.freeze
+  end
 end

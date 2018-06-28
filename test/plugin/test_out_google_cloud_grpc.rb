@@ -97,6 +97,34 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  def test_non_api_error
+    setup_gce_metadata_stubs
+    setup_prometheus
+    setup_logging_stubs(
+      GRPC::InvalidArgument.new('internal client error',
+                                PARSE_ERROR_GRPC_METADATA)) do
+      # The API Client should not retry this and the plugin should consume
+      # the exception.
+      d = create_driver(ENABLE_PROMETHEUS_CONFIG)
+      d.emit('message' => log_entry(0))
+      d.run
+      assert_prometheus_metric_value(
+        :stackdriver_successful_requests_count, 0,
+        grpc: true, code: GRPC::Core::StatusCodes::OK)
+      assert_prometheus_metric_value(
+        :stackdriver_failed_requests_count, 1,
+        grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+      assert_prometheus_metric_value(
+        :stackdriver_ingested_entries_count, 0,
+        grpc: true, code: GRPC::Core::StatusCodes::OK)
+      assert_prometheus_metric_value(
+        :stackdriver_dropped_entries_count, 1,
+        grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+      assert_prometheus_metric_value(
+        :stackdriver_retried_entries_count, 0, grpc: true)
+    end
+  end
+
   def test_server_error
     setup_gce_metadata_stubs
     {

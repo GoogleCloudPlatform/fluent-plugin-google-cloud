@@ -81,6 +81,31 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
+  def test_non_api_error
+    setup_gce_metadata_stubs
+    setup_prometheus
+    # The API Client should not retry this and the plugin should consume
+    # the exception.
+    root_error_code = PARSE_ERROR_RESPONSE_BODY['error']['code']
+    stub_request(:post, WRITE_LOG_ENTRIES_URI)
+      .to_return(status: root_error_code,
+                 body: PARSE_ERROR_RESPONSE_BODY.to_json)
+    d = create_driver(ENABLE_PROMETHEUS_CONFIG)
+    d.emit('message' => log_entry(0))
+    d.run
+    assert_prometheus_metric_value(
+      :stackdriver_successful_requests_count, 0, grpc: false, code: 200)
+    assert_prometheus_metric_value(
+      :stackdriver_failed_requests_count, 1, grpc: false, code: 400)
+    assert_prometheus_metric_value(
+      :stackdriver_ingested_entries_count, 0, grpc: false, code: 200)
+    assert_prometheus_metric_value(
+      :stackdriver_dropped_entries_count, 1, grpc: false, code: 400)
+    assert_prometheus_metric_value(
+      :stackdriver_retried_entries_count, 0, grpc: false)
+    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
+  end
+
   def test_server_error
     setup_gce_metadata_stubs
     # The API client should retry this once, then throw an exception which
