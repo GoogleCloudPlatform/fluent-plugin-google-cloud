@@ -86,7 +86,7 @@ module Fluent
         resource_type: 'container',
         extra_resource_labels: %w(namespace_id pod_id container_name),
         extra_common_labels: %w(namespace_name pod_name),
-        metadata_attributes: %w(kube-env),
+        metadata_attributes: %w(cluster-name cluster-location),
         stream_severity_map: {
           'stdout' => 'INFO',
           'stderr' => 'ERROR'
@@ -1148,12 +1148,11 @@ module Fluent
 
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
-        raw_kube_env = fetch_gce_metadata('instance/attributes/kube-env')
-        kube_env = YAML.load(raw_kube_env)
         return {
           'instance_id' => @vm_id,
           'zone' => @zone,
-          'cluster_name' => cluster_name_from_kube_env(kube_env)
+          'cluster_name' =>
+            fetch_gce_metadata('instance/attributes/cluster-name')
         }
 
       # Cloud Dataproc.
@@ -1533,15 +1532,6 @@ module Fluent
         end
         nil
       end
-    end
-
-    def cluster_name_from_kube_env(kube_env)
-      return kube_env['CLUSTER_NAME'] if kube_env.key?('CLUSTER_NAME')
-      instance_prefix = kube_env['INSTANCE_PREFIX']
-      gke_name_match = /^gke-(.+)-[0-9a-f]{8}$/.match(instance_prefix)
-      return gke_name_match.captures[0] if gke_name_match &&
-                                           !gke_name_match.captures.empty?
-      instance_prefix
     end
 
     def time_or_nil(ts_secs, ts_nanos)
