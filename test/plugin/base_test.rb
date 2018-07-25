@@ -1377,6 +1377,13 @@ module BaseTest
         expected_params: K8S_CONTAINER_PARAMS_CUSTOM
       },
       {
+        config: EMPTY_K8S_ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_container_log_entry(log_entry(0)),
+        expected_params: K8S_CONTAINER_PARAMS
+      },
+      {
         config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: false,
@@ -1431,6 +1438,13 @@ module BaseTest
         setup_k8s_stub: false,
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: K8S_NODE_PARAMS_CUSTOM
+      },
+      {
+        config: EMPTY_K8S_ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_node_log_entry(log_entry(0)),
+        expected_params: K8S_NODE_PARAMS
       },
       {
         config: ENABLE_METADATA_AGENT_CONFIG,
