@@ -2213,6 +2213,10 @@ module Fluent
           (?<resource_type>k8s_node)
           \.(?<node_name>[0-9a-z-]+)$/x =~ local_resource_id
 
+      # Clear name and location if they're explicitly set to empty.
+      @k8s_cluster_name = nil if @k8s_cluster_name == ''
+      @k8s_cluster_location = nil if @k8s_cluster_location == ''
+
       begin
         @k8s_cluster_name ||= fetch_gce_metadata(
           'instance/attributes/cluster-name')
