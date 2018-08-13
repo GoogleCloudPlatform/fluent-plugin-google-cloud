@@ -1,9 +1,10 @@
 = Google Cloud Logging plugin for {fluentd}[http://github.com/fluent/fluentd]
 
-fluent-plugin-google-cloud is an
-{output plugin for fluentd}[http://docs.fluentd.org/articles/output-plugin-overview]
-which sends logs to the
-{Stackdriver Logging API}[https://cloud.google.com/logging/docs/api/].
+fluent-plugin-google-cloud gem includes two plugins:
+1. An {filter plugin for fluentd}[http://docs.fluentd.org/articles/filter-plugin-overview]
+that embeds insertIds into log entries to guarantee order and uniqueness.
+2. An {output plugin for fluentd}[http://docs.fluentd.org/articles/output-plugin-overview]
+which sends logs to the {Stackdriver Logging API}[https://cloud.google.com/logging/docs/api/].
 
 This is an official Google Ruby gem.
 
@@ -12,8 +13,7 @@ This is an official Google Ruby gem.
 
 == Installation
 
-This gem is hosted at
-{RubyGems.org}[https://rubygems.org/gems/fluent-plugin-google-cloud]
+This gem is hosted at {RubyGems.org}[https://rubygems.org/gems/fluent-plugin-google-cloud]
 and can be installed using:
 
     $ gem install fluent-plugin-google-cloud
@@ -23,22 +23,31 @@ will also install and configure the gem.
 
 == Configuration
 
+To embed insertIds into log entries, specify <code>type add_insert_ids</code>
+in a {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
+of your Fluentd configuration file, for example:
+
+    <filter **>
+      type add_insert_ids
+      insert_id_key my_insert_id_field_name # Optional.
+    </filter>
+
+insert_id_key can be used to customize the insertId field name.
+
 To send logs to Google Cloud Logging, specify <code>type google_cloud</code>
-in a
-{match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
-of your fluentd configuration file, for example:
+in a {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
+of your Fluentd configuration file, for example:
 
     <match **>
       type google_cloud
     </match>
 
-No further configuration is required. The plugin uses
+See detailed instructions on how to configure this output plugin {here}[https://cloud.google.com/logging/docs/agent/configuration#cloud-fluentd-config].
+The plugin uses
 {Google Application Default Credentials}[https://developers.google.com/identity/protocols/application-default-credentials]
-for authorization - for additional information see 
+for authorization - for additional information see
 {here}[https://cloud.google.com/logging/docs/agent/authorization].
 
-<em>The previously documented parameters auth_method, private_key_email,
-and private_key_path are removed, and can no longer be used.</em>
 
 == Copyright
 
