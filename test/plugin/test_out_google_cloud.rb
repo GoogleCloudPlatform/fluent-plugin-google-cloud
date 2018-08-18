@@ -25,6 +25,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_false d.instance.instance_variable_get(:@use_grpc)
   end
 
+  def test_user_agent
+    setup_gce_metadata_stubs
+    user_agent = nil
+    stub_request(:post, WRITE_LOG_ENTRIES_URI).to_return do |request|
+      user_agent = request.headers['User-Agent']
+      { body: '' }
+    end
+    d = create_driver
+    d.emit('message' => log_entry(0))
+    d.run
+    assert_match Regexp.new("#{Fluent::GoogleCloudOutput::PLUGIN_NAME}"), user_agent
+  end
+
   def test_client_400
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume

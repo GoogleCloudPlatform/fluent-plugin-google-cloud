@@ -1984,7 +1984,12 @@ module Fluent
         end
         port = ":#{uri.port}" if uri.port
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
-          credentials: GRPC::Core::Channel.new("#{host}#{port}", nil, creds))
+          credentials: GRPC::Core::Channel.new(
+            "#{host}#{port}", {
+              'grpc.primary_user_agent'=>
+                "#{PLUGIN_NAME}/#{PLUGIN_VERSION} grpc-ruby/#{GRPC::VERSION} " \
+                "#{Google::Apis::OS_VERSION}"
+            }, creds))
       else
         # TODO: Use a non-default ClientOptions object.
         Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
