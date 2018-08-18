@@ -1986,7 +1986,7 @@ module Fluent
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
           credentials: GRPC::Core::Channel.new(
             "#{host}#{port}", {
-              'grpc.primary_user_agent'=>
+              'grpc.primary_user_agent' =>
                 "#{PLUGIN_NAME}/#{PLUGIN_VERSION} grpc-ruby/#{GRPC::VERSION} " \
                 "#{Google::Apis::OS_VERSION}"
             }, creds))

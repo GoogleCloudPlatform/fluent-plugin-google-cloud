@@ -36,13 +36,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       old_initialize = instance_method(:initialize)
       define_method(:initialize) do |url, args, creds|
         user_agent = args['grpc.primary_user_agent']
-        old_initialize.bind(self).(url, args, creds)
+        old_initialize.bind(self).call(url, args, creds)
       end
     end
 
     d = create_driver
     d.instance.send :init_api_client
-    assert_match Regexp.new("#{Fluent::GoogleCloudOutput::PLUGIN_NAME}"), user_agent
+    assert_match Regexp.new(Fluent::GoogleCloudOutput::PLUGIN_NAME.to_s), \
+                 user_agent
   end
 
   def test_client_error

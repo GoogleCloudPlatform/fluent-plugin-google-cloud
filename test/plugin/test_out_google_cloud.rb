@@ -35,7 +35,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver
     d.emit('message' => log_entry(0))
     d.run
-    assert_match Regexp.new("#{Fluent::GoogleCloudOutput::PLUGIN_NAME}"), user_agent
+    assert_match Regexp.new(Fluent::GoogleCloudOutput::PLUGIN_NAME.to_s), \
+                 user_agent
   end
 
   def test_client_400
