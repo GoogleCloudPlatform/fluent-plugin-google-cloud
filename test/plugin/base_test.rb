@@ -1230,6 +1230,11 @@ module BaseTest
                      CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, '000000000000004a')
   end
 
+  def test_log_entry_insert_id_field
+    verify_field_key('insertId', DEFAULT_INSERT_ID_KEY, 'custom_insert_id_key',
+                     CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED, 'fah7yr7iw64tg857y')
+  end
+
   # Metadata Agent related tests.
 
   # Test enable_metadata_agent not set or set to false.

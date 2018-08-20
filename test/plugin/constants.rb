@@ -348,6 +348,10 @@ module Constants
     span_id_key custom_span_id_key
   ).freeze
 
+  CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED = %(
+    insert_id_key custom_insert_id_key
+  ).freeze
+
   # Service configurations for various services.
 
   # GCE.
