@@ -42,7 +42,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
     d = create_driver
     d.instance.send :init_api_client
-    assert_match Regexp.new(Fluent::GoogleCloudOutput::PLUGIN_NAME.to_s), \
+    assert_match Regexp.new("#{Fluent::GoogleCloudOutput::PLUGIN_NAME}/" \
+                            "#{Fluent::GoogleCloudOutput::PLUGIN_VERSION}"), \
                  user_agent
   end
 
