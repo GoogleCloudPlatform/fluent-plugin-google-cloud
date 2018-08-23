@@ -27,6 +27,26 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     assert_true d.instance.instance_variable_get(:@use_grpc)
   end
 
+  def test_user_agent
+    setup_gce_metadata_stubs
+
+    user_agent = nil
+    # Record user agent when creating a GRPC::Core::Channel.
+    GRPC::Core::Channel.class_eval do
+      old_initialize = instance_method(:initialize)
+      define_method(:initialize) do |url, args, creds|
+        user_agent = args['grpc.primary_user_agent']
+        old_initialize.bind(self).call(url, args, creds)
+      end
+    end
+
+    d = create_driver
+    d.instance.send :init_api_client
+    assert_match Regexp.new("#{Fluent::GoogleCloudOutput::PLUGIN_NAME}/" \
+                            "#{Fluent::GoogleCloudOutput::PLUGIN_VERSION}"), \
+                 user_agent
+  end
+
   def test_client_error
     setup_gce_metadata_stubs
     {
