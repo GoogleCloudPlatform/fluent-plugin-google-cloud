@@ -1188,94 +1188,86 @@ module Fluent
       # Examples:
       # "container.<container_id>" // Docker container.
       # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
-      discovered_via_local = false
       if local_resource_id
         resource = monitored_resource_from_local_resource_id(local_resource_id)
-        discovered_via_local = true if resource
-      end
+        if resource
+          common_labels = get_common_labels_for_resource_type(resource.type)
 
-      unless resource
-        resource_type = determine_agent_level_monitored_resource_type
-        resource = Google::Apis::LoggingV2::MonitoredResource.new(
-          type: resource_type,
-          labels: determine_agent_level_monitored_resource_labels(
-            resource_type))
-
-        # Set regexp that we should match tags against later on. Using a list
-        # instead of a map to ensure order. For example, tags will be matched
-        # against Cloud Functions first, then GKE.
-        if resource.type == GKE_CONSTANTS[:resource_type]
-          # We only support Cloud Functions logs for GKE right now.
-          @is_gcf ||= fetch_gce_metadata('instance/attributes/'
-                                        ).split.include?('gcf_region')
-
-          matched_regexp_group = nil
-          if @is_gcf
-            matched_regexp_group = @compiled_cloudfunctions_tag_regexp.match(tag)
-            if matched_regexp_group
-              resource.type = CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-            end
-          end
-
-          matched_regexp_group ||= @compiled_kubernetes_tag_regexp.match(tag)
+          resource.freeze
+          resource.labels.freeze
+          common_labels.freeze
+          return [resource, common_labels]
         end
       end
+
+      resource_type = determine_agent_level_monitored_resource_type
+      resource = Google::Apis::LoggingV2::MonitoredResource.new(
+        type: resource_type,
+        labels: determine_agent_level_monitored_resource_labels(
+          resource_type))
 
       common_labels = get_common_labels_for_resource_type(resource.type)
 
-      if discovered_via_local
-        resource.freeze
-        resource.labels.freeze
-        common_labels.freeze
-        return [resource, common_labels]
-      end
+      # Set regexp that we should match tags against later on. Using a list
+      # instead of a map to ensure order. For example, tags will be matched
+      # against Cloud Functions first, then GKE.
+      if resource.type == GKE_CONSTANTS[:resource_type]
+        # We only support Cloud Functions logs for GKE right now.
+        @is_gcf ||= fetch_gce_metadata('instance/attributes/'
+                                      ).split.include?('gcf_region')
 
-      # Once the resource type is settled down, determine the labels.
-      case resource.type
-      # Cloud Functions.
-      when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        # Fetch this info and store it to avoid recurring
-        # metadata server calls.
-        @gcf_region ||= fetch_gce_metadata('instance/attributes/gcf_region')
+        if @is_gcf
+          matched_regexp_group = @compiled_cloudfunctions_tag_regexp.match(tag)
+          if matched_regexp_group
+            resource.type = CLOUDFUNCTIONS_CONSTANTS[:resource_type]
 
-        resource.labels.merge!(
-          'region' => @gcf_region,
-          'function_name' => decode_cloudfunctions_function_name(
-            matched_regexp_group['encoded_function_name'])
-        )
-        instance_id = resource.labels.delete('instance_id')
-        common_labels.merge!(
-          "#{GKE_CONSTANTS[:service]}/instance_id" => instance_id,
-          "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
-          "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-            resource.labels.delete('cluster_name'),
-          "#{COMPUTE_CONSTANTS[:service]}/zone" =>
-            resource.labels.delete('zone')
-        )
+            # Fetch this info and store it to avoid recurring
+            # metadata server calls.
+            @gcf_region ||= fetch_gce_metadata('instance/attributes/gcf_region')
 
-      # GKE container.
-      when GKE_CONSTANTS[:resource_type]
-        if matched_regexp_group
-          # We only expect one occurrence of each key in the match group.
-          resource_labels_candidates =
-            matched_regexp_group.names.zip(matched_regexp_group.captures).to_h
-          resource.labels.merge!(
-            delete_and_extract_labels(
-              resource_labels_candidates,
-              # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
-              # in fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
-              # TODO(qingling128): Figure out how to put this map into
-              # constants like GKE_CONSTANTS[:extra_resource_labels].
-              'container_name' => 'container_name',
-              'namespace_name' => 'namespace_id',
-              'pod_name' => 'pod_id'))
+            resource.labels.merge!(
+              'region' => @gcf_region,
+              'function_name' => decode_cloudfunctions_function_name(
+                matched_regexp_group['encoded_function_name'])
+            )
 
-          common_labels.merge!(
-            "#{GKE_CONSTANTS[:service]}/namespace_name" => resource.labels['namespace_id'],
-            "#{GKE_CONSTANTS[:service]}/pod_name" => resource.labels['pod_id']
-          )
+            instance_id = resource.labels.delete('instance_id')
+
+            common_labels.merge!(
+              "#{GKE_CONSTANTS[:service]}/instance_id" => instance_id,
+              "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
+              "#{GKE_CONSTANTS[:service]}/cluster_name" =>
+              resource.labels.delete('cluster_name'),
+                "#{COMPUTE_CONSTANTS[:service]}/zone" =>
+              resource.labels.delete('zone')
+            )
+          end
         end
 
+        if resource.type == GKE_CONSTANTS[:resource_type]
+          matched_regexp_group = @compiled_kubernetes_tag_regexp.match(tag)
+          if matched_regexp_group
+            # We only expect one occurrence of each key in the match group.
+            resource_labels_candidates =
+              matched_regexp_group.names.zip(matched_regexp_group.captures).to_h
+            resource.labels.merge!(
+              delete_and_extract_labels(
+                resource_labels_candidates,
+                # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
+                # in fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
+                # TODO(qingling128): Figure out how to put this map into
+                # constants like GKE_CONSTANTS[:extra_resource_labels].
+                'container_name' => 'container_name',
+                'namespace_name' => 'namespace_id',
+                'pod_name' => 'pod_id'))
+
+            common_labels.merge!(
+              "#{GKE_CONSTANTS[:service]}/namespace_name" => resource.labels['namespace_id'],
+              "#{GKE_CONSTANTS[:service]}/pod_name" => resource.labels['pod_id']
+            )
+
+          end
+        end
       end
 
       # Cloud Dataflow and Cloud ML.
