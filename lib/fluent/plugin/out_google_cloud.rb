@@ -976,8 +976,6 @@ module Fluent
       # All metadata parameters must now be set.
       missing = []
       missing << 'project_id' unless @project_id
-      missing << 'zone' unless @zone
-      missing << 'vm_id' unless @vm_id
       return if missing.empty?
       raise Fluent::ConfigError,
             "Unable to obtain metadata parameters: #{missing.join(' ')}"
