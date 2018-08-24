@@ -296,9 +296,9 @@ module Fluent
 
     # The regular expression to use on Kubernetes logs to extract some basic
     # information about the log source. The regexp must contain capture groups
-    # for pod_name, namespace_name, and container_name.
+    # for pod_id, namespace_id, and container_name.
     config_param :kubernetes_tag_regexp, :string, :default =>
-      '\.(?<pod_name>[^_]+)_(?<namespace_name>[^_]+)_(?<container_name>.+)$'
+      '\.(?<pod_id>[^_]+)_(?<namespace_id>[^_]+)_(?<container_name>.+)$'
 
     # label_map (specified as a JSON object) is an unordered set of fluent
     # field names whose values are sent as labels rather than as part of the
@@ -1248,19 +1248,11 @@ module Fluent
           matched_regexp_group = @compiled_kubernetes_tag_regexp.match(tag)
           if matched_regexp_group
             # We only expect one occurrence of each key in the match group.
-            resource_labels_candidates =
-              matched_regexp_group.names.zip(matched_regexp_group.captures).to_h
             resource.labels.merge!(
-              delete_and_extract_labels(
-                resource_labels_candidates,
-                # The kubernetes_tag_regexp is poorly named. 'namespace_name' is
-                # in fact 'namespace_id'. 'pod_name' is in fact 'pod_id'.
-                # TODO(qingling128): Figure out how to put this map into
-                # constants like GKE_CONSTANTS[:extra_resource_labels].
-                'container_name' => 'container_name',
-                'namespace_name' => 'namespace_id',
-                'pod_name' => 'pod_id'))
+              matched_regexp_group.names.zip(matched_regexp_group.captures).to_h
+            )
 
+            # namespace_id and pod_id are actually the names, not ids.
             common_labels.merge!(
               "#{GKE_CONSTANTS[:service]}/namespace_name" => resource.labels['namespace_id'],
               "#{GKE_CONSTANTS[:service]}/pod_name" => resource.labels['pod_id']
