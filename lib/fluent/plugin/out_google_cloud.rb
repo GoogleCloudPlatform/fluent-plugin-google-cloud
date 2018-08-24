@@ -239,8 +239,8 @@ module Fluent
 
     # Specify project/instance metadata.
     #
-    # project_id, zone, and vm_id are required to have valid values, which
-    # can be obtained from the metadata service or set explicitly.
+    # project_id is required to have a valid value, which can be obtained from
+    # the credentials, metadata service, or set explicitly.
     # Otherwise, the plugin will fail to initialize.
     #
     # Note that while 'project id' properly refers to the alphanumeric name
