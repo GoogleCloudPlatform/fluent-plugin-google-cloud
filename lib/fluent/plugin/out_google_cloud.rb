@@ -1224,6 +1224,30 @@ module Fluent
     # collection of entries.
     def determine_group_level_monitored_resource_and_labels(tag,
                                                             local_resource_id)
+      # Determine the monitored resource based on the local_resource_id.
+      # Different monitored resource types have unique ids in different format.
+      # We will query Metadata Agent for the monitored resource. Return the
+      # legacy monitored resource (either the instance resource or the resource
+      # inferred from the tag) if failed to get a monitored resource from
+      # Metadata Agent with this key.
+      #
+      # Examples:
+      # "container.<container_id>" // Docker container.
+      # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
+      if local_resource_id
+        resource = monitored_resource_from_local_resource_id(local_resource_id)
+        if resource
+          common_labels = determine_common_labels_for_resource_type(
+            resource.type)
+
+          resource.freeze
+          resource.labels.freeze
+          common_labels.freeze
+
+          return [resource, common_labels]
+        end
+      end
+
       resource = @resource.dup
       resource.labels = @resource.labels.dup
 
@@ -1239,22 +1263,6 @@ module Fluent
       end
 
       common_labels = determine_common_labels_for_resource_type(resource.type)
-
-      # Determine the monitored resource based on the local_resource_id.
-      # Different monitored resource types have unique ids in different format.
-      # We will query Metadata Agent for the monitored resource. Return the
-      # legacy monitored resource (either the instance resource or the resource
-      # inferred from the tag) if failed to get a monitored resource from
-      # Metadata Agent with this key.
-      #
-      # Examples:
-      # "container.<container_id>" // Docker container.
-      # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
-      if local_resource_id
-        converted_resource = monitored_resource_from_local_resource_id(
-          local_resource_id)
-        resource = converted_resource if converted_resource
-      end
 
       # Once the resource type is settled down, determine the labels.
       case resource.type
