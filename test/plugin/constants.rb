@@ -283,14 +283,6 @@ module Constants
     zone #{CUSTOM_ZONE}
     vm_id #{CUSTOM_VM_ID}
   ).freeze
-  CONFIG_MISSING_METADATA_ZONE = %(
-    project_id #{CUSTOM_PROJECT_ID}
-    vm_id #{CUSTOM_VM_ID}
-  ).freeze
-  CONFIG_MISSING_METADATA_VM_ID = %(
-    project_id #{CUSTOM_PROJECT_ID}
-    zone #{CUSTOM_ZONE}
-  ).freeze
   CONFIG_MISSING_METADATA_ALL = %(
   ).freeze
 

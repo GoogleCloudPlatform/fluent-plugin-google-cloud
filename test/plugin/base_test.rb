@@ -85,9 +85,7 @@ module BaseTest
     setup_no_metadata_service_stubs
     Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
     { CONFIG_MISSING_METADATA_PROJECT_ID => ['project_id'],
-      CONFIG_MISSING_METADATA_ZONE => ['zone'],
-      CONFIG_MISSING_METADATA_VM_ID => ['vm_id'],
-      CONFIG_MISSING_METADATA_ALL => %w(project_id zone vm_id)
+      CONFIG_MISSING_METADATA_ALL => ['project_id']
     }.each_with_index do |(config, parts), index|
       exception_count = 0
       begin
@@ -147,7 +145,6 @@ module BaseTest
     assert_equal PROJECT_ID, d.instance.project_id
     assert_equal ZONE, d.instance.zone
     assert_equal VM_ID, d.instance.vm_id
-    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_managed_vm_metadata_loading
@@ -156,13 +153,6 @@ module BaseTest
     d = create_driver
     d.run
     assert_equal PROJECT_ID, d.instance.project_id
-    assert_equal ZONE, d.instance.zone
-    assert_equal VM_ID, d.instance.vm_id
-    assert_equal APPENGINE_CONSTANTS[:resource_type], d.instance.resource.type
-    assert_equal MANAGED_VM_BACKEND_NAME,
-                 d.instance.resource.labels['module_id']
-    assert_equal MANAGED_VM_BACKEND_VERSION,
-                 d.instance.resource.labels['version_id']
   end
 
   def test_gce_metadata_does_not_load_when_use_metadata_service_is_false
@@ -172,7 +162,6 @@ module BaseTest
     assert_equal CUSTOM_PROJECT_ID, d.instance.project_id
     assert_equal CUSTOM_ZONE, d.instance.zone
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
-    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_gce_used_when_detect_subservice_is_false
@@ -182,7 +171,6 @@ module BaseTest
     setup_container_metadata_stubs
     d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
     d.run
-    assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
   end
 
   def test_metadata_overrides
