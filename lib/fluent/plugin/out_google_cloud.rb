@@ -521,15 +521,10 @@ module Fluent
         ]
       end
 
-      # Determine the common labels that should be added to all log entries
-      # processed by this logging agent.
-      @common_labels = determine_agent_level_common_labels
-
       # The resource and labels are now set up; ensure they can't be modified
       # without first duping them.
       @resource.freeze
       @resource.labels.freeze
-      @common_labels.freeze
 
       if @use_grpc
         @construct_log_entry = method(:construct_log_entry_in_grpc_format)
@@ -1167,14 +1162,14 @@ module Fluent
       {}
     end
 
-    # Determine the common labels that should be added to all log entries
-    # processed by this logging agent.
-    def determine_agent_level_common_labels
+    # Determine the common labels that should be added to all log entries for
+    # a given resource type.
+    def determine_common_labels_for_resource_type(resource_type)
       labels = {}
       # User can specify labels via config. We want to capture those as well.
       labels.merge!(@labels) if @labels
 
-      case @resource.type
+      case resource_type
       # GAE, Cloud Dataflow, Cloud Dataproc and Cloud ML.
       when APPENGINE_CONSTANTS[:resource_type],
            DATAFLOW_CONSTANTS[:resource_type],
@@ -1188,7 +1183,8 @@ module Fluent
 
       # GCE instance and GKE container.
       when COMPUTE_CONSTANTS[:resource_type],
-           GKE_CONSTANTS[:resource_type]
+           GKE_CONSTANTS[:resource_type],
+           CLOUDFUNCTIONS_CONSTANTS[:resource_type]
         labels["#{COMPUTE_CONSTANTS[:service]}/resource_name"] = @vm_name
 
       # EC2.
@@ -1230,7 +1226,6 @@ module Fluent
                                                             local_resource_id)
       resource = @resource.dup
       resource.labels = @resource.labels.dup
-      common_labels = @common_labels.dup
 
       # Change the resource type and set matched_regexp_group if the tag matches
       # certain regexp.
@@ -1242,6 +1237,8 @@ module Fluent
           break
         end
       end
+
+      common_labels = determine_common_labels_for_resource_type(resource.type)
 
       # Determine the monitored resource based on the local_resource_id.
       # Different monitored resource types have unique ids in different format.
