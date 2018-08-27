@@ -1176,8 +1176,6 @@ module Fluent
     # collection of entries.
     def determine_group_level_monitored_resource_and_labels(tag,
                                                             local_resource_id)
-      resource = nil
-
       # Determine the monitored resource based on the local_resource_id.
       # Different monitored resource types have unique ids in different format.
       # We will query Metadata Agent for the monitored resource. Return the
