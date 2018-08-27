@@ -530,12 +530,18 @@ module Fluent
               group_level_resource, group_level_common_labels, record)
 
           unless @logs_viewer_address_displayed
-            if [ COMPUTE_CONSTANTS[:resource_type], EC2_CONSTANTS[:resource_type] ].include? entry_level_resource.type
+            instance_resource_types = [
+              COMPUTE_CONSTANTS[:resource_type],
+              EC2_CONSTANTS[:resource_type]
+            ]
+
+            if instance_resource_types.include? entry_level_resource.type
               @logs_viewer_address_displayed = true
 
               # Log an informational message containing the Logs viewer URL
               @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
-                        "viewer?project=#{@project_id}&resource=#{entry_level_resource.type}/",
+                        "viewer?project=#{@project_id}&",
+                        "resource=#{entry_level_resource.type}/",
                         "instance_id/#{@vm_id}"
             end
           end
@@ -1242,7 +1248,7 @@ module Fluent
               "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
               "#{GKE_CONSTANTS[:service]}/cluster_name" =>
               resource.labels.delete('cluster_name'),
-                "#{COMPUTE_CONSTANTS[:service]}/zone" =>
+              "#{COMPUTE_CONSTANTS[:service]}/zone" =>
               resource.labels.delete('zone')
             )
           end
@@ -1257,10 +1263,10 @@ module Fluent
             )
 
             # namespace_id and pod_id are actually the names, not ids.
-            common_labels.merge!(
-              "#{GKE_CONSTANTS[:service]}/namespace_name" => resource.labels['namespace_id'],
-              "#{GKE_CONSTANTS[:service]}/pod_name" => resource.labels['pod_id']
-            )
+            common_labels["#{GKE_CONSTANTS[:service]}/namespace_name"] =
+              resource.labels['namespace_id']
+            common_labels["#{GKE_CONSTANTS[:service]}/pod_name"] =
+              resource.labels['pod_id']
 
           end
         end
@@ -1348,10 +1354,10 @@ module Fluent
                 .map { |l| [l, l] }.to_h))
           common_labels.merge!(
             delete_and_extract_labels(
-              record['kubernetes'], {
-                'namespace_name' => "#{GKE_CONSTANTS[:service]}/namespace_name",
-                'pod_name' => "#{GKE_CONSTANTS[:service]}/pod_name"
-              }))
+              record['kubernetes'],
+              'namespace_name' => "#{GKE_CONSTANTS[:service]}/namespace_name",
+              'pod_name' => "#{GKE_CONSTANTS[:service]}/pod_name"
+            ))
           # Prepend label/ to all user-defined labels' keys.
           if record['kubernetes'].key?('labels')
             common_labels.merge!(
