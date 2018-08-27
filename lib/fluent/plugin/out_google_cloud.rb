@@ -553,8 +553,8 @@ module Fluent
       if @vm_id
         # Log an informational message containing the Logs viewer URL
         @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
-          "viewer?project=#{@project_id}&resource=#{@resource.type}/",
-          "instance_id/#{@vm_id}"
+                  "viewer?project=#{@project_id}&resource=#{@resource.type}/",
+                  "instance_id/#{@vm_id}"
       end
     end
 
@@ -1029,6 +1029,10 @@ module Fluent
       # All metadata parameters must now be set.
       missing = []
       missing << 'project_id' unless @project_id
+      if @platform != Platform::OTHER
+        missing << 'zone' unless @zone
+        missing << 'vm_id' unless @vm_id
+      end
       return if missing.empty?
       raise Fluent::ConfigError,
             "Unable to obtain metadata parameters: #{missing.join(' ')}"
