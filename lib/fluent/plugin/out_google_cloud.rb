@@ -1247,10 +1247,11 @@ module Fluent
           # labels.
           if resource.type == GKE_CONSTANTS[:resource_type]
             common_labels.merge!(
-              delete_and_extract_labels(
-                common_labels,
-                GKE_CONSTANTS[:extra_common_labels]
-                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
+              "#{GKE_CONSTANTS[:service]}/namespace_name" =>
+              resource.labels['namespace_id'],
+              "#{GKE_CONSTANTS[:service]}/pod_name" =>
+              resource.labels['pod_id']
+            )
           end
 
           common_labels.freeze
