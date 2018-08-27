@@ -85,9 +85,7 @@ module BaseTest
     setup_no_metadata_service_stubs
     Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
     { CONFIG_MISSING_METADATA_PROJECT_ID => ['project_id'],
-      CONFIG_MISSING_METADATA_ZONE => ['zone'],
-      CONFIG_MISSING_METADATA_VM_ID => ['vm_id'],
-      CONFIG_MISSING_METADATA_ALL => %w(project_id zone vm_id)
+      CONFIG_MISSING_METADATA_ALL => %w(project_id)
     }.each_with_index do |(config, parts), index|
       exception_count = 0
       begin
