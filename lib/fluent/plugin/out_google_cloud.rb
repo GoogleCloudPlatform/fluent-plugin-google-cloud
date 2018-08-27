@@ -1036,6 +1036,19 @@ module Fluent
       @log.error 'Failed to obtain location: ', error: e
     end
 
+    def determine_subservice_resource_type
+      begin
+        attributes = fetch_gce_metadata('instance/attributes/').split.to_set
+        SUBSERVICE_METADATA_ATTRIBUTES.each do |resource_type, expected|
+          return resource_type if attributes.superset?(expected)
+        end
+      rescue StandardError => e
+        @log.error 'Failed to detect subservice: ', error: e
+      end
+
+      nil
+    end
+
     # Determine agent level monitored resource type.
     def determine_agent_level_monitored_resource_type
       case @platform
@@ -1052,14 +1065,8 @@ module Fluent
 
         # Resource types determined by @detect_subservice config.
         if @detect_subservice
-          begin
-            attributes = fetch_gce_metadata('instance/attributes/').split.to_set
-            SUBSERVICE_METADATA_ATTRIBUTES.each do |resource_type, expected|
-              return resource_type if attributes.superset?(expected)
-            end
-          rescue StandardError => e
-            @log.error 'Failed to detect subservice: ', error: e
-          end
+          @subservice_resource_type ||= determine_subservice_resource_type
+          return @subservice_resource_type if @subservice_resource_type
         end
 
         # GCE instance.
