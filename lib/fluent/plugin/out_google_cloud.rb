@@ -1237,11 +1237,22 @@ module Fluent
       if local_resource_id
         resource = monitored_resource_from_local_resource_id(local_resource_id)
         if resource
+          resource.freeze
+          resource.labels.freeze
+
           common_labels = determine_common_labels_for_resource_type(
             resource.type)
 
-          resource.freeze
-          resource.labels.freeze
+          # TODO(bmoyles0117): Remove this once backend service can map metadata
+          # labels.
+          if resource.type == GKE_CONSTANTS[:resource_type]
+            common_labels.merge!(
+              delete_and_extract_labels(
+                common_labels,
+                GKE_CONSTANTS[:extra_common_labels]
+                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
+          end
+
           common_labels.freeze
 
           return [resource, common_labels]
@@ -1301,6 +1312,8 @@ module Fluent
               'namespace_name' => 'namespace_id',
               'pod_name' => 'pod_id'))
 
+          # TODO(bmoyles0117): Remove this once backend service can map metadata
+          # labels.
           common_labels.merge!(
             delete_and_extract_labels(
               common_labels_candidates,
