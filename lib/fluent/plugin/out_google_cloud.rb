@@ -501,11 +501,6 @@ module Fluent
         @construct_log_entry = method(:construct_log_entry_in_rest_format)
         @write_request = method(:write_request_via_rest)
       end
-
-      # Log an informational message containing the Logs viewer URL
-      # @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
-      #           "viewer?project=#{@project_id}&resource=#{@resource.type}/",
-      #           "instance_id/#{@vm_id}"
     end
 
     def start
@@ -533,6 +528,17 @@ module Fluent
           entry_level_resource, entry_level_common_labels =
             determine_entry_level_monitored_resource_and_labels(
               group_level_resource, group_level_common_labels, record)
+
+          unless @logs_viewer_address_displayed
+            if [ COMPUTE_CONSTANTS[:resource_type], EC2_CONSTANTS[:resource_type] ].include? entry_level_resource.type
+              @logs_viewer_address_displayed = true
+
+              # Log an informational message containing the Logs viewer URL
+              @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
+                        "viewer?project=#{@project_id}&resource=#{entry_level_resource.type}/",
+                        "instance_id/#{@vm_id}"
+            end
+          end
 
           is_json = false
           if @detect_json
