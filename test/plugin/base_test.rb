@@ -1496,8 +1496,9 @@ module BaseTest
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: K8S_NODE_PARAMS
       }
-    ].each do |test_params|
+    ].each do |test_params, index|
       new_stub_context do
+	print index
         setup_gce_metadata_stubs
         setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
         setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
