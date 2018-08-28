@@ -28,7 +28,7 @@ in a {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdq
 of your Fluentd configuration file, for example:
 
     <filter **>
-      type add_insert_ids
+      @type add_insert_ids
       insert_id_key my_insert_id_field_name # Optional.
     </filter>
 
@@ -39,7 +39,7 @@ in a {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdq
 of your Fluentd configuration file, for example:
 
     <match **>
-      type google_cloud
+      @type google_cloud
     </match>
 
 See detailed instructions on how to configure this output plugin {here}[https://cloud.google.com/logging/docs/agent/configuration#cloud-fluentd-config].
