@@ -39,8 +39,7 @@ module Fluent
       desc 'The field name of insertIds in the log entry.'
       config_param :insert_id_key, :string, default: DEFAULT_INSERT_ID_KEY
 
-      # Expose attr_readers to make testing of metadata more direct than only
-      # testing it indirectly through metadata sent with logs.
+      # Expose attr_readers for testing.
       attr_reader :insert_id_key
 
       def start
