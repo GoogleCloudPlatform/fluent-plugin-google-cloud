@@ -91,10 +91,11 @@ module BaseTest
     ].each_with_index do |(config, missing_parts, is_valid_config), index|
       begin
         create_driver(config)
-
-        assert_true is_valid_config, "Index #{index} failed."
+        assert_true is_valid_config, "Invalid config at index #{index} should "\
+          'have raised an error.'
       rescue Fluent::ConfigError => error
-        assert_false is_valid_config, "Index #{index} failed."
+        assert_false is_valid_config, "Valid config at index #{index} should "\
+          "not have raised an error #{error}."
         assert error.message.include?('Unable to obtain metadata parameters:'),
                "Index #{index} failed."
         missing_parts.each do |part|
