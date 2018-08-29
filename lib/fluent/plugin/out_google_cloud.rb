@@ -550,7 +550,7 @@ module Fluent
         @write_request = method(:write_request_via_rest)
       end
 
-      if @platform != Platform::OTHER
+      if [Platform::GCE, Platform::EC2].include?(@platform)
         # Log an informational message containing the Logs viewer URL
         @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
                   "viewer?project=#{@project_id}&resource=#{@resource.type}/",
