@@ -577,7 +577,7 @@ module Fluent
           # record so that cascading JSON detection happens (we rely on the
           # record having only 1 field to trigger the detection). These will be
           # set later in the LogEntry.
-          fq_trace_id = record.delete(@trace_key)
+          trace_id = record.delete(@trace_key)
           span_id = record.delete(@span_id_key)
           insert_id = record.delete(@insert_id_key)
 
@@ -604,9 +604,10 @@ module Fluent
               is_json = true
               # Extract LogEntry fields if they are present in the nested JSON.
               # This will take precedence of the root level values.
-              fq_trace_id ||= record.delete(@trace_key)
-              span_id ||= record.delete(@span_id_key)
-              insert_id ||= record.delete(@insert_id_key)
+              trace_id = record.delete(@trace_key) if record.key?(@trace_key)
+              span_id = record.delete(@span_id_key) if record.key?(@span_id_key)
+              insert_id = record.delete(@insert_id_key) if
+                record.key?(@insert_id_key)
             end
             # Restore timestamp and severity if necessary. Note that we don't
             # want to override these keys in the JSON we've just parsed.
@@ -625,7 +626,7 @@ module Fluent
                                             ts_secs,
                                             ts_nanos)
 
-          entry.trace = fq_trace_id if fq_trace_id
+          entry.trace = trace_id if trace_id
           entry.span_id = span_id if span_id
           entry.insert_id = insert_id if insert_id
 
