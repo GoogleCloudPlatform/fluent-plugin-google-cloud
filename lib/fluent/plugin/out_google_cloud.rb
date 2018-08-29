@@ -597,8 +597,6 @@ module Fluent
             unless record_json.nil?
               record = record_json
               is_json = true
-              # Extract LogEntry fields if they are present in the nested JSON.
-              # This will take precedence of the root level values.
             end
             # Restore these if necessary. Note that we don't want to override
             # these keys in the JSON we've just parsed.
@@ -620,11 +618,12 @@ module Fluent
                                             ts_secs,
                                             ts_nanos)
 
-          entry.trace = record.delete(@trace_key) if record.key?(@trace_key)
-          entry.span_id = record.delete(@span_id_key) if
-            record.key?(@span_id_key)
-          entry.insert_id = record.delete(@insert_id_key) if
-            record.key?(@insert_id_key)
+          trace = record.delete(@trace_key)
+          entry.trace = trace if trace
+          span_id = record.delete(@span_id_key)
+          entry.span_id = span_id if span_id
+          insert_id = record.delete(@insert_id_key)
+          entry.insert_id = insert_id if insert_id
 
           set_log_entry_fields(record, entry)
           set_payload(entry_level_resource.type, record, entry, is_json)
