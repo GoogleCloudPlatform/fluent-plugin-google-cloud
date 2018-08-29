@@ -64,7 +64,7 @@ module Fluent
         # Initialize the insertID.
         @log.info "Started the add_insert_ids plugin with #{@insert_id_key}" \
                   ' as the insert ID key.'
-        @insert_id = initialize_insert_id
+        @insert_id = generate_initial_insert_id
         @log.info "Initialized the insert ID key to #{@insert_id}."
       end
 
@@ -90,8 +90,8 @@ module Fluent
 
       private
 
-      # Initialize the insertId to a random string.
-      def initialize_insert_id
+      # Generate a random string as the initial insertId.
+      def generate_initial_insert_id
         Array.new(INSERT_ID_SIZE) { ALLOWED_CHARS.sample }.join
       end
 

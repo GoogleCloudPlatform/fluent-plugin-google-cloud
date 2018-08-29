@@ -23,7 +23,7 @@ will also install and configure the gem.
 
 == Configuration
 
-To embed insertIds into log entries, specify <code>type add_insert_ids</code>
+To embed insertIds into log entries, specify <code>@type add_insert_ids</code>
 in a {filter clause}[https://docs.fluentd.org/v1.0/articles/config-file#(3)-%E2%80%9Cfilter%E2%80%9D:-event-processing-pipeline]
 of your Fluentd configuration file, for example:
 
@@ -34,7 +34,7 @@ of your Fluentd configuration file, for example:
 
 insert_id_key can be used to customize the insertId field name.
 
-To send logs to Google Cloud Logging, specify <code>type google_cloud</code>
+To send logs to Google Cloud Logging, specify <code>@type google_cloud</code>
 in a {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
 of your Fluentd configuration file, for example:
 
