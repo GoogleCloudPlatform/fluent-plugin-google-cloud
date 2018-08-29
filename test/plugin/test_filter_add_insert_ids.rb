@@ -22,6 +22,7 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
   include Fluent::Plugin::AddInsertIdsFilter::ConfigConstants
 
   CUSTOM_INSERT_ID_KEY = 'custom_insert_id_key'.freeze
+  INSERT_ID = 'aeyr82r92h249gh9h'.freeze
   TEST_MESSAGE = 'test message for add_insert_ids plugin.'.freeze
   APPLICATION_DEFAULT_CONFIG = ''.freeze
   INSERT_ID_KEY_CONFIG = %(
@@ -81,6 +82,43 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
     assert_equal total_entry_count, unique_insert_ids.size,
                  "Expected #{total_entry_count} unique insertIds." \
                  " Only #{unique_insert_ids.size} found."
+  end
+
+  def test_not_add_insert_ids_if_present
+    log_entry_with_empty_insert_id = log_entry(0).merge(
+      DEFAULT_INSERT_ID_KEY => '')
+    {
+      log_entry(0).merge(DEFAULT_INSERT_ID_KEY => INSERT_ID) => true,
+      # Still generate insertId if it's an empty string
+      log_entry_with_empty_insert_id => false
+    }.each do |test_data|
+      input_log_entry, retain_original_insert_id = test_data
+      # Make a copy because the log entry gets modified by the filter plugin.
+      log_entry = input_log_entry.dup
+      d = create_driver
+      d.run do
+        d.emit(log_entry)
+      end
+      filtered_events = d.filtered_as_array
+
+      assert_equal 1, filtered_events.size, 'Exact 1 log entry after' \
+                   " filtering is expected. Test data: #{test_data}."
+      event = filtered_events[0]
+      assert_equal 3, event.size, 'Log event should include 3 elements: tag,' \
+                   " time and record. Test data: #{test_data}."
+      record = event[2]
+      assert_true record.is_a?(Hash), "Log record #{record} should be a hash." \
+                  " Test data: #{test_data}."
+      assert_equal 0, record['id'], "Test data: #{test_data}."
+      assert_equal TEST_MESSAGE, record['message'], "Test data: #{test_data}."
+      insert_id = record[DEFAULT_INSERT_ID_KEY]
+      assert_false insert_id.to_s.empty?, 'Insert ID should not be empty.' \
+                   " Test data: #{test_data}."
+      assert_equal retain_original_insert_id,
+                   input_log_entry[DEFAULT_INSERT_ID_KEY] == insert_id,
+                   "Input value is #{input_log_entry[DEFAULT_INSERT_ID_KEY]}." \
+                   " Output value is #{insert_id}. Test data: #{test_data}."
+    end
   end
 
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG)

@@ -79,9 +79,9 @@ module Fluent
       # rubocop:disable Style/UnusedMethodArgument
       def filter(tag, time, record)
         # Only generate and add an insertId field if the record is a hash and
-        # the insert ID field is not already set.
-        if record.is_a?(Hash) && !record.key?(@insert_id_key) \
-            && record[@insert_id_key] != ''
+        # the insert ID field is not already set. An empty string is considered
+        # not set.
+        if record.is_a?(Hash) && record[@insert_id_key].to_s.empty?
           record[@insert_id_key] = increment_insert_id
         end
         record
