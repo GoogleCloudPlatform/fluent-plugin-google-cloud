@@ -1236,17 +1236,17 @@ module BaseTest
 
   def test_cascading_json_detection_with_log_entry_trace_field
     verify_cascading_json_detection_with_log_entry_fields(
-      'trace', DEFAULT_TRACE_KEY, TRACE)
+      'trace', DEFAULT_TRACE_KEY, TRACE, TRACE2)
   end
 
   def test_cascading_json_detection_with_log_entry_span_id_field
     verify_cascading_json_detection_with_log_entry_fields(
-      'spanId', DEFAULT_SPAN_ID_KEY, SPAN_ID)
+      'spanId', DEFAULT_SPAN_ID_KEY, SPAN_ID, SPAN_ID2)
   end
 
   def test_cascading_json_detection_with_log_entry_insert_id_field
     verify_cascading_json_detection_with_log_entry_fields(
-      'insertId', DEFAULT_INSERT_ID_KEY, INSERT_ID)
+      'insertId', DEFAULT_INSERT_ID_KEY, INSERT_ID, INSERT_ID2)
   end
 
   # Metadata Agent related tests.
@@ -2034,21 +2034,63 @@ module BaseTest
   # left with name "log", "message" or "msg". This test verifies additional
   # LogEntry fields like spanId and traceId do not disable that by accident.
   def verify_cascading_json_detection_with_log_entry_fields(
-      log_entry_field, default_key, sample_value)
+      log_entry_field, default_key, root_level_value, nested_level_value)
     setup_gce_metadata_stubs
-    log_entry = structured_log_entry
-    setup_logging_stubs do
-      d = create_driver(DETECT_JSON_CONFIG)
-      d.emit(log_entry.merge(default_key => sample_value))
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      assert_equal sample_value, entry[log_entry_field],
-                   "#{sample_value} is expected for #{log_entry_field} field."
-      payload_fields = get_fields(entry['jsonPayload'])
-      assert_equal log_entry.size, payload_fields.size
-      payload_fields.each do |key, value|
-        assert_equal log_entry[key], get_string(value)
+
+    # {
+    #   "logging.googleapis.com/XXX' => 'sample value'
+    #   "msg": {
+    #     "name": "test name",
+    #     "code": "test code"
+    #   }
+    # }
+    log_entry_with_root_level_field = {
+      default_key => root_level_value,
+      'msg' => structured_log_entry.to_json
+    }
+    # {
+    #   "msg": {
+    #     "logging.googleapis.com/XXX' => 'another value',
+    #     "name": "test name",
+    #     "code": "test code"
+    #   }
+    # }
+    log_entry_with_nested_level_field = {
+      'msg' => {
+        default_key => nested_level_value
+      }.merge(structured_log_entry).to_json
+    }
+    # {
+    #   "logging.googleapis.com/XXX' => 'sample value'
+    #   "msg": {
+    #     "logging.googleapis.com/XXX' => 'another value',
+    #     "name": "test name",
+    #     "code": "test code"
+    #   }
+    # }
+    log_entry_with_both_level_fields = log_entry_with_nested_level_field.merge(
+      default_key => root_level_value)
+
+    {
+      log_entry_with_root_level_field => root_level_value,
+      log_entry_with_nested_level_field => nested_level_value,
+      log_entry_with_both_level_fields => nested_level_value
+    }.each_with_index do |(input_log_entry, expected_value), index|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(DETECT_JSON_CONFIG)
+        d.emit(input_log_entry)
+        d.run
+      end
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+        assert_equal expected_value, entry[log_entry_field],
+                     "Index #{index} failed. #{expected_value} is expected" \
+                     " for #{log_entry_field} field."
+        payload_fields = get_fields(entry['jsonPayload'])
+        assert_equal structured_log_entry.size, payload_fields.size
+        payload_fields.each do |key, value|
+          assert_equal structured_log_entry[key], get_string(value)
+        end
       end
     end
   end
