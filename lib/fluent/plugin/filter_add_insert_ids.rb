@@ -13,12 +13,27 @@
 # limitations under the License.
 
 require 'fluent/plugin/filter'
-require 'thread'
 
 module Fluent
   module Plugin
     # Fluentd filter plugin for adding insertIds to guarantee log entry order
     # and uniqueness.
+    # Sample log entries enriched by this plugin:
+    # {
+    #   "timestamp": "2017-08-22 13:35:28",
+    #   "message": "1",
+    #   "logging.googleapis.com/insertId": "aye7eakuf23h41aef0"
+    # }
+    # {
+    #   "timestamp": "2017-08-22 13:35:28",
+    #   "message": "2",
+    #   "logging.googleapis.com/insertId": "aye7eakuf23h41aef1"
+    # }
+    # {
+    #   "timestamp": "2017-08-22 13:35:28",
+    #   "message": "3",
+    #   "logging.googleapis.com/insertId": "aye7eakuf23h41aef2"
+    # }
     class AddInsertIdsFilter < Filter
       Fluent::Plugin.register_filter('add_insert_ids', self)
 
@@ -36,7 +51,7 @@ module Fluent
 
       include self::ConfigConstants
 
-      desc 'The field name of insertIds in the log entry.'
+      desc 'The field name for insertIds in the log record.'
       config_param :insert_id_key, :string, default: DEFAULT_INSERT_ID_KEY
 
       # Expose attr_readers for testing.
@@ -46,11 +61,11 @@ module Fluent
         super
         @log = $log # rubocop:disable Style/GlobalVars
 
-        # Initiate the insertID.
+        # Initialize the insertID.
         @log.info "Started the add_insert_ids plugin with #{@insert_id_key}" \
                   ' as the insert ID key.'
-        @insert_id = generate_insert_id
-        @log.info "Initiated the insert ID key at #{@insert_id}."
+        @insert_id = initialize_insert_id
+        @log.info "Initialized the insert ID key to #{@insert_id}."
       end
 
       def configure(conf)
@@ -63,9 +78,10 @@ module Fluent
 
       # rubocop:disable Style/UnusedMethodArgument
       def filter(tag, time, record)
-        # Only generate and add an insertId field If the record is a hash and
+        # Only generate and add an insertId field if the record is a hash and
         # the insert ID field is not already set.
-        if record.is_a?(Hash) && !record.key?(@insert_id_key)
+        if record.is_a?(Hash) && !record.key?(@insert_id_key) \
+            && record[@insert_id_key] != ''
           record[@insert_id_key] = increment_insert_id
         end
         record
@@ -74,8 +90,8 @@ module Fluent
 
       private
 
-      # Generates a random string as the insertId.
-      def generate_insert_id
+      # Initialize the insertId to a random string.
+      def initialize_insert_id
         Array.new(INSERT_ID_SIZE) { ALLOWED_CHARS.sample }.join
       end
 

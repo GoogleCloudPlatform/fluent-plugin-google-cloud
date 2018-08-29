@@ -22,8 +22,8 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
   include Fluent::Plugin::AddInsertIdsFilter::ConfigConstants
 
   CUSTOM_INSERT_ID_KEY = 'custom_insert_id_key'.freeze
-  APPLICATION_DEFAULT_CONFIG = ''.freeze
   TEST_MESSAGE = 'test message for add_insert_ids plugin.'.freeze
+  APPLICATION_DEFAULT_CONFIG = ''.freeze
   INSERT_ID_KEY_CONFIG = %(
     insert_id_key #{CUSTOM_INSERT_ID_KEY}
   ).freeze
@@ -57,24 +57,30 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
                  " expected. Only #{filtered_events.size} are detected."
     # The expected insertId will be assigned as we scan the first log entry.
     expected_insert_id = nil
+    unique_insert_ids = Set.new
     filtered_events.each_with_index do |event, index|
       assert_equal 3, event.size, "Index #{index} failed. Log event should" \
                    ' include 3 elements: tag, time and record.'
       record = event[2]
       assert_true record.is_a?(Hash), "Index #{index} failed. Log record" \
-                  ' should be a hash.'
-      assert_equal index, record['id'], "Index #{index} failed."
+                  " #{record} should be a hash."
+      assert_equal index, record['id'], "Index #{index} failed. Log entries" \
+                   ' should come in order.'
       assert_equal TEST_MESSAGE, record['message'], "Index #{index} failed."
 
       # Get the first insertID.
       expected_insert_id = record[DEFAULT_INSERT_ID_KEY] if index == 0
-      assert_equal expected_insert_id, record[DEFAULT_INSERT_ID_KEY],
-                   "Index #{index} failed."
+      insert_id = record[DEFAULT_INSERT_ID_KEY]
+      assert_equal expected_insert_id, insert_id, "Index #{index} failed."
       expected_insert_id = expected_insert_id.next
-      assert_true record[DEFAULT_INSERT_ID_KEY] < expected_insert_id,
-                  "Index #{index} failed. #{record[DEFAULT_INSERT_ID_KEY]}" \
+      assert_true insert_id < expected_insert_id,
+                  "Index #{index} failed. #{insert_id}" \
                   " < #{expected_insert_id} is false."
+      unique_insert_ids << insert_id
     end
+    assert_equal total_entry_count, unique_insert_ids.size,
+                 "Expected #{total_entry_count} unique insertIds." \
+                 " Only #{unique_insert_ids.size} found."
   end
 
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG)
