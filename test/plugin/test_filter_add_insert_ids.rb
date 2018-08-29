@@ -84,7 +84,7 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
                  " Only #{unique_insert_ids.size} found."
   end
 
-  def test_not_add_insert_ids_if_present
+  def test_insert_ids_not_added_if_present
     log_entry_with_empty_insert_id = log_entry(0).merge(
       DEFAULT_INSERT_ID_KEY => '')
     {
