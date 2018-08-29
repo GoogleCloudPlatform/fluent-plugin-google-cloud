@@ -1221,18 +1221,32 @@ module BaseTest
 
   def test_log_entry_trace_field
     verify_field_key('trace', DEFAULT_TRACE_KEY, 'custom_trace_key',
-                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
-                     'projects/proj1/traces/1234567890abcdef1234567890abcdef')
+                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED, TRACE)
   end
 
   def test_log_entry_span_id_field
     verify_field_key('spanId', DEFAULT_SPAN_ID_KEY, 'custom_span_id_key',
-                     CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, '000000000000004a')
+                     CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, SPAN_ID)
   end
 
   def test_log_entry_insert_id_field
     verify_field_key('insertId', DEFAULT_INSERT_ID_KEY, 'custom_insert_id_key',
-                     CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED, 'fah7yr7iw64tg857y')
+                     CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED, INSERT_ID)
+  end
+
+  def test_cascading_json_detection_with_log_entry_trace_field
+    verify_cascading_json_detection_with_log_entry_fields(
+      'trace', DEFAULT_TRACE_KEY, TRACE)
+  end
+
+  def test_cascading_json_detection_with_log_entry_span_id_field
+    verify_cascading_json_detection_with_log_entry_fields(
+      'spanId', DEFAULT_SPAN_ID_KEY, SPAN_ID)
+  end
+
+  def test_cascading_json_detection_with_log_entry_insert_id_field
+    verify_cascading_json_detection_with_log_entry_fields(
+      'insertId', DEFAULT_INSERT_ID_KEY, INSERT_ID)
   end
 
   # Metadata Agent related tests.
@@ -1860,6 +1874,13 @@ module BaseTest
     }
   end
 
+  def structured_log_entry
+    {
+      'name' => 'test name',
+      'code' => 'test code'
+    }
+  end
+
   def log_entry(i)
     "test log entry #{i}"
   end
@@ -2006,6 +2027,29 @@ module BaseTest
       field = get_fields(entry['jsonPayload'])[payload_key]
       assert_equal 'a_string', get_string(field), entry
       assert_nil entry[destination_key], entry
+    end
+  end
+
+  # Cascading JSON detection is only triggered when the record has one field
+  # left with name "log", "message" or "msg". This test verifies additional
+  # LogEntry fields like spanId and traceId do not disable that by accident.
+  def verify_cascading_json_detection_with_log_entry_fields(
+      log_entry_field, default_key, sample_value)
+    setup_gce_metadata_stubs
+    log_entry = structured_log_entry
+    setup_logging_stubs do
+      d = create_driver(DETECT_JSON_CONFIG)
+      d.emit(log_entry.merge(default_key => sample_value))
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      assert_equal sample_value, entry[log_entry_field],
+                   "#{sample_value} is expected for #{log_entry_field} field."
+      payload_fields = get_fields(entry['jsonPayload'])
+      assert_equal log_entry.size, payload_fields.size
+      payload_fields.each do |key, value|
+        assert_equal log_entry[key], get_string(value)
+      end
     end
   end
 

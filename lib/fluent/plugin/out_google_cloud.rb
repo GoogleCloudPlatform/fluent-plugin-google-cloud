@@ -573,6 +573,14 @@ module Fluent
             determine_entry_level_monitored_resource_and_labels(
               group_level_resource, group_level_common_labels, record)
 
+          # Preserve traceId, spanId and insertId. Remove them from the log
+          # record so that cascading JSON detection happens (we rely on the
+          # record having only 1 field to trigger the detection). These will be
+          # set later in the LogEntry.
+          fq_trace_id = record.delete(@trace_key)
+          span_id = record.delete(@span_id_key)
+          insert_id = record.delete(@insert_id_key)
+
           is_json = false
           if @detect_json
             # Save the timestamp and severity if available, then clear it out to
@@ -612,14 +620,8 @@ module Fluent
                                             ts_secs,
                                             ts_nanos)
 
-          # Get fully-qualified trace id for LogEntry "trace" field.
-          fq_trace_id = record.delete(@trace_key)
           entry.trace = fq_trace_id if fq_trace_id
-
-          span_id = record.delete(@span_id_key)
           entry.span_id = span_id if span_id
-
-          insert_id = record.delete(@insert_id_key)
           entry.insert_id = insert_id if insert_id
 
           set_log_entry_fields(record, entry)

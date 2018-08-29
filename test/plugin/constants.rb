@@ -98,6 +98,11 @@ module Constants
   MANAGED_VM_BACKEND_NAME = 'default'.freeze
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'.freeze
 
+  # LogEntry fields for extraction.
+  TRACE = 'projects/proj1/traces/1234567890abcdef1234567890abcdef'.freeze
+  SPAN_ID = '000000000000004a'.freeze
+  INSERT_ID = 'fah7yr7iw64tg857y'.freeze
+
   # Docker Container labels.
   DOCKER_CONTAINER_ID =
     '0d0f03ff8d3c42688692536d1af77a28cd135c0a5c531f25a31'.freeze
