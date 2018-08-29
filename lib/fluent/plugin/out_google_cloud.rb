@@ -600,8 +600,8 @@ module Fluent
               # Extract LogEntry fields if they are present in the nested JSON.
               # This will take precedence of the root level values.
             end
-            # Restore these if necessary. Note that we don't
-            # want to override these keys in the JSON we've just parsed.
+            # Restore these if necessary. Note that we don't want to override
+            # these keys in the JSON we've just parsed.
             record['time'] ||= timestamp if timestamp
             record['severity'] ||= severity if severity
             record[@trace_key] ||= trace if trace
