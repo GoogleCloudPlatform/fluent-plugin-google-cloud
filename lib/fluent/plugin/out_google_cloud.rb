@@ -573,7 +573,6 @@ module Fluent
             determine_entry_level_monitored_resource_and_labels(
               group_level_resource, group_level_common_labels, record)
 
-
           is_json = false
           if @detect_json
             # Save the following fields if available, then clear them out to
