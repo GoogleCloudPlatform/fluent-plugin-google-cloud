@@ -602,6 +602,11 @@ module Fluent
             unless record_json.nil?
               record = record_json
               is_json = true
+              # Extract LogEntry fields if they are present in the nested JSON.
+              # This will take precedence of the root level values.
+              fq_trace_id ||= record.delete(@trace_key)
+              span_id ||= record.delete(@span_id_key)
+              insert_id ||= record.delete(@insert_id_key)
             end
             # Restore timestamp and severity if necessary. Note that we don't
             # want to override these keys in the JSON we've just parsed.
