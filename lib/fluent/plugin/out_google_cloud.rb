@@ -579,8 +579,9 @@ module Fluent
             # Save the following fields if available, then clear them out to
             # allow for determining whether we should parse the log or message
             # field.
-            preserved_keys = ['time', 'severity', @trace_key, @span_id_key,
-                              @insert_id_key]
+            preserved_keys = [
+              'time', 'severity', @trace_key, @span_id_key, @insert_id_key
+            ]
 
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
@@ -593,8 +594,8 @@ module Fluent
               end
             end
             unless record_json.nil?
-              # Set these if necessary. Note that we don't want to override
-              # these keys in the JSON we've just parsed.
+              # Propagate these if necessary. Note that we don't want to
+              # override these keys in the JSON we've just parsed.
               preserved_keys.each { |key| record_json[key] ||= record[key] }
 
               record = record_json
