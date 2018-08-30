@@ -587,16 +587,14 @@ module Fluent
             # Save the following fields if available, then clear them out to
             # allow for determining whether we should parse the log or message
             # field.
-            timestamp = record.delete('time')
-            severity = record.delete('severity')
-            trace = record.delete(@trace_key)
-            span_id = record.delete(@span_id_key)
-            insert_id = record.delete(@insert_id_key)
+            preserved_keys = [
+              'time', 'severity', @trace_key, @span_id_key, @insert_id_key
+            ]
 
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
             record_json = nil
-            if record.length == 1
+            if (record.keys - preserved_keys).length == 1
               %w(log message msg).each do |field|
                 if record.key?(field)
                   record_json = parse_json_or_nil(record[field])
@@ -604,16 +602,15 @@ module Fluent
               end
             end
             unless record_json.nil?
+              # Propagate these if necessary. Note that we don't want to
+              # override these keys in the JSON we've just parsed.
+              preserved_keys.each do |key|
+                record_json[key] ||= record[key] if record.key?(key)
+              end
+
               record = record_json
               is_json = true
             end
-            # Restore these if necessary. Note that we don't want to override
-            # these keys in the JSON we've just parsed.
-            record['time'] ||= timestamp if timestamp
-            record['severity'] ||= severity if severity
-            record[@trace_key] ||= trace if trace
-            record[@span_id_key] ||= span_id if span_id
-            record[@insert_id_key] ||= insert_id if insert_id
           end
 
           ts_secs, ts_nanos = compute_timestamp(
