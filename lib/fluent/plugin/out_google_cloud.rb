@@ -576,11 +576,14 @@ module Fluent
 
           is_json = false
           if @detect_json
-            # Save the timestamp and severity if available, then clear it out to
+            # Save the following fields if available, then clear them out to
             # allow for determining whether we should parse the log or message
             # field.
             timestamp = record.delete('time')
             severity = record.delete('severity')
+            trace = record.delete(@trace_key)
+            span_id = record.delete(@span_id_key)
+            insert_id = record.delete(@insert_id_key)
 
             # If the log is json, we want to export it as a structured log
             # unless there is additional metadata that would be lost.
@@ -596,10 +599,13 @@ module Fluent
               record = record_json
               is_json = true
             end
-            # Restore timestamp and severity if necessary. Note that we don't
-            # want to override these keys in the JSON we've just parsed.
+            # Restore these if necessary. Note that we don't want to override
+            # these keys in the JSON we've just parsed.
             record['time'] ||= timestamp if timestamp
             record['severity'] ||= severity if severity
+            record[@trace_key] ||= trace if trace
+            record[@span_id_key] ||= span_id if span_id
+            record[@insert_id_key] ||= insert_id if insert_id
           end
 
           ts_secs, ts_nanos = compute_timestamp(
@@ -613,13 +619,10 @@ module Fluent
                                             ts_secs,
                                             ts_nanos)
 
-          # Get fully-qualified trace id for LogEntry "trace" field.
-          fq_trace_id = record.delete(@trace_key)
-          entry.trace = fq_trace_id if fq_trace_id
-
+          trace = record.delete(@trace_key)
+          entry.trace = trace if trace
           span_id = record.delete(@span_id_key)
           entry.span_id = span_id if span_id
-
           insert_id = record.delete(@insert_id_key)
           entry.insert_id = insert_id if insert_id
 
