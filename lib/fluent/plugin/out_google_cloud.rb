@@ -596,7 +596,9 @@ module Fluent
             unless record_json.nil?
               # Propagate these if necessary. Note that we don't want to
               # override these keys in the JSON we've just parsed.
-              preserved_keys.each { |key| record_json[key] ||= record[key] }
+              preserved_keys.each do |key|
+                record_json[key] ||= record[key] if record.key?(key)
+              end
 
               record = record_json
               is_json = true
