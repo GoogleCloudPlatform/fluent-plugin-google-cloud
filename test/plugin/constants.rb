@@ -491,7 +491,6 @@ module Constants
         'location' => K8S_LOCATION
       }
     },
-    log_name: 'test',
     project_id: PROJECT_ID,
     labels: {}
   }.freeze

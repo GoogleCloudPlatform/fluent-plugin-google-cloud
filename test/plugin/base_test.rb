@@ -1339,25 +1339,24 @@ module BaseTest
     end
   end
 
-  # Test k8s monitored resource including the fallback when Metadata Agent
-  # restarts.
-  def test_k8s_monitored_resource_fallback
+  # Test k8s_container monitored resource including the fallback when Metadata
+  # Agent restarts.
+  def test_k8s_container_monitored_resource_fallback
     [
-      # k8s_container.
       # When enable_metadata_agent is false.
       {
         config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: false,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: COMPUTE_PARAMS
+        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: COMPUTE_PARAMS
+        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
@@ -1373,13 +1372,13 @@ module BaseTest
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
       },
-      # When enable_metadata_agent is true.
+      ## When enable_metadata_agent is true.
       {
         config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: false,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: COMPUTE_PARAMS
+        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
       },
       {
         config: ENABLE_METADATA_AGENT_CONFIG,
@@ -1423,7 +1422,7 @@ module BaseTest
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
-        expected_params: COMPUTE_PARAMS
+        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
       },
       {
         config: ENABLE_METADATA_AGENT_CONFIG,
@@ -1434,9 +1433,41 @@ module BaseTest
           local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
         # When 'kube-env' is present, "compute.googleapis.com/resource_name" is
         # not added.
-        expected_params: COMPUTE_PARAMS
-      },
-      # Specific cases for k8s_node.
+        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        if test_params[:setup_metadata_agent_stub]
+          setup_metadata_agent_stubs
+        else
+          setup_no_metadata_agent_stubs
+        end
+        if test_params[:setup_k8s_stub]
+          setup_k8s_metadata_stubs
+        else
+          setup_no_k8s_metadata_stubs
+        end
+        setup_logging_stubs do
+          d = create_driver(test_params[:config], CONTAINER_TAG)
+          d.emit(test_params[:log_entry])
+          d.run
+        end
+        verify_log_entries(1, test_params[:expected_params],
+                           'jsonPayload') do |entry|
+          fields = get_fields(entry['jsonPayload'])
+          assert_equal 2, fields.size, entry
+          assert_equal 'test log entry 0', get_string(fields['log']), entry
+          assert_equal K8S_STREAM, get_string(fields['stream']), entry
+        end
+      end
+    end
+  end
+
+  # Test k8s_node monitored resource including the fallback when Metadata Agent
+  # restarts.
+  def test_k8s_node_monitored_resource_fallback
+    [
       {
         config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: true,
