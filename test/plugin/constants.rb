@@ -509,6 +509,10 @@ module Constants
       )
     )
   ).freeze
+  # Used in fallback tests.
+  COMPUTE_PARAMS_WITH_CONTAINER_TAG = COMPUTE_PARAMS_NO_LOG_NAME.merge(
+    log_name: CONTAINER_TAG
+  ).freeze
 
   # K8s Node.
   K8S_NODE_PARAMS = {

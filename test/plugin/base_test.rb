@@ -1349,14 +1349,14 @@ module BaseTest
         setup_metadata_agent_stub: false,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
+        expected_params: COMPUTE_PARAMS_WITH_CONTAINER_TAG
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
         setup_metadata_agent_stub: true,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
+        expected_params: COMPUTE_PARAMS_WITH_CONTAINER_TAG
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
@@ -1378,7 +1378,7 @@ module BaseTest
         setup_metadata_agent_stub: false,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
+        expected_params: COMPUTE_PARAMS_WITH_CONTAINER_TAG
       },
       {
         config: ENABLE_METADATA_AGENT_CONFIG,
@@ -1422,7 +1422,7 @@ module BaseTest
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
-        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
+        expected_params: COMPUTE_PARAMS_WITH_CONTAINER_TAG
       },
       {
         config: ENABLE_METADATA_AGENT_CONFIG,
@@ -1433,7 +1433,7 @@ module BaseTest
           local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
         # When 'kube-env' is present, "compute.googleapis.com/resource_name" is
         # not added.
-        expected_params: COMPUTE_PARAMS_NO_LOG_NAME
+        expected_params: COMPUTE_PARAMS_WITH_CONTAINER_TAG
       }
     ].each do |test_params|
       new_stub_context do
