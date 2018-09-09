@@ -81,26 +81,27 @@ module BaseTest
     assert_equal CUSTOM_VM_ID, d.instance.vm_id
   end
 
-  def test_configure_invalid_metadata_missing_parts
+  def test_configure_metadata_missing_parts_on_other_platforms
     setup_no_metadata_service_stubs
     Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
-    { CONFIG_MISSING_METADATA_PROJECT_ID => ['project_id'],
-      CONFIG_MISSING_METADATA_ZONE => ['zone'],
-      CONFIG_MISSING_METADATA_VM_ID => ['vm_id'],
-      CONFIG_MISSING_METADATA_ALL => %w(project_id zone vm_id)
-    }.each_with_index do |(config, parts), index|
-      exception_count = 0
+    [[CONFIG_MISSING_METADATA_PROJECT_ID, ['project_id'], false],
+     [CONFIG_MISSING_METADATA_ZONE, [], true],
+     [CONFIG_MISSING_METADATA_VM_ID, [], true],
+     [CONFIG_MISSING_METADATA_ALL, ['project_id'], false]
+    ].each_with_index do |(config, missing_parts, is_valid_config), index|
       begin
         create_driver(config)
+        assert_true is_valid_config, "Invalid config at index #{index} should "\
+          'have raised an error.'
       rescue Fluent::ConfigError => error
+        assert_false is_valid_config, "Valid config at index #{index} should "\
+          "not have raised an error #{error}."
         assert error.message.include?('Unable to obtain metadata parameters:'),
                "Index #{index} failed."
-        parts.each do |part|
+        missing_parts.each do |part|
           assert error.message.include?(part), "Index #{index} failed."
         end
-        exception_count += 1
       end
-      assert_equal 1, exception_count, "Index #{index} failed."
     end
   end
 

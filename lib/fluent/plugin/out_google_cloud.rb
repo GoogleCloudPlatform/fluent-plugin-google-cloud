@@ -550,10 +550,12 @@ module Fluent
         @write_request = method(:write_request_via_rest)
       end
 
-      # Log an informational message containing the Logs viewer URL
-      @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
-                "viewer?project=#{@project_id}&resource=#{@resource.type}/",
-                "instance_id/#{@vm_id}"
+      if [Platform::GCE, Platform::EC2].include?(@platform)
+        # Log an informational message containing the Logs viewer URL
+        @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
+                  "viewer?project=#{@project_id}&resource=#{@resource.type}/",
+                  "instance_id/#{@vm_id}"
+      end
     end
 
     def start
@@ -1027,8 +1029,10 @@ module Fluent
       # All metadata parameters must now be set.
       missing = []
       missing << 'project_id' unless @project_id
-      missing << 'zone' unless @zone
-      missing << 'vm_id' unless @vm_id
+      if @platform != Platform::OTHER
+        missing << 'zone' unless @zone
+        missing << 'vm_id' unless @vm_id
+      end
       return if missing.empty?
       raise Fluent::ConfigError,
             "Unable to obtain metadata parameters: #{missing.join(' ')}"
