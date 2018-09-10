@@ -387,6 +387,10 @@ module Constants
       }
     )
   ).freeze
+  # Used in k8s fallback tests.
+  COMPUTE_PARAMS_WITH_CONTAINER_TAG = COMPUTE_PARAMS_NO_LOG_NAME.merge(
+    log_name: CONTAINER_TAG
+  ).freeze
 
   # GAE.
   VMENGINE_PARAMS = {
@@ -508,10 +512,6 @@ module Constants
         'location' => CUSTOM_K8S_LOCATION
       )
     )
-  ).freeze
-  # Used in fallback tests.
-  COMPUTE_PARAMS_WITH_CONTAINER_TAG = COMPUTE_PARAMS_NO_LOG_NAME.merge(
-    log_name: CONTAINER_TAG
   ).freeze
 
   # K8s Node.
