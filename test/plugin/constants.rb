@@ -491,7 +491,6 @@ module Constants
         'location' => K8S_LOCATION
       }
     },
-    log_name: 'test',
     project_id: PROJECT_ID,
     labels: {}
   }.freeze
@@ -509,6 +508,10 @@ module Constants
         'location' => CUSTOM_K8S_LOCATION
       )
     )
+  ).freeze
+  # Used in k8s fallback tests.
+  K8S_CONTAINER_PARAMS_FROM_FALLBACK = COMPUTE_PARAMS_NO_LOG_NAME.merge(
+    log_name: CONTAINER_TAG
   ).freeze
 
   # K8s Node.
