@@ -1684,8 +1684,10 @@ module BaseTest
       stub_metadata_request(
         'instance/attributes/',
         "attribute1\ncluster-name\ncluster-location\nlast_attribute")
-      stub_metadata_request('instance/attributes/cluster-location', K8S_LOCATION2)
-      stub_metadata_request('instance/attributes/cluster-name', K8S_CLUSTER_NAME)
+      stub_metadata_request('instance/attributes/cluster-location',
+                            K8S_LOCATION2)
+      stub_metadata_request('instance/attributes/cluster-name',
+                            K8S_CLUSTER_NAME)
     else
       ['cluster-location', 'cluster-name'].each do |metadata_name|
         stub_request(:get, %r{.*instance/attributes/#{metadata_name}.*})
