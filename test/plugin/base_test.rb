@@ -1679,8 +1679,8 @@ module BaseTest
                           'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
   end
 
-  def setup_k8s_metadata_stubs(should_response = true)
-    if should_response
+  def setup_k8s_metadata_stubs(should_respond = true)
+    if should_respond
       stub_metadata_request(
         'instance/attributes/',
         "attribute1\ncluster-name\ncluster-location\nlast_attribute")
@@ -1740,8 +1740,8 @@ module BaseTest
     WebMock.reset!
   end
 
-  def setup_metadata_agent_stubs(should_response = true)
-    if should_response
+  def setup_metadata_agent_stubs(should_respond = true)
+    if should_respond
       MONITORED_RESOURCE_STUBS.each do |local_resource_id, resource|
         stub_request(:get, metadata_request_url(local_resource_id))
           .to_return(status: 200, body: resource)
