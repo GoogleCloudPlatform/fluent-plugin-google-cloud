@@ -1440,7 +1440,7 @@ module BaseTest
       new_stub_context do
         setup_gce_metadata_stubs
         setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
-	setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
+        setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config], CONTAINER_TAG)
           d.emit(test_params[:log_entry])
@@ -1500,7 +1500,7 @@ module BaseTest
       new_stub_context do
         setup_gce_metadata_stubs
         setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
-	setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
+        setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config])
           d.emit(test_params[:log_entry])
