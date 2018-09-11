@@ -1096,27 +1096,6 @@ module BaseTest
     end
   end
 
-  def test_cloudfunctions_log_kube_env_hidden
-    setup_gce_metadata_stubs
-    setup_cloudfunctions_metadata_stubs_kube_env_hidden
-    [1, 2, 3, 5, 11, 50].each do |n|
-      setup_logging_stubs do
-        d = create_driver(APPLICATION_DEFAULT_CONFIG, CLOUDFUNCTIONS_TAG)
-        # The test driver doesn't clear its buffer of entries after running, so
-        # do it manually here.
-        d.instance_variable_get('@entries').clear
-        @logs_sent = []
-        n.times { |i| d.emit(cloudfunctions_log_entry(i)) }
-        d.run
-      end
-      verify_log_entries(n, CLOUDFUNCTIONS_PARAMS) do |entry, i|
-        verify_default_log_entry_text(entry['textPayload'], i, entry)
-        assert_equal 'DEBUG', entry['severity'],
-                     "Test with #{n} logs failed. \n#{entry}"
-      end
-    end
-  end
-
   def test_dataproc_log
     setup_gce_metadata_stubs
     setup_dataproc_metadata_stubs
@@ -1438,7 +1417,6 @@ module BaseTest
         expected_params: K8S_CONTAINER_PARAMS
       },
       # When local_resource_id is not present or does not match k8s regexes.
-      # TODO these two are busted.
       {
         config: ENABLE_METADATA_AGENT_CONFIG,
         setup_metadata_agent_stub: true,
@@ -1462,7 +1440,7 @@ module BaseTest
       new_stub_context do
         setup_gce_metadata_stubs
         setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
-        setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
+	setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config], CONTAINER_TAG)
           d.emit(test_params[:log_entry])
@@ -1522,7 +1500,7 @@ module BaseTest
       new_stub_context do
         setup_gce_metadata_stubs
         setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
-        setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
+	setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config])
           d.emit(test_params[:log_entry])
@@ -1616,30 +1594,6 @@ module BaseTest
     end
   end
 
-  # Test GKE container logs. These logs have the label
-  # "logging.googleapis.com/local_resource_id" set in the format of
-  # "gke_container.<namespace_id>.<pod_name>.<container_name>".
-  def test_gke_container_logs_kube_env_hidden
-    [1, 2, 3, 5, 11, 50].each do |n|
-      new_stub_context do
-        setup_gce_metadata_stubs
-        setup_container_metadata_stubs_kube_env_hidden
-        setup_metadata_agent_stubs
-        setup_logging_stubs do
-          d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
-          n.times do |i|
-            d.emit(gke_container_log_entry(log_entry(i)))
-          end
-          d.run
-        end
-        verify_log_entries(n, CONTAINER_FROM_APPLICATION_PARAMS)
-        assert_requested_metadata_agent_stub(
-          "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
-          ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}")
-      end
-    end
-  end
-
   private
 
   def stub_metadata_request(metadata_path, response_body)
@@ -1715,10 +1669,12 @@ module BaseTest
                           MANAGED_VM_BACKEND_VERSION)
   end
 
-  def setup_container_metadata_stubs_common
+  def setup_container_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
-      "attribute1\ncluster-name\ncluster-location\nkube-env\nlast_attribute")
+      "attribute1\ncluster-location\ncluster-name\nlast_attribute")
+    stub_metadata_request('instance/attributes/cluster-location',
+                          K8S_LOCATION2)
     stub_metadata_request('instance/attributes/cluster-name',
                           CONTAINER_CLUSTER_NAME)
   end
@@ -1743,30 +1699,16 @@ module BaseTest
     end
   end
 
-  def setup_cloudfunctions_metadata_stubs_common
+  def setup_cloudfunctions_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
-      "attribute1\ncluster-name\ncluster-location\nkube-env\ngcf_region\n"\
-      'last_attribute')
+      "attribute1\ncluster-location\ncluster-name\ngcf_region\nlast_attribute")
+    stub_metadata_request('instance/attributes/cluster-location',
+                          K8S_LOCATION2)
     stub_metadata_request('instance/attributes/cluster-name',
                           CONTAINER_CLUSTER_NAME)
     stub_metadata_request('instance/attributes/gcf_region',
                           CLOUDFUNCTIONS_REGION)
-  end
-
-  def setup_cloudfunctions_metadata_stubs
-    setup_cloudfunctions_metadata_stubs_common
-    stub_metadata_request('instance/attributes/kube-env',
-                          "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          'INSTANCE_PREFIX: '\
-                          "gke-#{CLOUDFUNCTIONS_CLUSTER_NAME}-740fdafa\n"\
-                          'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
-  end
-
-  def setup_cloudfunctions_metadata_stubs_kube_env_hidden
-    setup_cloudfunctions_metadata_stubs_common
-    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/'\
-                 'instance/attributes/kube-env').to_return(status: 403)
   end
 
   def setup_dataproc_metadata_stubs
