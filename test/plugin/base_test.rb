@@ -1415,26 +1415,6 @@ module BaseTest
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS
-      },
-      # When local_resource_id is not present or does not match k8s regexes.
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: true,
-        log_entry: k8s_container_log_entry(
-          log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
-        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
-      },
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: true,
-        log_entry: k8s_container_log_entry(
-          log_entry(0),
-          local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
-        # When 'kube-env' is present, "compute.googleapis.com/resource_name" is
-        # not added.
-        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
       }
     ].each do |test_params|
       new_stub_context do
@@ -1452,6 +1432,43 @@ module BaseTest
           assert_equal 2, fields.size, entry
           assert_equal 'test log entry 0', get_string(fields['log']), entry
           assert_equal K8S_STREAM, get_string(fields['stream']), entry
+        end
+      end
+    end
+  end
+
+  def test_k8s_container_monitored_resource_invalid_local_resource_id
+    [
+      # When local_resource_id is not present or does not match k8s regexes.
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_container_log_entry(
+          log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
+        expected_params: CONTAINER_FROM_TAG_PARAMS
+      },
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_container_log_entry(
+          log_entry(0),
+          local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
+        expected_params: CONTAINER_FROM_TAG_PARAMS
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
+        setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
+        setup_logging_stubs do
+          d = create_driver(test_params[:config], CONTAINER_TAG)
+          d.emit(test_params[:log_entry])
+          d.run
+        end
+        verify_log_entries(1, test_params[:expected_params]) do |entry|
+          assert_equal 'test log entry 0', entry['textPayload'], entry
         end
       end
     end
