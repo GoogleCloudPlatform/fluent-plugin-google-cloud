@@ -13,7 +13,6 @@ desc 'Run unit tests'
 Rake::TestTask.new(:test) do |test|
   test.libs << 'lib' << 'test'
   test.test_files = FileList['test/plugin/*.rb']
-  test.warning = false
   test.verbose = true
 end
 
