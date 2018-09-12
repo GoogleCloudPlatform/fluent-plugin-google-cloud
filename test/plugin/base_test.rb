@@ -180,7 +180,7 @@ module BaseTest
     setup_gce_metadata_stubs
     # This would cause the resource type to be container.googleapis.com if not
     # for the detect_subservice=false config.
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     d = create_driver(NO_DETECT_SUBSERVICE_CONFIG)
     d.run
     assert_equal COMPUTE_CONSTANTS[:resource_type], d.instance.resource.type
@@ -468,7 +468,7 @@ module BaseTest
 
   def test_structured_payload_json_log_default_container_not_parsed
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
@@ -485,7 +485,7 @@ module BaseTest
 
   def test_structured_payload_json_log_detect_json_container_not_parsed
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
@@ -500,7 +500,7 @@ module BaseTest
 
   def test_structured_payload_json_log_detect_json_container_parsed
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
@@ -539,7 +539,7 @@ module BaseTest
   # match, thus the original tag is used as the log name.
   def test_handle_empty_container_name
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     container_name = ''
     # This tag will not match the kubernetes regex because it requires a
     # non-empty container name.
@@ -561,7 +561,7 @@ module BaseTest
   # 'require_valid_tags' is true.
   def test_reject_non_utf8_container_name_with_require_valid_tags_true
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     non_utf8_tags = INVALID_TAGS.select do |tag, _|
       tag.is_a?(String) && !tag.empty?
     end
@@ -601,7 +601,7 @@ module BaseTest
   # Verify that tags extracted from container names are properly encoded.
   def test_encode_tags_from_container_name_with_require_valid_tags_true
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     VALID_TAGS.each do |tag, encoded_tag|
       setup_logging_stubs do
         @logs_sent = []
@@ -640,7 +640,7 @@ module BaseTest
   # sanitized.
   def test_sanitize_tags_from_container_name_with_require_valid_tags_false
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     # Log names are derived from container names for containers. And container
     # names are extracted from the tag based on a regex match pattern. As a
     # prerequisite, the tag should already be a string, thus we only test
@@ -969,7 +969,7 @@ module BaseTest
 
   def test_one_container_log_from_tag_stderr
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
       d.emit(container_log_entry(log_entry(0), 'stderr'))
@@ -980,15 +980,15 @@ module BaseTest
     ) { |_, oldval, newval| oldval.merge(newval) }
     verify_log_entries(1, expected_params) do |entry, i|
       verify_default_log_entry_text(entry['textPayload'], i, entry)
-      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal K8S_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
+      assert_equal K8S_NANOS, entry['timestamp']['nanos'], entry
       assert_equal 'ERROR', entry['severity'], entry
     end
   end
 
   def test_json_container_log_metadata_from_plugin
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
       d.emit(container_log_entry_with_metadata('{"msg": "test log entry 0", ' \
@@ -1003,15 +1003,15 @@ module BaseTest
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
       assert_equal 'test', get_string(fields['tag2']), entry
       assert_equal 5000, get_number(fields['data']), entry
-      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal K8S_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
+      assert_equal K8S_NANOS, entry['timestamp']['nanos'], entry
       assert_equal 'WARNING', entry['severity'], entry
     end
   end
 
   def test_json_container_log_metadata_from_tag
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
       d.emit(container_log_entry('{"msg": "test log entry 0", ' \
@@ -1026,8 +1026,8 @@ module BaseTest
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
       assert_equal 'test', get_string(fields['tag2']), entry
       assert_equal 5000, get_number(fields['data']), entry
-      assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
-      assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+      assert_equal K8S_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
+      assert_equal K8S_NANOS, entry['timestamp']['nanos'], entry
       assert_equal 'WARNING', entry['severity'], entry
     end
   end
@@ -1415,26 +1415,6 @@ module BaseTest
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS
-      },
-      # When local_resource_id is not present or does not match k8s regexes.
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: true,
-        log_entry: k8s_container_log_entry(
-          log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
-        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
-      },
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: true,
-        log_entry: k8s_container_log_entry(
-          log_entry(0),
-          local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
-        # When 'kube-env' is present, "compute.googleapis.com/resource_name" is
-        # not added.
-        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
       }
     ].each do |test_params|
       new_stub_context do
@@ -1452,6 +1432,43 @@ module BaseTest
           assert_equal 2, fields.size, entry
           assert_equal 'test log entry 0', get_string(fields['log']), entry
           assert_equal K8S_STREAM, get_string(fields['stream']), entry
+        end
+      end
+    end
+  end
+
+  def test_k8s_container_monitored_resource_invalid_local_resource_id
+    [
+      # When local_resource_id is not present or does not match k8s regexes.
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_container_log_entry(
+          log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
+        expected_params: CONTAINER_FROM_TAG_PARAMS
+      },
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_container_log_entry(
+          log_entry(0),
+          local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
+        expected_params: CONTAINER_FROM_TAG_PARAMS
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
+        setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
+        setup_logging_stubs do
+          d = create_driver(test_params[:config], CONTAINER_TAG)
+          d.emit(test_params[:log_entry])
+          d.run
+        end
+        verify_log_entries(1, test_params[:expected_params]) do |entry|
+          assert_equal 'test log entry 0', entry['textPayload'], entry
         end
       end
     end
@@ -1577,7 +1594,7 @@ module BaseTest
     [1, 2, 3, 5, 11, 50].each do |n|
       new_stub_context do
         setup_gce_metadata_stubs
-        setup_container_metadata_stubs
+        setup_k8s_metadata_stubs
         setup_metadata_agent_stubs
         setup_logging_stubs do
           d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
@@ -1589,7 +1606,7 @@ module BaseTest
         verify_log_entries(n, CONTAINER_FROM_APPLICATION_PARAMS)
         assert_requested_metadata_agent_stub(
           "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
-          ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}")
+          ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}")
       end
     end
   end
@@ -1669,22 +1686,11 @@ module BaseTest
                           MANAGED_VM_BACKEND_VERSION)
   end
 
-  def setup_container_metadata_stubs
-    stub_metadata_request(
-      'instance/attributes/',
-      "attribute1\nkube-env\nlast_attribute")
-    stub_metadata_request('instance/attributes/kube-env',
-                          "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          'INSTANCE_PREFIX: '\
-                          "gke-#{CONTAINER_CLUSTER_NAME}-740fdafa\n"\
-                          'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
-  end
-
   def setup_k8s_metadata_stubs(should_respond = true)
     if should_respond
       stub_metadata_request(
         'instance/attributes/',
-        "attribute1\ncluster-name\ncluster-location\nlast_attribute")
+        "attribute1\ncluster-location\ncluster-name\nlast_attribute")
       stub_metadata_request('instance/attributes/cluster-location',
                             K8S_LOCATION2)
       stub_metadata_request('instance/attributes/cluster-name',
@@ -1703,12 +1709,11 @@ module BaseTest
   def setup_cloudfunctions_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
-      "attribute1\nkube-env\ngcf_region\nlast_attribute")
-    stub_metadata_request('instance/attributes/kube-env',
-                          "ENABLE_NODE_LOGGING: \"true\"\n"\
-                          'INSTANCE_PREFIX: '\
-                          "gke-#{CLOUDFUNCTIONS_CLUSTER_NAME}-740fdafa\n"\
-                          'KUBE_BEARER_TOKEN: AoQiMuwkNP2BMT0S')
+      "attribute1\ncluster-location\ncluster-name\ngcf_region\nlast_attribute")
+    stub_metadata_request('instance/attributes/cluster-location',
+                          K8S_LOCATION2)
+    stub_metadata_request('instance/attributes/cluster-name',
+                          K8S_CLUSTER_NAME)
     stub_metadata_request('instance/attributes/gcf_region',
                           CLOUDFUNCTIONS_REGION)
   end
@@ -1766,21 +1771,20 @@ module BaseTest
   # GKE Container.
 
   def container_tag_with_container_name(container_name)
-    "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
-      "#{container_name}"
+    "kubernetes.#{K8S_POD_NAME}_#{K8S_NAMESPACE_NAME}_#{container_name}"
   end
 
   def container_log_entry_with_metadata(
-      log, container_name = CONTAINER_CONTAINER_NAME)
+      log, container_name = K8S_CONTAINER_NAME)
     {
       log: log,
-      stream: CONTAINER_STREAM,
-      time: CONTAINER_TIMESTAMP,
+      stream: K8S_STREAM,
+      time: K8S_TIMESTAMP,
       kubernetes: {
         namespace_id: CONTAINER_NAMESPACE_ID,
-        namespace_name: CONTAINER_NAMESPACE_NAME,
+        namespace_name: K8S_NAMESPACE_NAME,
         pod_id: CONTAINER_POD_ID,
-        pod_name: CONTAINER_POD_NAME,
+        pod_name: K8S_POD_NAME,
         container_name: container_name,
         labels: {
           CONTAINER_LABEL_KEY => CONTAINER_LABEL_VALUE
@@ -1789,11 +1793,11 @@ module BaseTest
     }
   end
 
-  def container_log_entry(log, stream = CONTAINER_STREAM)
+  def container_log_entry(log, stream = K8S_STREAM)
     {
       log: log,
       stream: stream,
-      time: CONTAINER_TIMESTAMP
+      time: K8S_TIMESTAMP
     }
   end
 
@@ -1802,7 +1806,7 @@ module BaseTest
       log: log,
       LOCAL_RESOURCE_ID_KEY =>
         "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
-        ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}"
+        ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}"
     }
   end
 
@@ -1968,7 +1972,7 @@ module BaseTest
 
   def verify_container_logs(log_entry_factory, expected_params)
     setup_gce_metadata_stubs
-    setup_container_metadata_stubs
+    setup_k8s_metadata_stubs
     [1, 2, 3, 5, 11, 50].each do |n|
       @logs_sent = []
       setup_logging_stubs do
@@ -1978,9 +1982,8 @@ module BaseTest
       end
       verify_log_entries(n, expected_params) do |entry, i|
         verify_default_log_entry_text(entry['textPayload'], i, entry)
-        assert_equal CONTAINER_SECONDS_EPOCH, entry['timestamp']['seconds'],
-                     entry
-        assert_equal CONTAINER_NANOS, entry['timestamp']['nanos'], entry
+        assert_equal K8S_SECONDS_EPOCH, entry['timestamp']['seconds'], entry
+        assert_equal K8S_NANOS, entry['timestamp']['nanos'], entry
         assert_equal CONTAINER_SEVERITY, entry['severity'], entry
       end
     end
