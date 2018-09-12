@@ -143,20 +143,11 @@ module Constants
     ".#{K8S_CONTAINER_NAME}".freeze
 
   # Container Engine / Kubernetes specific labels.
-  CONTAINER_CLUSTER_NAME = 'cluster-1'.freeze
   CONTAINER_NAMESPACE_ID = '898268c8-4a36-11e5-9d81-42010af0194c'.freeze
-  CONTAINER_NAMESPACE_NAME = 'kube-system'.freeze
   CONTAINER_POD_ID = 'cad3c3c4-4b9c-11e5-9d81-42010af0194c'.freeze
-  CONTAINER_POD_NAME = 'redis-master-c0l82.foo.bar'.freeze
-  CONTAINER_CONTAINER_NAME = 'redis'.freeze
   CONTAINER_LABEL_KEY = 'component'.freeze
   CONTAINER_LABEL_VALUE = 'redis-component'.freeze
-  CONTAINER_STREAM = 'stdout'.freeze
   CONTAINER_SEVERITY = 'INFO'.freeze
-  # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch.
-  CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'.freeze
-  CONTAINER_SECONDS_EPOCH = 1_234_567_890
-  CONTAINER_NANOS = 987_654_321
   CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'gke_container'.freeze
 
   # Cloud Functions specific labels.
@@ -408,28 +399,27 @@ module Constants
 
   # GKE Container.
   CONTAINER_TAG =
-    "kubernetes.#{CONTAINER_POD_NAME}_#{CONTAINER_NAMESPACE_NAME}_" \
-    "#{CONTAINER_CONTAINER_NAME}".freeze
+    "kubernetes.#{K8S_POD_NAME}_#{K8S_NAMESPACE_NAME}_" \
+    "#{K8S_CONTAINER_NAME}".freeze
 
   CONTAINER_FROM_METADATA_PARAMS = {
     resource: {
       type: GKE_CONSTANTS[:resource_type],
       labels: {
-        'cluster_name' => CONTAINER_CLUSTER_NAME,
+        'cluster_name' => K8S_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_ID,
         'instance_id' => VM_ID,
         'pod_id' => CONTAINER_POD_ID,
-        'container_name' => CONTAINER_CONTAINER_NAME,
+        'container_name' => K8S_CONTAINER_NAME,
         'zone' => ZONE
       }
     },
-    log_name: CONTAINER_CONTAINER_NAME,
+    log_name: K8S_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{GKE_CONSTANTS[:service]}/namespace_name" =>
-        CONTAINER_NAMESPACE_NAME,
-      "#{GKE_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
-      "#{GKE_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
+      "#{GKE_CONSTANTS[:service]}/namespace_name" => K8S_NAMESPACE_NAME,
+      "#{GKE_CONSTANTS[:service]}/pod_name" => K8S_POD_NAME,
+      "#{GKE_CONSTANTS[:service]}/stream" => K8S_STREAM,
       "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
@@ -441,21 +431,20 @@ module Constants
     resource: {
       type: GKE_CONSTANTS[:resource_type],
       labels: {
-        'cluster_name' => CONTAINER_CLUSTER_NAME,
-        'namespace_id' => CONTAINER_NAMESPACE_NAME,
+        'cluster_name' => K8S_CLUSTER_NAME,
+        'namespace_id' => K8S_NAMESPACE_NAME,
         'instance_id' => VM_ID,
-        'pod_id' => CONTAINER_POD_NAME,
-        'container_name' => CONTAINER_CONTAINER_NAME,
+        'pod_id' => K8S_POD_NAME,
+        'container_name' => K8S_CONTAINER_NAME,
         'zone' => ZONE
       }
     },
-    log_name: CONTAINER_CONTAINER_NAME,
+    log_name: K8S_CONTAINER_NAME,
     project_id: PROJECT_ID,
     labels: {
-      "#{GKE_CONSTANTS[:service]}/namespace_name" =>
-        CONTAINER_NAMESPACE_NAME,
-      "#{GKE_CONSTANTS[:service]}/pod_name" => CONTAINER_POD_NAME,
-      "#{GKE_CONSTANTS[:service]}/stream" => CONTAINER_STREAM,
+      "#{GKE_CONSTANTS[:service]}/namespace_name" => K8S_NAMESPACE_NAME,
+      "#{GKE_CONSTANTS[:service]}/pod_name" => K8S_POD_NAME,
+      "#{GKE_CONSTANTS[:service]}/stream" => K8S_STREAM,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }.freeze
@@ -464,11 +453,11 @@ module Constants
     resource: {
       type: GKE_CONSTANTS[:resource_type],
       labels: {
-        'cluster_name' => CONTAINER_CLUSTER_NAME,
+        'cluster_name' => K8S_CLUSTER_NAME,
         'namespace_id' => CONTAINER_NAMESPACE_ID,
         'instance_id' => VM_ID,
         'pod_id' => CONTAINER_POD_ID,
-        'container_name' => CONTAINER_CONTAINER_NAME,
+        'container_name' => K8S_CONTAINER_NAME,
         'zone' => ZONE
       }
     },
@@ -788,12 +777,12 @@ module Constants
       }.to_json,
     # GKE container logs.
     "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
-    ".#{CONTAINER_POD_NAME}.#{CONTAINER_CONTAINER_NAME}" =>
+    ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}" =>
       {
         'type' => GKE_CONSTANTS[:resource_type],
         'labels' => {
-          'cluster_name' => CONTAINER_CLUSTER_NAME,
-          'container_name' => CONTAINER_CONTAINER_NAME,
+          'cluster_name' => K8S_CLUSTER_NAME,
+          'container_name' => K8S_CONTAINER_NAME,
           'instance_id' => VM_ID,
           'namespace_id' => CONTAINER_NAMESPACE_ID,
           'pod_id' => CONTAINER_POD_ID,
