@@ -21,8 +21,7 @@ end
 desc 'Fix file permissions'
 task :fix_perms do
   files = [
-    'lib/fluent/plugin/out_google_cloud.rb',
-    'lib/fluent/plugin/monitoring.rb',
+    'lib/fluent/plugin/*.rb',
     'lib/google/**/*.rb'
   ].flat_map do |file|
     file.include?('*') ? Dir.glob(file) : [file]
