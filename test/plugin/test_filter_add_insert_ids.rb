@@ -19,7 +19,7 @@ require 'fluent/plugin/filter_add_insert_ids'
 
 # Unit tests for filter_add_insert_ids plugin.
 class FilterAddInsertIdsTest < Test::Unit::TestCase
-  include Fluent::Plugin::AddInsertIdsFilter::ConfigConstants
+  include Fluent::AddInsertIdsFilter::ConfigConstants
 
   CUSTOM_INSERT_ID_KEY = 'custom_insert_id_key'.freeze
   INSERT_ID = 'aeyr82r92h249gh9h'.freeze
@@ -123,7 +123,7 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
 
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG)
     Fluent::Test::FilterTestDriver.new(
-      Fluent::Plugin::AddInsertIdsFilter).configure(conf, true)
+      Fluent::AddInsertIdsFilter).configure(conf, true)
   end
 
   def log_entry(index)
