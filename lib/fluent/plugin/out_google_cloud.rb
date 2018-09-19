@@ -165,6 +165,12 @@ module Fluent
       # monitored resource from Stackdriver Metadata agent.
       LOCAL_RESOURCE_ID_KEY = 'logging.googleapis.com/local_resource_id'.freeze
 
+      # The regexp matches stackdriver trace format. An example string
+      # will match the regexp is:
+      # "projects/my-project/traces/1234567890abcdef1234567890abcdef"
+      STACKDRIVER_TRACE_REGEXP = Regexp.new(
+        '^projects\/[^\/]*\/traces\/[^\/]*$').freeze
+
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
       LOG_ENTRY_FIELDS_MAP = {
@@ -392,6 +398,10 @@ module Fluent
     #    - any other value will result in the absence of metrics.
     config_param :monitoring_type, :string,
                  :default => Monitoring::PrometheusMonitoringRegistry.name
+
+    # Whether to autoformat value of "logging.googleapis.com/trace" to
+    # LogEntry.Trace.
+    config_param :enable_stackdriver_trace_autoformat, :bool, :default => true
 
     # Whether to call metadata agent to retrieve monitored resource.
     config_param :enable_metadata_agent, :bool, :default => false
@@ -625,9 +635,15 @@ module Fluent
                                             severity,
                                             ts_secs,
                                             ts_nanos)
-
           trace = record.delete(@trace_key)
-          entry.trace = trace if trace
+          if trace
+            if @enable_stackdriver_trace_autoformat &&
+               !STACKDRIVER_TRACE_REGEXP.match(trace)
+              trace = "projects/#{@project_id}/traces/#{trace}"
+            end
+            entry.trace = trace
+          end
+
           span_id = record.delete(@span_id_key)
           entry.span_id = span_id if span_id
           insert_id = record.delete(@insert_id_key)

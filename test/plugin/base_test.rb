@@ -338,6 +338,81 @@ module BaseTest
     end
   end
 
+  def test_stackdriver_trace_format_compliant_trace
+    full_stackdriver_trace = \
+      'projects/some-proj/traces/1234567890abcdef1234567890abcdef'
+
+    [
+      {
+        config: APPLICATION_DEFAULT_CONFIG
+      },
+      {
+        config: 'enable_stackdriver_trace_autoformat true'
+      },
+      {
+        config: 'enable_stackdriver_trace_autoformat false'
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(test_params[:config])
+          d.emit(DEFAULT_TRACE_KEY => full_stackdriver_trace)
+          d.run
+
+          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+            assert_equal full_stackdriver_trace, entry['trace']
+          end
+        end
+      end
+    end
+  end
+
+  def test_autoformat_enabled_with_stackdriver_trace_format_noncompliant_trace
+    non_stackdriver_trace_compliant_trace = '1234567890abcdef1234567890abcdef'
+
+    [
+      {
+        config: APPLICATION_DEFAULT_CONFIG
+      },
+      {
+        config: 'enable_stackdriver_trace_autoformat true'
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(test_params[:config])
+          d.emit(DEFAULT_TRACE_KEY => non_stackdriver_trace_compliant_trace)
+          d.run
+
+          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+            expected_trace = \
+              "projects/#{d.instance.project_id}" \
+              "/traces/#{non_stackdriver_trace_compliant_trace}"
+            assert_equal expected_trace, entry['trace']
+          end
+        end
+      end
+    end
+  end
+
+  def test_autoformat_disabled_with_stackdriver_trace_format_noncompliant_trace
+    config = 'enable_stackdriver_trace_autoformat false'
+    non_stackdriver_trace_compliant_trace = '1234567890abcdef1234567890abcdef'
+
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver(config)
+      d.emit(DEFAULT_TRACE_KEY => non_stackdriver_trace_compliant_trace)
+      d.run
+
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+        assert_equal non_stackdriver_trace_compliant_trace, entry['trace']
+      end
+    end
+  end
+
   def test_structured_payload_malformatted_log
     setup_gce_metadata_stubs
     message = 'test message'
