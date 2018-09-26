@@ -347,10 +347,10 @@ module BaseTest
         config: APPLICATION_DEFAULT_CONFIG
       },
       {
-        config: 'enable_stackdriver_trace_autoformat true'
+        config: 'autoformat_stackdriver_trace true'
       },
       {
-        config: 'enable_stackdriver_trace_autoformat false'
+        config: 'autoformat_stackdriver_trace false'
       }
     ].each do |test_params|
       new_stub_context do
@@ -376,7 +376,7 @@ module BaseTest
         config: APPLICATION_DEFAULT_CONFIG
       },
       {
-        config: 'enable_stackdriver_trace_autoformat true'
+        config: 'autoformat_stackdriver_trace true'
       }
     ].each do |test_params|
       new_stub_context do
@@ -398,7 +398,7 @@ module BaseTest
   end
 
   def test_autoformat_disabled_with_stackdriver_trace_format_noncompliant_trace
-    config = 'enable_stackdriver_trace_autoformat false'
+    config = 'autoformat_stackdriver_trace false'
     non_stackdriver_trace_compliant_trace = '1234567890abcdef1234567890abcdef'
 
     setup_gce_metadata_stubs

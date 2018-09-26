@@ -401,7 +401,7 @@ module Fluent
 
     # Whether to autoformat value of "logging.googleapis.com/trace" to
     # LogEntry.Trace.
-    config_param :enable_stackdriver_trace_autoformat, :bool, :default => true
+    config_param :autoformat_stackdriver_trace, :bool, :default => true
 
     # Whether to call metadata agent to retrieve monitored resource.
     config_param :enable_metadata_agent, :bool, :default => false
@@ -637,7 +637,7 @@ module Fluent
                                             ts_nanos)
           trace = record.delete(@trace_key)
           if trace
-            if @enable_stackdriver_trace_autoformat &&
+            if @autoformat_stackdriver_trace &&
                !STACKDRIVER_TRACE_REGEXP.match(trace)
               trace = "projects/#{@project_id}/traces/#{trace}"
             end
