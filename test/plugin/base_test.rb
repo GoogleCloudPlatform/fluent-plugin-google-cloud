@@ -339,22 +339,60 @@ module BaseTest
   end
 
   def test_stackdriver_trace_format_compliant_trace_with_autoformat_config
-    [
+    configs = [
       APPLICATION_DEFAULT_CONFIG,
       AUTOFORMAT_STACKDRIVER_TRACE_CONFIG,
       NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
-    ].each do |test_config|
+    ]
+    traces = [
+      TRACE
+    ]
+
+    configs.product(traces).collect do |config, trace|
       new_stub_context do
         setup_gce_metadata_stubs
         setup_logging_stubs do
-          d = create_driver(test_config)
-          d.emit(DEFAULT_TRACE_KEY => TRACE)
+          d = create_driver(config)
+          d.emit(DEFAULT_TRACE_KEY => trace)
           d.run
 
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-            assert_equal TRACE, entry['trace'], 'stackdriver trace ' \
+            assert_equal trace, entry['trace'], 'stackdriver trace ' \
 	                 'format compliant trace should not be modified with ' \
-	                 "config #{test_config}."
+	                 "config #{config}."
+          end
+        end
+      end
+    end
+  end
+
+  def test_random_trace_with_autoformat_config
+    configs = [
+      APPLICATION_DEFAULT_CONFIG,
+      AUTOFORMAT_STACKDRIVER_TRACE_CONFIG,
+      NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
+    ]
+    traces = [
+      '',
+      '1',
+      NON_STACKDRIVER_TRACE_ID,
+      "projects/#{PROJECT_ID}/traces/",
+      "projects/#{PROJECT_ID}/traces/#{NON_STACKDRIVER_TRACE_ID}",
+      "projects//traces/#{STACKDRIVER_TRACE_ID}"
+    ]
+
+    configs.product(traces).collect do |config, trace|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(config)
+          d.emit(DEFAULT_TRACE_KEY => trace)
+          d.run
+
+          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+            assert_equal trace, entry['trace'], 'non stackdriver trace id' \
+	                 'compliant trace should not be modified with ' \
+	                 "config #{config}."
           end
         end
       end
@@ -362,10 +400,12 @@ module BaseTest
   end
 
   def test_autoformat_enabled_with_stackdriver_trace_id_as_trace
-    [
+    configs = [
       APPLICATION_DEFAULT_CONFIG,
       AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
-    ].each do |test_config|
+    ]
+
+    configs.each do |test_config|
       new_stub_context do
         setup_gce_metadata_stubs
         setup_logging_stubs do
