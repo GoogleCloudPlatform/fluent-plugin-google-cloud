@@ -265,6 +265,14 @@ module Constants
     enable_metadata_agent false
   ).freeze
 
+  AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
+    autoformat_stackdriver_trace true
+  ).freeze
+
+  NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
+    autoformat_stackdriver_trace false
+  ).freeze
+
   DOCKER_CONTAINER_CONFIG = %(
     enable_metadata_agent true
     label_map { "source": "#{DOCKER_CONSTANTS[:service]}/stream" }
