@@ -353,7 +353,7 @@ module BaseTest
 
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
             assert_equal TRACE, entry['trace'], 'stackdriver trace ' \
-	                 'compliant trace should not be modified with ' \
+	                 'format compliant trace should not be modified with ' \
 	                 "config #{test_config}."
           end
         end
@@ -361,7 +361,7 @@ module BaseTest
     end
   end
 
-  def test_autoformat_enabled_with_stackdriver_trace_format_noncompliant_trace
+  def test_autoformat_enabled_with_stackdriver_trace_id_as_trace
     [
       APPLICATION_DEFAULT_CONFIG,
       AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
@@ -370,32 +370,31 @@ module BaseTest
         setup_gce_metadata_stubs
         setup_logging_stubs do
           d = create_driver(test_config)
-          d.emit(DEFAULT_TRACE_KEY => NON_STACKDRIVER_TRACE_COMPLIANT_TRACE)
+          d.emit(DEFAULT_TRACE_KEY => STACKDRIVER_TRACE_ID)
           d.run
 
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
             expected_trace = \
-              "projects/#{d.instance.project_id}" \
-              "/traces/#{NON_STACKDRIVER_TRACE_COMPLIANT_TRACE}"
+              "projects/#{d.instance.project_id}/traces/#{STACKDRIVER_TRACE_ID}"
             assert_equal expected_trace, entry['trace'], 'stackdriver trace ' \
-                         'inoncompliant trace should be autoformatted with ' \
-                         "config #{test_config}."
+                         'id should be autoformatted with config' \
+                         "#{test_config}."
           end
         end
       end
     end
   end
 
-  def test_autoformat_disabled_with_stackdriver_trace_format_noncompliant_trace
+  def test_autoformat_disabled_with_stackdriver_trace_id_as_trace
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver(NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG)
-      d.emit(DEFAULT_TRACE_KEY => NON_STACKDRIVER_TRACE_COMPLIANT_TRACE)
+      d.emit(DEFAULT_TRACE_KEY => STACKDRIVER_TRACE_ID)
       d.run
 
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-        assert_equal NON_STACKDRIVER_TRACE_COMPLIANT_TRACE, entry['trace'],
-                     'stackdriver trace noncompliant trace should be ' \
+        assert_equal STACKDRIVER_TRACE_ID, entry['trace'],
+                     'trace as stackdriver trace id should be ' \
                      'autoformatted with config ' \
 		     "#{NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG}."
       end

@@ -165,11 +165,10 @@ module Fluent
       # monitored resource from Stackdriver Metadata agent.
       LOCAL_RESOURCE_ID_KEY = 'logging.googleapis.com/local_resource_id'.freeze
 
-      # The regexp matches stackdriver trace format. An example string
-      # will match the regexp is:
-      # "projects/my-project/traces/1234567890abcdef1234567890abcdef"
-      STACKDRIVER_TRACE_REGEXP = Regexp.new(
-        '^projects\/[^\/]*\/traces\/[^\/]*$').freeze
+      # The regexp matches stackdriver trace id format: 32-byte hex string.
+      # The format is documented in
+      # https://cloud.google.com/trace/docs/reference/v2/rpc/google.devtools.cloudtrace.v1#trace
+      STACKDRIVER_TRACE_ID_REGEXP = Regexp.new('^\h{32}$').freeze
 
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
@@ -689,7 +688,7 @@ module Fluent
 
     def compute_trace(trace)
       if @autoformat_stackdriver_trace &&
-         !STACKDRIVER_TRACE_REGEXP.match(trace)
+         STACKDRIVER_TRACE_ID_REGEXP.match(trace)
         trace = "projects/#{@project_id}/traces/#{trace}"
       end
       trace
