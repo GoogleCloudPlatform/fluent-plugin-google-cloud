@@ -369,8 +369,6 @@ module BaseTest
   end
 
   def test_autoformat_enabled_with_stackdriver_trace_format_noncompliant_trace
-    non_stackdriver_trace_compliant_trace = '1234567890abcdef1234567890abcdef'
-
     [
       {
         config: APPLICATION_DEFAULT_CONFIG
@@ -383,13 +381,13 @@ module BaseTest
         setup_gce_metadata_stubs
         setup_logging_stubs do
           d = create_driver(test_params[:config])
-          d.emit(DEFAULT_TRACE_KEY => non_stackdriver_trace_compliant_trace)
+          d.emit(DEFAULT_TRACE_KEY => NON_STACKDRIVER_TRACE_COMPLIANT_TRACE)
           d.run
 
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
             expected_trace = \
               "projects/#{d.instance.project_id}" \
-              "/traces/#{non_stackdriver_trace_compliant_trace}"
+              "/traces/#{NON_STACKDRIVER_TRACE_COMPLIANT_TRACE}"
             assert_equal expected_trace, entry['trace']
           end
         end
@@ -399,16 +397,15 @@ module BaseTest
 
   def test_autoformat_disabled_with_stackdriver_trace_format_noncompliant_trace
     config = NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
-    non_stackdriver_trace_compliant_trace = '1234567890abcdef1234567890abcdef'
 
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver(config)
-      d.emit(DEFAULT_TRACE_KEY => non_stackdriver_trace_compliant_trace)
+      d.emit(DEFAULT_TRACE_KEY => NON_STACKDRIVER_TRACE_COMPLIANT_TRACE)
       d.run
 
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-        assert_equal non_stackdriver_trace_compliant_trace, entry['trace']
+        assert_equal NON_STACKDRIVER_TRACE_COMPLIANT_TRACE, entry['trace']
       end
     end
   end
