@@ -635,14 +635,9 @@ module Fluent
                                             severity,
                                             ts_secs,
                                             ts_nanos)
+
           trace = record.delete(@trace_key)
-          if trace
-            if @autoformat_stackdriver_trace &&
-               !STACKDRIVER_TRACE_REGEXP.match(trace)
-              trace = "projects/#{@project_id}/traces/#{trace}"
-            end
-            entry.trace = trace
-          end
+          entry.trace = compute_trace(trace) if trace
 
           span_id = record.delete(@span_id_key)
           entry.span_id = span_id if span_id
@@ -691,6 +686,14 @@ module Fluent
     end
 
     private
+
+    def compute_trace(trace)
+      if @autoformat_stackdriver_trace &&
+         !STACKDRIVER_TRACE_REGEXP.match(trace)
+        trace = "projects/#{@project_id}/traces/#{trace}"
+      end
+      trace
+    end
 
     def construct_log_entry_in_grpc_format(labels,
                                            resource,
