@@ -338,73 +338,11 @@ module BaseTest
     end
   end
 
-  def test_stackdriver_trace_format_compliant_trace_with_autoformat_config
-    configs = [
-      APPLICATION_DEFAULT_CONFIG,
-      AUTOFORMAT_STACKDRIVER_TRACE_CONFIG,
-      NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
-    ]
-    traces = [
-      TRACE
-    ]
-
-    configs.product(traces).collect do |config, trace|
-      new_stub_context do
-        setup_gce_metadata_stubs
-        setup_logging_stubs do
-          d = create_driver(config)
-          d.emit(DEFAULT_TRACE_KEY => trace)
-          d.run
-
-          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-            assert_equal trace, entry['trace'], 'stackdriver trace ' \
-	                 'format compliant trace should not be modified with ' \
-	                 "config #{config}."
-          end
-        end
-      end
-    end
-  end
-
-  def test_random_trace_with_autoformat_config
-    configs = [
-      APPLICATION_DEFAULT_CONFIG,
-      AUTOFORMAT_STACKDRIVER_TRACE_CONFIG,
-      NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
-    ]
-    traces = [
-      '',
-      '1',
-      NON_STACKDRIVER_TRACE_ID,
-      "projects/#{PROJECT_ID}/traces/",
-      "projects/#{PROJECT_ID}/traces/#{NON_STACKDRIVER_TRACE_ID}",
-      "projects//traces/#{STACKDRIVER_TRACE_ID}"
-    ]
-
-    configs.product(traces).collect do |config, trace|
-      new_stub_context do
-        setup_gce_metadata_stubs
-        setup_logging_stubs do
-          d = create_driver(config)
-          d.emit(DEFAULT_TRACE_KEY => trace)
-          d.run
-
-          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-            assert_equal trace, entry['trace'], 'non stackdriver trace id' \
-	                 'compliant trace should not be modified with ' \
-	                 "config #{config}."
-          end
-        end
-      end
-    end
-  end
-
   def test_autoformat_enabled_with_stackdriver_trace_id_as_trace
     configs = [
       APPLICATION_DEFAULT_CONFIG,
       AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
     ]
-
     configs.each do |test_config|
       new_stub_context do
         setup_gce_metadata_stubs
@@ -412,12 +350,11 @@ module BaseTest
           d = create_driver(test_config)
           d.emit(DEFAULT_TRACE_KEY => STACKDRIVER_TRACE_ID)
           d.run
-
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
             expected_trace = \
               "projects/#{d.instance.project_id}/traces/#{STACKDRIVER_TRACE_ID}"
             assert_equal expected_trace, entry['trace'], 'stackdriver trace ' \
-                         'id should be autoformatted with config' \
+                         'id should be autoformatted with config ' \
                          "#{test_config}."
           end
         end
@@ -431,12 +368,64 @@ module BaseTest
       d = create_driver(NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG)
       d.emit(DEFAULT_TRACE_KEY => STACKDRIVER_TRACE_ID)
       d.run
-
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
         assert_equal STACKDRIVER_TRACE_ID, entry['trace'],
-                     'trace as stackdriver trace id should be ' \
+                     'trace as stackdriver trace id should not be ' \
                      'autoformatted with config ' \
-		     "#{NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG}."
+                     "#{NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG}."
+      end
+    end
+  end
+
+  def test_no_trace_when_trace_key_not_exists_with_any_autoformat_config
+    configs = [
+      APPLICATION_DEFAULT_CONFIG,
+      AUTOFORMAT_STACKDRIVER_TRACE_CONFIG,
+      NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
+    ]
+    configs.each do |config|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(config)
+          d.emit('msg' => log_entry(0))
+          d.run
+          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+            assert_nil entry['trace']
+          end
+        end
+      end
+    end
+  end
+
+  def test_non_stackdriver_trace_id_compliant_trace_with_any_autoformat_config
+    configs = [
+      APPLICATION_DEFAULT_CONFIG,
+      AUTOFORMAT_STACKDRIVER_TRACE_CONFIG,
+      NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
+    ]
+    traces = [
+      '',
+      '1',
+      NON_STACKDRIVER_TRACE_ID,
+      "projects/#{PROJECT_ID}/traces/",
+      "projects/#{PROJECT_ID}/traces/#{NON_STACKDRIVER_TRACE_ID}",
+      "projects//traces/#{STACKDRIVER_TRACE_ID}",
+      TRACE # full trace won't be modified either
+    ]
+    configs.product(traces).collect do |config, trace|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(config)
+          d.emit(DEFAULT_TRACE_KEY => trace)
+          d.run
+          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+            assert_equal trace, entry['trace'], 'trace as non stackdriver' \
+                         'trace id should not be autoformatted with ' \
+	                 "config #{config}."
+          end
+        end
       end
     end
   end
