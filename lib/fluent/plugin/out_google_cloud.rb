@@ -399,7 +399,9 @@ module Fluent
                  :default => Monitoring::PrometheusMonitoringRegistry.name
 
     # Whether to autoformat value of "logging.googleapis.com/trace" to
-    # LogEntry.Trace.
+    # comply with Stackdriver Trace format
+    # "projects/[PROJECT-ID]/traces/[TRACE-ID]" when setting
+    # LogEntry.trace.
     config_param :autoformat_stackdriver_trace, :bool, :default => true
 
     # Whether to call metadata agent to retrieve monitored resource.
