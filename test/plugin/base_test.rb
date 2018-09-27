@@ -421,9 +421,10 @@ module BaseTest
           d.emit(DEFAULT_TRACE_KEY => trace)
           d.run
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-            assert_equal trace, entry['trace'], 'trace as non stackdriver' \
-                         'trace id should not be autoformatted with ' \
-	                 "config #{config}."
+            assert_equal_with_default \
+              entry['trace'], trace, '',
+              'trace as non stackdriver trace id should not be ' \
+              "autoformatted with config #{config}."
           end
         end
       end
