@@ -343,11 +343,11 @@ module BaseTest
       APPLICATION_DEFAULT_CONFIG,
       AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
     ]
-    configs.each do |test_config|
+    configs.each do |config|
       new_stub_context do
         setup_gce_metadata_stubs
         setup_logging_stubs do
-          d = create_driver(test_config)
+          d = create_driver(config)
           d.emit(DEFAULT_TRACE_KEY => STACKDRIVER_TRACE_ID)
           d.run
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
@@ -355,7 +355,7 @@ module BaseTest
               "projects/#{d.instance.project_id}/traces/#{STACKDRIVER_TRACE_ID}"
             assert_equal expected_trace, entry['trace'], 'stackdriver trace ' \
                          'id should be autoformatted with config ' \
-                         "#{test_config}."
+                         "#{config}."
           end
         end
       end
