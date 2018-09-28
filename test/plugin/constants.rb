@@ -101,12 +101,14 @@ module Constants
   # LogEntry fields for extraction.
   TRACE = 'projects/proj1/traces/1234567890abcdef1234567890abcdef'.freeze
   TRACE2 = 'projects/proj1/traces/1234567890abcdef1234567890fedcba'.freeze
-  STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdef'.freeze
-  NON_STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdeZ'.freeze
   SPAN_ID = '000000000000004a'.freeze
   SPAN_ID2 = '000000000000007e'.freeze
   INSERT_ID = 'fah7yr7iw64tg857y'.freeze
   INSERT_ID2 = 'fah7yr7iw64tgaeuf'.freeze
+  STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdef'.freeze
+  FULL_STACKDRIVER_TRACE = \
+    "projects/#{PROJECT_ID}/traces/#{STACKDRIVER_TRACE_ID}".freeze
+  NON_STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdeZ'.freeze
 
   # Docker Container labels.
   DOCKER_CONTAINER_ID =

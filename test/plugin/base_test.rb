@@ -339,11 +339,10 @@ module BaseTest
   end
 
   def test_autoformat_enabled_with_stackdriver_trace_id_as_trace
-    configs = [
+    [
       APPLICATION_DEFAULT_CONFIG,
       ENABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
-    ]
-    configs.each do |config|
+    ].each do |config|
       new_stub_context do
         setup_gce_metadata_stubs
         setup_logging_stubs do
@@ -351,12 +350,9 @@ module BaseTest
           d.emit(DEFAULT_TRACE_KEY => STACKDRIVER_TRACE_ID)
           d.run
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-            expected_trace = \
-              "projects/#{d.instance.project_id}" \
-              "/traces/#{STACKDRIVER_TRACE_ID}"
-            assert_equal expected_trace, entry['trace'],
+            assert_equal FULL_STACKDRIVER_TRACE, entry['trace'],
                          'stackdriver trace id should be autoformatted ' \
-                         "with config #{config}."
+                         'when autoformat_stackdriver_trace is enabled.'
           end
         end
       end
@@ -379,12 +375,11 @@ module BaseTest
   end
 
   def test_no_trace_when_trace_key_not_exists_with_any_autoformat_config
-    configs = [
+    [
       APPLICATION_DEFAULT_CONFIG,
       ENABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG,
       DISABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
-    ]
-    configs.each do |config|
+    ].each do |config|
       new_stub_context do
         setup_gce_metadata_stubs
         setup_logging_stubs do
