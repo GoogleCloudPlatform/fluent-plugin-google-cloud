@@ -267,11 +267,11 @@ module Constants
     enable_metadata_agent false
   ).freeze
 
-  AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
+  ENABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
     autoformat_stackdriver_trace true
   ).freeze
 
-  NO_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
+  DISABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
     autoformat_stackdriver_trace false
   ).freeze
 
