@@ -414,7 +414,7 @@ module BaseTest
       "projects//traces/#{STACKDRIVER_TRACE_ID}",
       TRACE # Full trace won't be modified either.
     ]
-    configs.product(traces).collect do |config, trace|
+    configs.product(traces).each do |config, trace|
       new_stub_context do
         setup_gce_metadata_stubs
         setup_logging_stubs do
