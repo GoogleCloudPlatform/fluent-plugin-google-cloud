@@ -689,11 +689,9 @@ module Fluent
     private
 
     def compute_trace(trace)
-      if @autoformat_stackdriver_trace &&
-         STACKDRIVER_TRACE_ID_REGEXP.match(trace)
-        trace = "projects/#{@project_id}/traces/#{trace}"
-      end
-      trace
+      return trace unless @autoformat_stackdriver_trace &&
+                          STACKDRIVER_TRACE_ID_REGEXP.match(trace)
+      "projects/#{@project_id}/traces/#{trace}"
     end
 
     def construct_log_entry_in_grpc_format(labels,
