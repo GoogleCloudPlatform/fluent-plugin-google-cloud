@@ -401,13 +401,16 @@ module BaseTest
       DISABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG
     ]
     traces = [
-      '',
-      '1',
-      NON_STACKDRIVER_TRACE_ID,
-      "projects/#{PROJECT_ID}/traces/",
-      "projects/#{PROJECT_ID}/traces/#{NON_STACKDRIVER_TRACE_ID}",
-      "projects//traces/#{STACKDRIVER_TRACE_ID}",
-      TRACE # Full trace won't be modified either.
+      TRACE, # Full trace won't be modified.
+      EMPTY_STRING,
+      INVALID_SHORT_STACKDRIVER_TRACE_ID,
+      INVALID_LONG_STACKDRIVER_TRACE_ID,
+      INVALID_NON_HEX_STACKDRIVER_TRACE_ID,
+      INVALID_TRACE_NO_TRACE_ID,
+      INVALID_TRACE_NO_PROJECT_ID,
+      INVALID_TRACE_WITH_SHORT_TRACE_ID,
+      INVALID_TRACE_WITH_LONG_TRACE_ID,
+      INVALID_TRACE_WITH_NON_HEX_TRACE_ID
     ]
     configs.product(traces).each do |config, trace|
       new_stub_context do

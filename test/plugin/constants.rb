@@ -105,10 +105,30 @@ module Constants
   SPAN_ID2 = '000000000000007e'.freeze
   INSERT_ID = 'fah7yr7iw64tg857y'.freeze
   INSERT_ID2 = 'fah7yr7iw64tgaeuf'.freeze
+
   STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdef'.freeze
   FULL_STACKDRIVER_TRACE = \
     "projects/#{PROJECT_ID}/traces/#{STACKDRIVER_TRACE_ID}".freeze
-  NON_STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdeZ'.freeze
+
+  # Invalid trace id for stackdriver.
+  EMPTY_STRING = ''.freeze
+  INVALID_SHORT_STACKDRIVER_TRACE_ID = '1234567890abcdef'.freeze
+  INVALID_LONG_STACKDRIVER_TRACE_ID = \
+    '1234567890abcdef1234567890abcdef123'.freeze
+  INVALID_NON_HEX_STACKDRIVER_TRACE_ID = \
+    '1234567890abcdef1234567890abcdeZ'.freeze
+
+  # Invalid full format of stackdriver trace.
+  INVALID_TRACE_NO_TRACE_ID = "projects/#{PROJECT_ID}/traces/".freeze
+  INVALID_TRACE_NO_PROJECT_ID = \
+    "projects//traces/#{STACKDRIVER_TRACE_ID}".freeze
+  INVALID_TRACE_WITH_SHORT_TRACE_ID = \
+    "projects/#{PROJECT_ID}/traces/#{INVALID_SHORT_STACKDRIVER_TRACE_ID}".freeze
+  INVALID_TRACE_WITH_LONG_TRACE_ID = \
+    "projects/#{PROJECT_ID}/traces/#{INVALID_LONG_STACKDRIVER_TRACE_ID}".freeze
+  INVALID_TRACE_WITH_NON_HEX_TRACE_ID = \
+    "projects/#{PROJECT_ID}/" \
+    "traces/#{INVALID_NON_HEX_STACKDRIVER_TRACE_ID}".freeze
 
   # Docker Container labels.
   DOCKER_CONTAINER_ID =
