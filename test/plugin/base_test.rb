@@ -352,10 +352,11 @@ module BaseTest
           d.run
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
             expected_trace = \
-              "projects/#{d.instance.project_id}/traces/#{STACKDRIVER_TRACE_ID}"
-            assert_equal expected_trace, entry['trace'], 'stackdriver trace ' \
-                         'id should be autoformatted with config ' \
-                         "#{config}."
+              "projects/#{d.instance.project_id}" \
+              "/traces/#{STACKDRIVER_TRACE_ID}"
+            assert_equal expected_trace, entry['trace'],
+                         'stackdriver trace id should be autoformatted ' \
+                         "with config #{config}."
           end
         end
       end
@@ -411,7 +412,7 @@ module BaseTest
       "projects/#{PROJECT_ID}/traces/",
       "projects/#{PROJECT_ID}/traces/#{NON_STACKDRIVER_TRACE_ID}",
       "projects//traces/#{STACKDRIVER_TRACE_ID}",
-      TRACE # full trace won't be modified either
+      TRACE # Full trace won't be modified either.
     ]
     configs.product(traces).collect do |config, trace|
       new_stub_context do
