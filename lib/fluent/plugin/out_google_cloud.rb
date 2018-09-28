@@ -398,12 +398,6 @@ module Fluent
     config_param :monitoring_type, :string,
                  :default => Monitoring::PrometheusMonitoringRegistry.name
 
-    # Whether to autoformat value of "logging.googleapis.com/trace" to
-    # comply with Stackdriver Trace format
-    # "projects/[PROJECT-ID]/traces/[TRACE-ID]" when setting
-    # LogEntry.trace.
-    config_param :autoformat_stackdriver_trace, :bool, :default => true
-
     # Whether to call metadata agent to retrieve monitored resource.
     config_param :enable_metadata_agent, :bool, :default => false
 
@@ -420,6 +414,12 @@ module Fluent
 
     # Whether to attempt adjusting invalid log entry timestamps.
     config_param :adjust_invalid_timestamps, :bool, :default => true
+
+    # Whether to autoformat value of "logging.googleapis.com/trace" to
+    # comply with Stackdriver Trace format
+    # "projects/[PROJECT-ID]/traces/[TRACE-ID]" when setting
+    # LogEntry.trace.
+    config_param :autoformat_stackdriver_trace, :bool, :default => true
 
     # rubocop:enable Style/HashSyntax
 
