@@ -165,6 +165,11 @@ module Fluent
       # monitored resource from Stackdriver Metadata agent.
       LOCAL_RESOURCE_ID_KEY = 'logging.googleapis.com/local_resource_id'.freeze
 
+      # The regexp matches stackdriver trace id format: 32-byte hex string.
+      # The format is documented in
+      # https://cloud.google.com/trace/docs/reference/v2/rpc/google.devtools.cloudtrace.v1#trace
+      STACKDRIVER_TRACE_ID_REGEXP = Regexp.new('^\h{32}$').freeze
+
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
       LOG_ENTRY_FIELDS_MAP = {
@@ -410,6 +415,12 @@ module Fluent
     # Whether to attempt adjusting invalid log entry timestamps.
     config_param :adjust_invalid_timestamps, :bool, :default => true
 
+    # Whether to autoformat value of "logging.googleapis.com/trace" to
+    # comply with Stackdriver Trace format
+    # "projects/[PROJECT-ID]/traces/[TRACE-ID]" when setting
+    # LogEntry.trace.
+    config_param :autoformat_stackdriver_trace, :bool, :default => true
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -627,7 +638,8 @@ module Fluent
                                             ts_nanos)
 
           trace = record.delete(@trace_key)
-          entry.trace = trace if trace
+          entry.trace = compute_trace(trace) if trace
+
           span_id = record.delete(@span_id_key)
           entry.span_id = span_id if span_id
           insert_id = record.delete(@insert_id_key)
@@ -675,6 +687,12 @@ module Fluent
     end
 
     private
+
+    def compute_trace(trace)
+      return trace unless @autoformat_stackdriver_trace &&
+                          STACKDRIVER_TRACE_ID_REGEXP.match(trace)
+      "projects/#{@project_id}/traces/#{trace}"
+    end
 
     def construct_log_entry_in_grpc_format(labels,
                                            resource,
