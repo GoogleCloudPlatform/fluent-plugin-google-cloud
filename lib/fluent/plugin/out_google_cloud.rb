@@ -235,7 +235,7 @@ module Fluent
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
     # Extract plugin version by finding the spec this file was loaded from.
     PLUGIN_VERSION = __FILE__.match(
-      %r{fluent-plugin-google-cloud(?<version>[-0-9a-zA-Z\.]*)/})['version']
+      %r{fluent-plugin-google-cloud-?(?<version>[0-9a-zA-Z\.]*)/})['version']
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'.freeze
