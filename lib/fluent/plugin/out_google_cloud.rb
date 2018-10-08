@@ -233,9 +233,20 @@ module Fluent
     Fluent::Plugin.register_output('google_cloud', self)
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
-    # Extract plugin version by finding the spec this file was loaded from.
-    PLUGIN_VERSION = __FILE__.match(
-      %r{fluent-plugin-google-cloud-?(?<version>[0-9a-zA-Z\.]*)/})['version']
+    PLUGIN_VERSION = begin
+      # Extract plugin version from file path.
+      __FILE__.match(
+        %r{fluent-plugin-google-cloud-(?<version>[0-9a-zA-Z\.]*)/})['version']
+    rescue StandardError
+      # Extract plugin version by finding the spec this file was loaded from.
+      dependency = Gem::Dependency.new('fluent-plugin-google-cloud')
+      all_specs, = Gem::SpecFetcher.fetcher.spec_for_dependency(dependency)
+      matching_spec, = all_specs.grep(
+        proc { |spec,| __FILE__.include?(spec.full_gem_path) }) do |spec,|
+          spec.version.to_s
+        end
+      matching_spec
+    end.freeze
 
     # Name of the the Google cloud logging write scope.
     LOGGING_SCOPE = 'https://www.googleapis.com/auth/logging.write'.freeze
