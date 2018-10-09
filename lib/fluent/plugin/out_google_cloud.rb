@@ -242,11 +242,11 @@ module Fluent
       # Extract plugin version by finding the spec this file was loaded from.
       dependency = Gem::Dependency.new('fluent-plugin-google-cloud')
       all_specs, = Gem::SpecFetcher.fetcher.spec_for_dependency(dependency)
-      matching_spec, = all_specs.grep(
-         proc { |spec,| __FILE__.include?(spec.full_gem_path) }) do |spec,|
-           spec.version.to_s
-         end
-      matching_spec
+      matching_version, = all_specs.grep(
+        proc { |spec,| __FILE__.include?(spec.full_gem_path) }) do |spec,|
+          spec.version.to_s
+        end
+      matching_version
     end.freeze
 
     # Name of the the Google cloud logging write scope.
