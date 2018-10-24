@@ -159,40 +159,39 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       [500, 1, 2, [0, 0, 0, 0, 2]]
     ].each do |code, request_count, entry_count, metric_values|
       setup_prometheus
-      # TODO: Do this as part of setup_logging_stubs.
-      stub_request(:post, WRITE_LOG_ENTRIES_URI)
-        .to_return(status: code, body: 'Some Message')
-      (1..request_count).each do
-        d = create_driver(ENABLE_PROMETHEUS_CONFIG)
-        (1..entry_count).each do |i|
-          d.emit('message' => log_entry(i.to_s))
+      setup_logging_stubs(code: code, message: 'Some Message') do
+        (1..request_count).each do
+          d = create_driver(ENABLE_PROMETHEUS_CONFIG)
+          (1..entry_count).each do |i|
+            d.emit('message' => log_entry(i.to_s))
+          end
+          # rubocop:disable Lint/HandleExceptions
+          begin
+            d.run
+          rescue Google::Apis::AuthorizationError
+          rescue Google::Apis::ServerError
+          end
+          # rubocop:enable Lint/HandleExceptions
         end
-        # rubocop:disable Lint/HandleExceptions
-        begin
-          d.run
-        rescue Google::Apis::AuthorizationError
-        rescue Google::Apis::ServerError
-        end
-        # rubocop:enable Lint/HandleExceptions
+        successful_requests_count, failed_requests_count,
+          ingested_entries_count, dropped_entries_count,
+          retried_entries_count = metric_values
+        assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                       successful_requests_count,
+                                       grpc: false, code: 200)
+        assert_prometheus_metric_value(:stackdriver_failed_requests_count,
+                                       failed_requests_count,
+                                       grpc: false, code: code)
+        assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
+                                       ingested_entries_count,
+                                       grpc: false, code: 200)
+        assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
+                                       dropped_entries_count,
+                                       grpc: false, code: code)
+        assert_prometheus_metric_value(:stackdriver_retried_entries_count,
+                                       retried_entries_count,
+                                       grpc: false, code: code)
       end
-      successful_requests_count, failed_requests_count,
-        ingested_entries_count, dropped_entries_count,
-        retried_entries_count = metric_values
-      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     successful_requests_count,
-                                     grpc: false, code: 200)
-      assert_prometheus_metric_value(:stackdriver_failed_requests_count,
-                                     failed_requests_count,
-                                     grpc: false, code: code)
-      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     ingested_entries_count,
-                                     grpc: false, code: 200)
-      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
-                                     dropped_entries_count,
-                                     grpc: false, code: code)
-      assert_prometheus_metric_value(:stackdriver_retried_entries_count,
-                                     retried_entries_count,
-                                     grpc: false, code: code)
     end
   end
 
@@ -340,10 +339,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs
-    stub_request(:post, WRITE_LOG_ENTRIES_URI).to_return do |request|
-      @logs_sent << JSON.parse(request.body)
-      { body: '' }
+  def setup_logging_stubs(code: nil,
+                          message: nil,
+                          _metadata: {},
+                          _error: nil)
+    if code == 200 || code.nil?
+      stub_request(:post, WRITE_LOG_ENTRIES_URI).to_return do |request|
+        @logs_sent << JSON.parse(request.body)
+        { body: '' }
+      end
+    else
+      stub_request(:post, WRITE_LOG_ENTRIES_URI)
+        .to_return(status: code, body: message)
     end
     yield
   end
