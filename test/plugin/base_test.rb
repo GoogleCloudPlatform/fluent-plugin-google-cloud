@@ -769,6 +769,60 @@ module BaseTest
     end
   end
 
+  def test_prometheus_metrics
+    setup_gce_metadata_stubs
+    ok_code = status_codes[:ok]
+    use_grpc = ok_code == 0
+    [
+      # Single successful request.
+      [:ok, 1, 1, [1, 0, 1, 0, 0]],
+      # Several successful requests.
+      [:ok, 2, 1, [2, 0, 2, 0, 0]],
+      # Single successful request with several entries.
+      [:ok, 1, 2, [1, 0, 2, 0, 0]],
+      # Single failed request that causes logs to be dropped.
+      [:unauthorized, 1, 1, [0, 1, 0, 1, 0]],
+      # Single failed request that escalates without logs being dropped with
+      # several entries.
+      [:server_error, 1, 2, [0, 0, 0, 0, 2]]
+    ].each do |code_name, request_count, entry_count, metric_values|
+      setup_prometheus
+      code = status_codes[code_name]
+      setup_logging_stubs(code: code, message: 'Some Message') do
+        (1..request_count).each do
+          d = create_driver(ENABLE_PROMETHEUS_CONFIG)
+          (1..entry_count).each do |i|
+            d.emit('message' => log_entry(i.to_s))
+          end
+          # rubocop:disable Lint/HandleExceptions
+          begin
+            d.run
+          rescue StandardError
+          end
+          # rubocop:enable Lint/HandleExceptions
+        end
+        successful_requests_count, failed_requests_count,
+          ingested_entries_count, dropped_entries_count,
+          retried_entries_count = metric_values
+        assert_prometheus_metric_value(:stackdriver_successful_requests_count,
+                                       successful_requests_count,
+                                       grpc: use_grpc, code: ok_code)
+        assert_prometheus_metric_value(:stackdriver_failed_requests_count,
+                                       failed_requests_count,
+                                       grpc: use_grpc, code: code)
+        assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
+                                       ingested_entries_count,
+                                       grpc: use_grpc, code: ok_code)
+        assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
+                                       dropped_entries_count,
+                                       grpc: use_grpc, code: code)
+        assert_prometheus_metric_value(:stackdriver_retried_entries_count,
+                                       retried_entries_count,
+                                       grpc: use_grpc, code: code)
+      end
+    end
+  end
+
   def test_split_logs_by_tag
     setup_gce_metadata_stubs
     log_entry_count = 5
