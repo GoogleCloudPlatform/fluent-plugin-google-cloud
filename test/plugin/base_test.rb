@@ -823,6 +823,40 @@ module BaseTest
     end
   end
 
+  def test_partial_success
+    setup_gce_metadata_stubs
+    setup_prometheus
+    ok_code = status_codes[:ok]
+    use_grpc = ok_code == 0
+    # The API Client should not retry this and the plugin should consume
+    # the exception.
+    setup_logging_stubs(code: partial_success_info[:error_code],
+                        message: partial_success_info[:error_message],
+                        metadata: partial_success_info[:error_metadata]) do
+      d = create_driver(ENABLE_PROMETHEUS_CONFIG)
+      4.times do |i|
+        d.emit('message' => log_entry(i.to_s))
+      end
+      d.run
+      assert_prometheus_metric_value(
+        :stackdriver_successful_requests_count, 1,
+        grpc: use_grpc, code: status_codes[:ok])
+      assert_prometheus_metric_value(
+        :stackdriver_failed_requests_count, 0, :aggregate)
+      assert_prometheus_metric_value(
+        :stackdriver_ingested_entries_count, 1,
+        grpc: use_grpc, code: status_codes[:ok])
+      assert_prometheus_metric_value(
+        :stackdriver_dropped_entries_count, 2,
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+      assert_prometheus_metric_value(
+        :stackdriver_dropped_entries_count, 1,
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+      assert_prometheus_metric_value(
+        :stackdriver_retried_entries_count, 0, :aggregate)
+    end
+  end
+
   def test_split_logs_by_tag
     setup_gce_metadata_stubs
     log_entry_count = 5

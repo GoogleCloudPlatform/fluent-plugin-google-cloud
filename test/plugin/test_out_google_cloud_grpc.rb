@@ -83,40 +83,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     assert_equal 1, @failed_attempts.size
   end
 
-  def test_partial_success
-    setup_gce_metadata_stubs
-    setup_prometheus
-    setup_logging_stubs(
-      code: GRPC::Core::StatusCodes::PERMISSION_DENIED,
-      message: 'User not authorized.',
-      metadata: PARTIAL_SUCCESS_GRPC_METADATA) do
-      # The API Client should not retry this and the plugin should consume
-      # the exception.
-      d = create_driver(ENABLE_PROMETHEUS_CONFIG)
-      4.times do |i|
-        d.emit('message' => log_entry(i.to_s))
-      end
-      d.run
-      assert_prometheus_metric_value(
-        :stackdriver_successful_requests_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::OK)
-      assert_prometheus_metric_value(
-        :stackdriver_failed_requests_count, 0,
-        grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
-      assert_prometheus_metric_value(
-        :stackdriver_ingested_entries_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::OK)
-      assert_prometheus_metric_value(
-        :stackdriver_dropped_entries_count, 2,
-        grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
-      assert_prometheus_metric_value(
-        :stackdriver_dropped_entries_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
-      assert_prometheus_metric_value(
-        :stackdriver_retried_entries_count, 0, grpc: true)
-    end
-  end
-
   def test_non_api_error
     setup_gce_metadata_stubs
     setup_prometheus
@@ -444,6 +410,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       ok: GRPC::Core::StatusCodes::OK,
       unauthorized: GRPC::Core::StatusCodes::UNAUTHENTICATED,
       server_error: GRPC::Core::StatusCodes::INTERNAL
+    }
+  end
+
+  def partial_success_info
+    {
+      error_code: GRPC::Core::StatusCodes::PERMISSION_DENIED,
+      error_message: 'User not authorized.',
+      error_metadata: PARTIAL_SUCCESS_GRPC_METADATA
     }
   end
 end

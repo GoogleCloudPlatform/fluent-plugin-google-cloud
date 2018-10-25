@@ -67,35 +67,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
   end
 
-  def test_partial_success
-    setup_gce_metadata_stubs
-    setup_prometheus
-    # The API Client should not retry this and the plugin should consume
-    # the exception.
-    root_error_code = PARTIAL_SUCCESS_RESPONSE_BODY['error']['code']
-    stub_request(:post, WRITE_LOG_ENTRIES_URI)
-      .to_return(status: root_error_code,
-                 body: PARTIAL_SUCCESS_RESPONSE_BODY.to_json)
-    d = create_driver(ENABLE_PROMETHEUS_CONFIG)
-    4.times do |i|
-      d.emit('message' => log_entry(i.to_s))
-    end
-    d.run
-    assert_prometheus_metric_value(
-      :stackdriver_successful_requests_count, 1, grpc: false, code: 200)
-    assert_prometheus_metric_value(
-      :stackdriver_failed_requests_count, 0, grpc: false)
-    assert_prometheus_metric_value(
-      :stackdriver_ingested_entries_count, 1, grpc: false, code: 200)
-    assert_prometheus_metric_value(
-      :stackdriver_dropped_entries_count, 2, grpc: false, code: 3)
-    assert_prometheus_metric_value(
-      :stackdriver_dropped_entries_count, 1, grpc: false, code: 7)
-    assert_prometheus_metric_value(
-      :stackdriver_retried_entries_count, 0, grpc: false)
-    assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
-  end
-
   def test_non_api_error
     setup_gce_metadata_stubs
     setup_prometheus
@@ -284,10 +255,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
+  # rubocop:disable Style/UnusedMethodArgument
   def setup_logging_stubs(code: nil,
                           message: nil,
-                          _metadata: {},
-                          _error: nil)
+                          metadata: {},
+                          error: nil)
     if code == 200 || code.nil?
       stub_request(:post, WRITE_LOG_ENTRIES_URI).to_return do |request|
         @logs_sent << JSON.parse(request.body)
@@ -299,6 +271,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
     yield
   end
+  # rubocop:enable Style/UnusedMethodArgument
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
@@ -385,6 +358,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       ok: 200,
       unauthorized: 401,
       server_error: 500
+    }
+  end
+
+  def partial_success_info
+    {
+      error_code: PARTIAL_SUCCESS_RESPONSE_BODY['error']['code'],
+      error_message: PARTIAL_SUCCESS_RESPONSE_BODY.to_json,
+      error_metadata: nil
     }
   end
 end
