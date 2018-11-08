@@ -2168,7 +2168,8 @@ module BaseTest
 
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       fields = get_fields(entry['jsonPayload'])
-      assert_nil fields[payload_key], entry[destination_key]
+      assert_false fields.key?(payload_key), entry
+      assert_false entry.key?(destination_key), entry
     end
   end
 
