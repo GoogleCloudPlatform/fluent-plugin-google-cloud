@@ -387,7 +387,7 @@ module BaseTest
           d.emit('msg' => log_entry(0))
           d.run
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-            assert_nil entry['trace']
+            assert_false entry.key?('trace'), entry
           end
         end
       end
@@ -2152,7 +2152,7 @@ module BaseTest
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       field = get_fields(entry['jsonPayload'])[payload_key]
       assert_equal 'a_string', get_string(field), entry
-      assert_nil entry[destination_key], entry
+      assert_false entry.key?(destination_key), entry
     end
   end
 
