@@ -73,7 +73,7 @@ module Fluent
       super
     end
 
-    # rubocop:disable Style/UnusedMethodArgument
+    # rubocop:disable Lint/UnusedMethodArgument
     def filter(tag, time, record)
       # Only generate and add an insertId field if the record is a hash and
       # the insert ID field is not already set (or set to an empty string).
@@ -82,7 +82,7 @@ module Fluent
       end
       record
     end
-    # rubocop:enable Style/UnusedMethodArgument
+    # rubocop:enable Lint/UnusedMethodArgument
 
     private
 

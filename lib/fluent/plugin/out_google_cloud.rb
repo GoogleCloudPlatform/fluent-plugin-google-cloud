@@ -1679,6 +1679,7 @@ module Fluent
         begin
           payload_key = instance_variable_get(payload_key)
           fields = record[payload_key]
+          record.delete(payload_key) if fields.nil?
           next unless fields.is_a?(Hash)
 
           extracted_subfields = subfields.each_with_object({}) \

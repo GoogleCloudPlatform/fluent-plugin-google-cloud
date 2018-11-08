@@ -387,7 +387,7 @@ module BaseTest
           d.emit('msg' => log_entry(0))
           d.run
           verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-            assert_nil entry['trace']
+            assert_false entry.key?('trace'), entry
           end
         end
       end
@@ -1253,6 +1253,18 @@ module BaseTest
 
   def test_log_entry_operation_field_when_not_hash
     verify_subfields_when_not_hash(DEFAULT_OPERATION_KEY)
+  end
+
+  def test_log_entry_http_request_field_when_nil
+    verify_subfields_when_nil(DEFAULT_HTTP_REQUEST_KEY)
+  end
+
+  def test_log_entry_source_location_field_when_nil
+    verify_subfields_when_nil(DEFAULT_SOURCE_LOCATION_KEY)
+  end
+
+  def test_log_entry_operation_field_when_nil
+    verify_subfields_when_nil(DEFAULT_OPERATION_KEY)
   end
 
   def test_http_request_from_record_with_referer_nil_or_absent
@@ -2140,7 +2152,24 @@ module BaseTest
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       field = get_fields(entry['jsonPayload'])[payload_key]
       assert_equal 'a_string', get_string(field), entry
-      assert_nil entry[destination_key], entry
+      assert_false entry.key?(destination_key), entry
+    end
+  end
+
+  def verify_subfields_when_nil(payload_key)
+    destination_key = log_entry_subfields_params[payload_key][0]
+    @logs_sent = []
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(payload_key => nil)
+      d.run
+    end
+
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert_false fields.key?(payload_key), entry
+      assert_false entry.key?(destination_key), entry
     end
   end
 
