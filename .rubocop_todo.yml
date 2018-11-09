@@ -5,12 +5,6 @@
 # Note that changes in the inspected code, or installation of new
 # versions of RuboCop, may require this file to be generated again.
 
-AllCops:
-  TargetRubyVersion: 2.1
-  Exclude:
-    # Generated files.
-    - lib/google/**/*
-
 # Offense count: 2
 Metrics/AbcSize:
   Max: 150
