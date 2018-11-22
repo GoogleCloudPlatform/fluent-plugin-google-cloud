@@ -34,7 +34,7 @@ unless ENV.key?('VERBOSE')
     end
   end
   # global $log variable is used by fluentd
-  $log = nulllogger # rubocop:disable Style/GlobalVars
+  $log = nulllogger
 end
 
 require 'fluent/plugin/out_google_cloud'
