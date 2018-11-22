@@ -5,3 +5,8 @@ AllCops:
   Exclude:
     # Generated files.
     - 'lib/google/**/*'
+
+Style/GlobalVars:
+  AllowedVariables:
+    - $log
+
