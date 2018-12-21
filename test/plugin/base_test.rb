@@ -612,6 +612,30 @@ module BaseTest
       end
   end
 
+  # Verify that when the log has only one effective field (named 'log',
+  # 'message' or 'msg') and the field is in JSON format, the field is parsed as
+  # JSON and sent as jsonPayload.
+  def test_detect_json_auto_triggered_with_one_field
+    setup_gce_metadata_stubs
+    json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
+                  '"data": 5000, "some_null_field": null}'
+    setup_logging_stubs do
+      d = create_driver(DETECT_JSON_CONFIG)
+      %w(message log msg).each do |field|
+        d.emit(PERSERVED_KEYS_MAP.merge(field => json_string))
+      end
+      d.run
+    end
+    verify_log_entries(3, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert_equal 4, fields.size, entry
+      assert_equal 'test log entry 0', get_string(fields['msg']), entry
+      assert_equal 'test', get_string(fields['tag2']), entry
+      assert_equal 5000, get_number(fields['data']), entry
+      assert_equal null_value, fields['some_null_field'], entry
+    end
+  end
+
   # Verify that we drop the log entries when 'require_valid_tags' is true and
   # any non-string tags or tags with non-utf8 characters are detected.
   def test_reject_invalid_tags_with_require_valid_tags_true

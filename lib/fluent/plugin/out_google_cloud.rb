@@ -609,7 +609,14 @@ module Fluent
             # allow for determining whether we should parse the log or message
             # field.
             preserved_keys = [
-              'time', 'severity', @trace_key, @span_id_key, @insert_id_key
+              'time',
+              'severity',
+              @http_request_key,
+              @insert_id_key,
+              @source_location_key,
+              @span_id_key,
+              @trace_key,
+              @operation_key
             ]
 
             # If the log is json, we want to export it as a structured log
