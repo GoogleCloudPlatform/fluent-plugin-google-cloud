@@ -613,7 +613,7 @@ module BaseTest
   end
 
   # Verify that when the log has only one effective field (named 'log',
-  # 'message' or 'msg') and the field is in JSON format, the field is parsed as
+  # 'message', or 'msg') and the field is in JSON format, the field is parsed as
   # JSON and sent as jsonPayload.
   def test_detect_json_auto_triggered_with_one_field
     setup_gce_metadata_stubs
@@ -622,7 +622,7 @@ module BaseTest
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
       %w(message log msg).each do |field|
-        d.emit(PERSERVED_KEYS_MAP.merge(field => json_string))
+        d.emit(PRESERVED_KEYS_MAP.merge(field => json_string))
       end
       d.run
     end

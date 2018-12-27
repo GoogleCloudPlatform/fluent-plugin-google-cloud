@@ -613,10 +613,10 @@ module Fluent
               'severity',
               @http_request_key,
               @insert_id_key,
+              @operation_key,
               @source_location_key,
               @span_id_key,
-              @trace_key,
-              @operation_key
+              @trace_key
             ]
 
             # If the log is json, we want to export it as a structured log
