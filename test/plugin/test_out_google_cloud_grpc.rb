@@ -466,8 +466,78 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     field['numberValue']
   end
 
+  def get_bool(field)
+    field['boolValue']
+  end
+
   # The null value.
   def null_value
     { 'nullValue' => 'NULL_VALUE' }
+  end
+
+  def http_request_message
+    HTTP_REQUEST_MESSAGE
+  end
+
+  def source_location_message
+    SOURCE_LOCATION_MESSAGE
+  end
+
+  def source_location_message2
+    SOURCE_LOCATION_MESSAGE2
+  end
+
+  def expected_operation_message2
+    # 'last' is a boolean field with false as default value. Protobuf omit
+    # fields with default values during deserialization.
+    OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
+  end
+
+  # expected: A Ruby hash that represent a JSON object.
+  # e.g.:
+  #   {
+  #     "file" => "source/file",
+  #     "function" => "my_function",
+  #     "line" => 18
+  #   }
+  #
+  # actual: A Ruby hash that represents a Proto object.
+  # e.g.:
+  #   {
+  #     "structValue" => {
+  #       "fields" => {
+  #         "file" => {
+  #           "stringValue" => "source/file"
+  #         },
+  #         "function" => {
+  #           "stringValue" => "my_function"
+  #         },
+  #         "line" => {
+  #           "numberValue" => 18
+  #         }
+  #       }
+  #     }
+  #   }
+  def assert_json_equal(expected, actual)
+    error_message = "expected: #{expected}\nactual: #{actual}"
+    assert_true actual.is_a?(Hash),
+                "Expect the actual value to be a hash. #{error_message}"
+    if actual.key?('stringValue')
+      assert_equal expected, get_string(actual), error_message
+    elsif actual.key?('numberValue')
+      assert_equal expected, get_number(actual), error_message
+    elsif actual.key?('boolValue')
+      assert_equal expected, get_bool(actual), error_message
+    elsif actual.key?('structValue')
+      expected_copy = expected.dup
+      get_fields(get_struct(actual)).each do |field_name, nested_actual|
+        assert_json_equal expected_copy[field_name], nested_actual
+        expected_copy.reject! { |k, _| k == field_name }
+      end
+      # Make sure all fields are matched.
+      assert_true expected_copy.empty?
+    else
+      assert_true false, "Unsupported proto format. #{error_message}"
+    end
   end
 end

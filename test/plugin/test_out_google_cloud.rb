@@ -407,24 +407,41 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     nil
   end
 
-  # 'responseSize' and 'requestSize' are Integers in the gRPC proto, yet Strings
-  # in REST API client.
-  # TODO(qingling128): Address this accordingly once the following question is
-  # answered: https://github.com/google/google-api-ruby-client/issues/619.
-  # If this discrepancy is legit, add some comments to explain the reason.
-  # Otherwise once the discrepancy is fixed, we need to upgrade to that version
-  # and change our tests accordingly.
+  # Convert certain fields to strings for compatibility between gRPC and REST.
+  # See more details in:
+  # https://github.com/google/google-api-ruby-client/issues/619.
+  def convert_subfields_to_strings(full_hash, fields_to_convert)
+    full_hash.merge(Hash[
+      fields_to_convert.collect do |field_name|
+        [field_name, full_hash[field_name].to_s]
+      end
+    ])
+  end
+
+  # 'responseSize' and 'requestSize' are Integers in the gRPC protos, yet
+  # Strings in REST API client libraries.
   def http_request_message
-    HTTP_REQUEST_MESSAGE.merge(
-      'responseSize' => HTTP_REQUEST_MESSAGE['responseSize'].to_s,
-      'requestSize' => HTTP_REQUEST_MESSAGE['requestSize'].to_s
-    )
+    convert_subfields_to_strings(
+      HTTP_REQUEST_MESSAGE, %w(responseSize requestSize))
   end
 
   # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
   def source_location_message
-    SOURCE_LOCATION_MESSAGE.merge(
-      'line' => SOURCE_LOCATION_MESSAGE['line'].to_s
-    )
+    convert_subfields_to_strings(
+      SOURCE_LOCATION_MESSAGE, ['line'])
+  end
+
+  # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
+  def source_location_message2
+    convert_subfields_to_strings(
+      SOURCE_LOCATION_MESSAGE2, ['line'])
+  end
+
+  def expected_operation_message2
+    OPERATION_MESSAGE2
+  end
+
+  def assert_json_equal(expected, actual)
+    assert_equal expected, actual, "expected: #{expected}\nactual: #{actual}"
   end
 end
