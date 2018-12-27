@@ -950,4 +950,15 @@ module Constants
       'grpc-status-details-bin' => status_details.to_proto
     }.freeze
   end
+
+  PRESERVED_KEYS_MAP = {
+    'time' => K8S_TIMESTAMP,
+    'severity' => CONTAINER_SEVERITY,
+    DEFAULT_HTTP_REQUEST_KEY => HTTP_REQUEST_MESSAGE,
+    DEFAULT_INSERT_ID_KEY => INSERT_ID,
+    DEFAULT_OPERATION_KEY => OPERATION_MESSAGE,
+    DEFAULT_SOURCE_LOCATION_KEY => SOURCE_LOCATION_MESSAGE,
+    DEFAULT_SPAN_ID_KEY => SPAN_ID,
+    DEFAULT_TRACE_KEY => TRACE
+  }.freeze
 end
