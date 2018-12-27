@@ -493,7 +493,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
   end
 
-  # expected: A Ruby hash that represent a JSON object.
+  # expected: A Ruby hash that represents a JSON object.
   # e.g.:
   #   {
   #     "file" => "source/file",
