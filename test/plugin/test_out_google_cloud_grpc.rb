@@ -518,6 +518,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   #       }
   #     }
   #   }
+  # This method has a different implementation at the REST side.
   def assert_json_equal(expected, actual)
     error_message = "expected: #{expected}\nactual: #{actual}"
     assert_true actual.is_a?(Hash),
