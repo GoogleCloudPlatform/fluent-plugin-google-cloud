@@ -2360,7 +2360,7 @@ module BaseTest
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal input[:expected_payload].size, payload_fields.size, input
         payload_fields.each do |key, value|
-          assert_json_equal(input[:expected_payload][key], value)
+          assert_hash_equal_json(input[:expected_payload][key], value)
         end
       end
     end
@@ -2485,7 +2485,7 @@ module BaseTest
   end
 
   # Defined in specific gRPC or REST files.
-  def assert_json_equal(_expected, _actual)
+  def assert_hash_equal_json(_expected, _actual)
     _undefined
   end
 

@@ -444,7 +444,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Both expected and actual are Ruby hashes that represent JSON
   # objects.
   # This method has a different implementation at the gRPC side.
-  def assert_json_equal(expected, actual)
+  def assert_hash_equal_json(expected, actual)
     assert_equal expected, actual, "expected: #{expected}\nactual: #{actual}"
   end
 end

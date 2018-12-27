@@ -519,7 +519,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   #     }
   #   }
   # This method has a different implementation at the REST side.
-  def assert_json_equal(expected, actual)
+  def assert_hash_equal_json(expected, actual)
     error_message = "expected: #{expected}\nactual: #{actual}"
     assert_true actual.is_a?(Hash),
                 "Expect the actual value to be a hash. #{error_message}"
@@ -532,7 +532,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     elsif actual.key?('structValue')
       expected_copy = expected.dup
       get_fields(get_struct(actual)).each do |field_name, nested_actual|
-        assert_json_equal expected_copy[field_name], nested_actual
+        assert_hash_equal_json expected_copy[field_name], nested_actual
         expected_copy.reject! { |k, _| k == field_name }
       end
       # Make sure all fields are matched.
