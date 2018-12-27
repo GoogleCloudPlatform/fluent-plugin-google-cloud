@@ -371,16 +371,24 @@ module Constants
     label_map { "name": "#{ML_CONSTANTS[:service]}/job_id/log_area" }
   ).freeze
 
-  CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
-    trace_key custom_trace_key
+  CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED = %(
+    insert_id_key custom_insert_id_key
+  ).freeze
+
+  CONFIG_CUSTOM_OPERATION_KEY_SPECIFIED = %(
+    operation_key custom_operation_key
+  ).freeze
+
+  CONFIG_CUSTOM_SOURCE_LOCATION_KEY_SPECIFIED = %(
+    source_location_key custom_source_location_key
   ).freeze
 
   CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED = %(
     span_id_key custom_span_id_key
   ).freeze
 
-  CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED = %(
-    insert_id_key custom_insert_id_key
+  CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
+    trace_key custom_trace_key
   ).freeze
 
   # Service configurations for various services.
@@ -751,10 +759,22 @@ module Constants
     'line' => 18
   }.freeze
 
+  SOURCE_LOCATION_MESSAGE2 = {
+    'file' => 'src/file',
+    'function' => 'my_func',
+    'line' => 8
+  }.freeze
+
   OPERATION_MESSAGE = {
     'id' => 'op_id',
     'producer' => 'my/app',
     'last' => true
+  }.freeze
+
+  OPERATION_MESSAGE2 = {
+    'id' => 'op_id2',
+    'producer' => 'my/app2',
+    'last' => false
   }.freeze
 
   CUSTOM_LABELS_MESSAGE = {

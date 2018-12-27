@@ -1243,6 +1243,8 @@ module BaseTest
     verify_log_entries(1, DATAFLOW_PARAMS)
   end
 
+  # Verify the subfields extraction of LogEntry fields.
+
   def test_log_entry_http_request_field_from_record
     verify_subfields_from_record(DEFAULT_HTTP_REQUEST_KEY)
   end
@@ -1254,6 +1256,9 @@ module BaseTest
   def test_log_entry_operation_field_from_record
     verify_subfields_from_record(DEFAULT_OPERATION_KEY)
   end
+
+  # Verify the subfields extraction of LogEntry fields when there are other
+  # fields.
 
   def test_log_entry_http_request_field_partial_from_record
     verify_subfields_partial_from_record(DEFAULT_HTTP_REQUEST_KEY)
@@ -1267,6 +1272,8 @@ module BaseTest
     verify_subfields_partial_from_record(DEFAULT_OPERATION_KEY)
   end
 
+  # Verify the subfields extraction of LogEntry fields when they are not hashes.
+
   def test_log_entry_http_request_field_when_not_hash
     verify_subfields_when_not_hash(DEFAULT_HTTP_REQUEST_KEY)
   end
@@ -1278,6 +1285,8 @@ module BaseTest
   def test_log_entry_operation_field_when_not_hash
     verify_subfields_when_not_hash(DEFAULT_OPERATION_KEY)
   end
+
+  # Verify the subfields extraction of LogEntry fields when they are nil.
 
   def test_log_entry_http_request_field_when_nil
     verify_subfields_when_nil(DEFAULT_HTTP_REQUEST_KEY)
@@ -1348,9 +1357,23 @@ module BaseTest
     end
   end
 
-  def test_log_entry_trace_field
-    verify_field_key('trace', DEFAULT_TRACE_KEY, 'custom_trace_key',
-                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED, TRACE)
+  # Verify the default and customization of LogEntry field extraction key.
+
+  def test_log_entry_insert_id_field
+    verify_field_key('insertId', DEFAULT_INSERT_ID_KEY, 'custom_insert_id_key',
+                     CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED, INSERT_ID)
+  end
+
+  def test_log_entry_operation_field
+    verify_field_key('operation', DEFAULT_OPERATION_KEY, 'custom_operation_key',
+                     CONFIG_CUSTOM_OPERATION_KEY_SPECIFIED, OPERATION_MESSAGE)
+  end
+
+  def test_log_entry_source_location_field
+    verify_field_key('sourceLocation', DEFAULT_SOURCE_LOCATION_KEY,
+                     'custom_source_location_key',
+                     CONFIG_CUSTOM_SOURCE_LOCATION_KEY_SPECIFIED,
+                     source_location_message)
   end
 
   def test_log_entry_span_id_field
@@ -1358,24 +1381,47 @@ module BaseTest
                      CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, SPAN_ID)
   end
 
-  def test_log_entry_insert_id_field
-    verify_field_key('insertId', DEFAULT_INSERT_ID_KEY, 'custom_insert_id_key',
-                     CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED, INSERT_ID)
+  def test_log_entry_trace_field
+    verify_field_key('trace', DEFAULT_TRACE_KEY, 'custom_trace_key',
+                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED, TRACE)
   end
 
-  def test_cascading_json_detection_with_log_entry_trace_field
+  # Verify the cascading JSON detection of LogEntry fields.
+
+  def test_cascading_json_detection_with_log_entry_insert_id_field
     verify_cascading_json_detection_with_log_entry_fields(
-      'trace', DEFAULT_TRACE_KEY, TRACE, TRACE2)
+      'insertId', DEFAULT_INSERT_ID_KEY,
+      root_level_value: INSERT_ID,
+      nested_level_value: INSERT_ID2)
+  end
+
+  def test_cascading_json_detection_with_log_entry_operation_field
+    verify_cascading_json_detection_with_log_entry_fields(
+      'operation', DEFAULT_OPERATION_KEY,
+      root_level_value: OPERATION_MESSAGE,
+      nested_level_value: OPERATION_MESSAGE2,
+      expected_value_from_nested: expected_operation_message2)
+  end
+
+  def test_cascading_json_detection_with_log_entry_source_location_field
+    verify_cascading_json_detection_with_log_entry_fields(
+      'sourceLocation', DEFAULT_SOURCE_LOCATION_KEY,
+      root_level_value: source_location_message,
+      nested_level_value: source_location_message2)
   end
 
   def test_cascading_json_detection_with_log_entry_span_id_field
     verify_cascading_json_detection_with_log_entry_fields(
-      'spanId', DEFAULT_SPAN_ID_KEY, SPAN_ID, SPAN_ID2)
+      'spanId', DEFAULT_SPAN_ID_KEY,
+      root_level_value: SPAN_ID,
+      nested_level_value: SPAN_ID2)
   end
 
-  def test_cascading_json_detection_with_log_entry_insert_id_field
+  def test_cascading_json_detection_with_log_entry_trace_field
     verify_cascading_json_detection_with_log_entry_fields(
-      'insertId', DEFAULT_INSERT_ID_KEY, INSERT_ID, INSERT_ID2)
+      'trace', DEFAULT_TRACE_KEY,
+      root_level_value: TRACE,
+      nested_level_value: TRACE2)
   end
 
   # Metadata Agent related tests.
@@ -2201,7 +2247,14 @@ module BaseTest
   # left with name "log", "message" or "msg". This test verifies additional
   # LogEntry fields like spanId and traceId do not disable that by accident.
   def verify_cascading_json_detection_with_log_entry_fields(
-      log_entry_field, default_key, root_level_value, nested_level_value)
+      log_entry_field, default_key, expectation)
+    root_level_value = expectation[:root_level_value]
+    nested_level_value = expectation[:nested_level_value]
+    expected_value_from_root = expectation.fetch(
+      :expected_value_from_root, root_level_value)
+    expected_value_from_nested = expectation.fetch(
+      :expected_value_from_nested, nested_level_value)
+
     setup_gce_metadata_stubs
 
     # {
@@ -2239,9 +2292,9 @@ module BaseTest
       default_key => root_level_value)
 
     {
-      log_entry_with_root_level_field => root_level_value,
-      log_entry_with_nested_level_field => nested_level_value,
-      log_entry_with_both_level_fields => nested_level_value
+      log_entry_with_root_level_field => expected_value_from_root,
+      log_entry_with_nested_level_field => expected_value_from_nested,
+      log_entry_with_both_level_fields => expected_value_from_nested
     }.each_with_index do |(input_log_entry, expected_value), index|
       setup_logging_stubs do
         @logs_sent = []
@@ -2307,18 +2360,10 @@ module BaseTest
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal input[:expected_payload].size, payload_fields.size, input
         payload_fields.each do |key, value|
-          assert_equal input[:expected_payload][key], get_string(value), input
+          assert_hash_equal_json(input[:expected_payload][key], value)
         end
       end
     end
-  end
-
-  def http_request_message
-    HTTP_REQUEST_MESSAGE
-  end
-
-  def source_location_message
-    SOURCE_LOCATION_MESSAGE
   end
 
   # Replace the 'referer' field with nil.
@@ -2416,6 +2461,31 @@ module BaseTest
 
   # The null value.
   def null_value(_field)
+    _undefined
+  end
+
+  # Defined in specific gRPC or REST files.
+  def http_request_message
+    _undefined
+  end
+
+  # Defined in specific gRPC or REST files.
+  def source_location_message
+    _undefined
+  end
+
+  # Defined in specific gRPC or REST files.
+  def source_location_message2
+    _undefined
+  end
+
+  # Defined in specific gRPC or REST files.
+  def expected_operation_message2
+    _undefined
+  end
+
+  # Defined in specific gRPC or REST files.
+  def assert_hash_equal_json(_expected, _actual)
     _undefined
   end
 
