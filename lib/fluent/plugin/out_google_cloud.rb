@@ -186,6 +186,7 @@ module Fluent
             %w(responseSize response_size parse_int),
             %w(userAgent user_agent parse_string),
             %w(remoteIp remote_ip parse_string),
+            %w(serverIp server_ip parse_string),
             %w(referer referer parse_string),
             %w(cacheHit cache_hit parse_bool),
             %w(cacheValidatedWithOriginServer
