@@ -748,6 +748,7 @@ module Constants
     'responseSize' => 65,
     'userAgent' => 'USER AGENT 1.0',
     'remoteIp' => '55.55.55.55',
+    'serverIp' => '66.66.66.66',
     'referer' => 'http://referer/',
     'cacheHit' => true,
     'cacheValidatedWithOriginServer' => true
