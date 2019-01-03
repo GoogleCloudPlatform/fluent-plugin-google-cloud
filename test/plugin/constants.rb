@@ -745,7 +745,6 @@ module Constants
     'cacheHit' => true,
     'cacheLookup' => true,
     'cacheValidatedWithOriginServer' => true,
-    'latency' => '3.5s',
     'protocol' => 'HTTP/1.1',
     'referer' => 'http://referer/',
     'remoteIp' => '55.55.55.55',
