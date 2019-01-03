@@ -179,10 +179,13 @@ module Fluent
           # Map from subfields' names to their types.
           [
             # subfield key in the payload, destination key, cast lambda (opt)
+            %w(cacheFillBytes cache_fill_bytes parse_int),
             %w(cacheHit cache_hit parse_bool),
+            %w(cacheLookup cache_lookup parse_bool),
             %w(cacheValidatedWithOriginServer
                cache_validated_with_origin_server parse_bool),
             %w(latency latency parse_latency),
+            %w(protocol protocol parse_string),
             %w(referer referer parse_string),
             %w(remoteIp remote_ip parse_string),
             %w(responseSize response_size parse_int),
