@@ -741,17 +741,20 @@ module Constants
   ).freeze
 
   HTTP_REQUEST_MESSAGE = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'serverIp' => '66.66.66.66',
-    'referer' => 'http://referer/',
+    'cacheFillBytes' => 6653,
     'cacheHit' => true,
-    'cacheValidatedWithOriginServer' => true
+    'cacheLookup' => true,
+    'cacheValidatedWithOriginServer' => true,
+    'protocol' => 'HTTP/1.1',
+    'referer' => 'http://referer/',
+    'remoteIp' => '55.55.55.55',
+    'responseSize' => 65,
+    'requestMethod' => 'POST',
+    'requestSize' => 210,
+    'requestUrl' => 'http://example/',
+    'serverIp' => '66.66.66.66',
+    'status' => 200,
+    'userAgent' => 'USER AGENT 1.0'
   }.freeze
 
   SOURCE_LOCATION_MESSAGE = {

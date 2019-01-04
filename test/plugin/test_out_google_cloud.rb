@@ -418,11 +418,11 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     ])
   end
 
-  # 'responseSize' and 'requestSize' are Integers in the gRPC protos, yet
-  # Strings in REST API client libraries.
+  # 'responseSize', 'requestSize', and 'cacheFillBytes' are Integers in the gRPC
+  # protos, yet Strings in REST API client libraries.
   def http_request_message
     convert_subfields_to_strings(
-      HTTP_REQUEST_MESSAGE, %w(responseSize requestSize))
+      HTTP_REQUEST_MESSAGE, %w(cacheFillBytes responseSize requestSize))
   end
 
   # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
