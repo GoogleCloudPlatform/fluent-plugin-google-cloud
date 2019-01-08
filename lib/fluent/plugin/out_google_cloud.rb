@@ -148,6 +148,7 @@ module Fluent
         'logging.googleapis.com/sourceLocation'.freeze
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
       DEFAULT_SPAN_ID_KEY = 'logging.googleapis.com/spanId'.freeze
+      DEFAULT_TRACE_SAMPLED_KEY = 'logging.googleapis.com/traceSampled'.freeze
       DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
 
       DEFAULT_METADATA_AGENT_URL =
@@ -300,6 +301,8 @@ module Fluent
       DEFAULT_SOURCE_LOCATION_KEY
     config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
     config_param :span_id_key, :string, :default => DEFAULT_SPAN_ID_KEY
+    config_param :trace_sampled_key, :string, :default =>
+      DEFAULT_TRACE_SAMPLED_KEY
     config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
 
     # Whether to try to detect if the record is a text log entry with JSON
@@ -620,7 +623,8 @@ module Fluent
               @operation_key,
               @source_location_key,
               @span_id_key,
-              @trace_key
+              @trace_key,
+              @trace_sampled_key
             ]
 
             # If the log is json, we want to export it as a structured log
@@ -661,6 +665,8 @@ module Fluent
 
           span_id = record.delete(@span_id_key)
           entry.span_id = span_id if span_id
+          trace_sampled = record.delete(@trace_sampled_key)
+          entry.trace_sampled = parse_bool(trace_sampled) if !trace_sampled.nil?
           insert_id = record.delete(@insert_id_key)
           entry.insert_id = insert_id if insert_id
 

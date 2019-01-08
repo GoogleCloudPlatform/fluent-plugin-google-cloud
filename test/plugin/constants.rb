@@ -103,6 +103,8 @@ module Constants
   TRACE2 = 'projects/proj1/traces/1234567890abcdef1234567890fedcba'.freeze
   SPAN_ID = '000000000000004a'.freeze
   SPAN_ID2 = '000000000000007e'.freeze
+  TRACE_SAMPLED = true
+  TRACE_NOT_SAMPLED = false
   INSERT_ID = 'fah7yr7iw64tg857y'.freeze
   INSERT_ID2 = 'fah7yr7iw64tgaeuf'.freeze
 
@@ -389,6 +391,10 @@ module Constants
 
   CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
     trace_key custom_trace_key
+  ).freeze
+
+  CONFIG_CUSTOM_TRACE_SAMPLED_KEY_SPECIFIED = %(
+    trace_sampled_key custom_trace_sampled_key
   ).freeze
 
   # Service configurations for various services.
@@ -983,6 +989,7 @@ module Constants
     DEFAULT_OPERATION_KEY => OPERATION_MESSAGE,
     DEFAULT_SOURCE_LOCATION_KEY => SOURCE_LOCATION_MESSAGE,
     DEFAULT_SPAN_ID_KEY => SPAN_ID,
-    DEFAULT_TRACE_KEY => TRACE
+    DEFAULT_TRACE_KEY => TRACE,
+    DEFAULT_TRACE_SAMPLED_KEY => TRACE_NOT_SAMPLED
   }.freeze
 end

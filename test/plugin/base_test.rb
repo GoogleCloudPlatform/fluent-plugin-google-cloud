@@ -430,6 +430,37 @@ module BaseTest
     end
   end
 
+  def test_trace_sampled
+    logs = [
+      {
+        message: {'msg' => log_entry(0)},
+        sampled: nil
+      },
+      {
+        message: {'msg' => log_entry(1), DEFAULT_TRACE_SAMPLED_KEY => false},
+        sampled: false
+      },
+      {
+        message: {'msg' => log_entry(2), DEFAULT_TRACE_SAMPLED_KEY => true},
+        sampled: true
+      }
+    ]
+    
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver(APPLICATION_DEFAULT_CONFIG)
+      logs.each do |log|
+        d.emit(log[:message])
+      end
+      d.run
+    end
+    verify_log_entries(logs.count, COMPUTE_PARAMS, 'jsonPayload') do |entry, entry_index|
+      assert_equal_with_default \
+        entry['traceSampled'], logs[entry_index][:sampled], false,
+        "traceSampled should be #{logs[entry_index][:sampled]} for '#{logs[entry_index][:message]}'"
+    end
+  end
+
   def test_structured_payload_malformatted_log
     setup_gce_metadata_stubs
     message = 'test message'
@@ -1384,6 +1415,11 @@ module BaseTest
   def test_log_entry_trace_field
     verify_field_key('trace', DEFAULT_TRACE_KEY, 'custom_trace_key',
                      CONFIG_CUSTOM_TRACE_KEY_SPECIFIED, TRACE)
+  end
+
+  def test_log_entry_trace_sampled_field
+    verify_field_key('traceSampled', DEFAULT_TRACE_SAMPLED_KEY, 'custom_trace_sampled_key',
+                     CONFIG_CUSTOM_TRACE_SAMPLED_KEY_SPECIFIED, TRACE_SAMPLED)
   end
 
   # Verify the cascading JSON detection of LogEntry fields.
