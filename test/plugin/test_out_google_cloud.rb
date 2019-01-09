@@ -333,9 +333,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # Will only work as "expected" with REST/JSON, but not with gRPC.
   # The output of the gRPC result will be converted to JSON
   # to get the assertions to work in the base test class.
-  # The problem with this is that default values are being omitted to save space.
-  # Reading this json will construct a struct which doesn't contain the field 'traceSampled',
-  # thus returning nil when trying to access that field instead of the expected false.
+  # The problem with this is that default values
+  # are being omitted to save space.
+  # Reading this json will construct a struct
+  # which doesn't contain the field 'traceSampled',
+  # thus returning nil when trying to access that field
+  # instead of the expected false.
   # And since 'nil' != 'false' this test will fail for gRPC.
   # See https://developers.google.com/protocol-buffers/docs/proto3#json
   def test_cascading_json_detection_with_log_entry_trace_sampled_field

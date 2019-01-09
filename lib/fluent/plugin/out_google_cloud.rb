@@ -666,7 +666,8 @@ module Fluent
           span_id = record.delete(@span_id_key)
           entry.span_id = span_id if span_id
           trace_sampled = record.delete(@trace_sampled_key)
-          entry.trace_sampled = parse_bool(trace_sampled) if !trace_sampled.nil?
+          entry.trace_sampled = parse_bool(trace_sampled) unless
+            trace_sampled.nil?
           insert_id = record.delete(@insert_id_key)
           entry.insert_id = insert_id if insert_id
 
