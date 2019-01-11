@@ -600,7 +600,7 @@ module Fluent
         server_create(:out_google_cloud_statusz,
                       @statusz_port,
                       bind: '127.0.0.1') do |data, conn|
-          if data.split(' ')[1] == "/statusz"
+          if data.split(' ')[1] == '/statusz'
             write_html_response(data, conn, 200, statusz_response)
           else
             write_html_response(data, conn, 404, "Not found\n")
@@ -730,19 +730,19 @@ module Fluent
 
     def statusz_response
       # TODO(davidbtucker): Add more status information here.
-      return [
-        "<html>",
-        "<body>",
-        "<h1>Status</h1>",
-        "<b>Command-line flags:</b> #{CGI::escapeHTML(ARGV.join(' '))}",
-        "</body>",
-        "</html>"
+      [
+        '<html>',
+        '<body>',
+        '<h1>Status</h1>',
+        "<b>Command-line flags:</b> #{CGI.escapeHTML(ARGV.join(' '))}",
+        '</body>',
+        '</html>'
       ].join("\n") + "\n"
     end
 
     def write_html_response(data, conn, code, response)
-      @log.info "#{conn.remote_host} - - " +
-                "#{Time.now.strftime("%d/%b/%Y:%H:%M:%S %z")} " +
+      @log.info "#{conn.remote_host} - - " \
+                "#{Time.now.strftime('%d/%b/%Y:%H:%M:%S %z')} " \
                 "\"#{data.lines.first.strip}\" #{code} #{response.bytesize}"
       conn.write "HTTP/1.1 #{code}\r\n"
       conn.write "Content-Type: text/html\r\n"
