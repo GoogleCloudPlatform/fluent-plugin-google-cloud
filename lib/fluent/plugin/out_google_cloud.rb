@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'cgi'
 require 'erb'
 require 'grpc'
 require 'json'
@@ -236,6 +237,8 @@ module Fluent
 
     Fluent::Plugin.register_output('google_cloud', self)
 
+    helpers :server
+
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
 
     PLUGIN_VERSION = begin
@@ -433,6 +436,11 @@ module Fluent
     # LogEntry.trace.
     config_param :autoformat_stackdriver_trace, :bool, :default => true
 
+    # Port for web server that exposes a /statusz endpoint with
+    # diagnostic information in HTML format.  If the value is 0,
+    # the server is not created.
+    config_param :statusz_port, :integer, :default => 0
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -586,6 +594,19 @@ module Fluent
       init_api_client
       @successful_call = false
       @timenanos_warning = false
+
+      if @statusz_port > 0
+        @log.info "Starting statusz server on port #{@statusz_port}"
+        server_create(:out_google_cloud_statusz,
+                      @statusz_port,
+                      bind: '127.0.0.1') do |data, conn|
+          if data.split(' ')[1] == "/statusz"
+            write_html_response(data, conn, 200, statusz_response)
+          else
+            write_html_response(data, conn, 404, "Not found\n")
+          end
+        end
+      end
     end
 
     def shutdown
@@ -706,6 +727,29 @@ module Fluent
     end
 
     private
+
+    def statusz_response
+      # TODO(davidbtucker): Add more status information here.
+      return [
+        "<html>",
+        "<body>",
+        "<h1>Status</h1>",
+        "<b>Command-line flags:</b> #{CGI::escapeHTML(ARGV.join(' '))}",
+        "</body>",
+        "</html>"
+      ].join("\n") + "\n"
+    end
+
+    def write_html_response(data, conn, code, response)
+      @log.info "#{conn.remote_host} - - " +
+                "#{Time.now.strftime("%d/%b/%Y:%H:%M:%S %z")} " +
+                "\"#{data.lines.first.strip}\" #{code} #{response.bytesize}"
+      conn.write "HTTP/1.1 #{code}\r\n"
+      conn.write "Content-Type: text/html\r\n"
+      conn.write "Content-Length: #{response.bytesize}\r\n"
+      conn.write "\r\n"
+      conn.write response
+    end
 
     def compute_trace(trace)
       return trace unless @autoformat_stackdriver_trace &&
