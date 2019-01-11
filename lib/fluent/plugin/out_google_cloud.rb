@@ -29,6 +29,7 @@ require 'google/logging/v2/log_entry_pb'
 require 'googleauth'
 
 require_relative 'monitoring'
+require_relative 'statusz'
 
 module Google
   module Protobuf
@@ -601,7 +602,7 @@ module Fluent
                       @statusz_port,
                       bind: '127.0.0.1') do |data, conn|
           if data.split(' ')[1] == '/statusz'
-            write_html_response(data, conn, 200, statusz_response)
+            write_html_response(data, conn, 200, Statusz.response)
           else
             write_html_response(data, conn, 404, "Not found\n")
           end
@@ -727,18 +728,6 @@ module Fluent
     end
 
     private
-
-    def statusz_response
-      # TODO(davidbtucker): Add more status information here.
-      [
-        '<html>',
-        '<body>',
-        '<h1>Status</h1>',
-        "<b>Command-line flags:</b> #{CGI.escapeHTML(ARGV.join(' '))}",
-        '</body>',
-        '</html>'
-      ].join("\n") + "\n"
-    end
 
     def write_html_response(data, conn, code, response)
       @log.info "#{conn.remote_host} - - " \
