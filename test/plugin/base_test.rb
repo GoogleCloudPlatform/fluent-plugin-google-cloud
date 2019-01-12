@@ -13,7 +13,7 @@
 # limitations under the License.
 
 require 'google/apis'
-require 'helper'
+require_relative '../helper'
 require 'mocha/test_unit'
 require 'webmock/test_unit'
 require 'prometheus/client'
@@ -1242,6 +1242,28 @@ module BaseTest
     end
     verify_log_entries(1, DATAFLOW_PARAMS)
   end
+
+  def test_generic_node_log
+    setup_no_metadata_service_stubs
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
+    setup_logging_stubs do
+      d = create_driver(GENERIC_NODE_CONFIG)
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries(1, GENERIC_NODE_PARAMS)
+  end  
+
+  def test_generic_task_log
+    setup_no_metadata_service_stubs
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
+    setup_logging_stubs do
+      d = create_driver(GENERIC_TASK_CONFIG)
+      d.emit('message' => log_entry(0))
+      d.run
+    end
+    verify_log_entries(1, GENERIC_TASK_PARAMS)
+  end  
 
   # Verify the subfields extraction of LogEntry fields.
 

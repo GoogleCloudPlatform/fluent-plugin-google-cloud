@@ -204,6 +204,19 @@ module Constants
   ML_LOG_AREA = 'log_area_1'.freeze
   ML_TAG = 'master-replica-0'.freeze
 
+  # Generic labels.
+  GENERIC_NAMESPACE = 'default'.freeze
+  GENERIC_LOCATION = 'us-central1-a'.freeze
+
+  # Generic_Node labels.
+  GENERIC_NODE_MONITORED_RESOURCE = 'generic_node'.freeze
+  GENERIC_NODE_NODE_ID = '10.10.10.1'.freeze
+
+  # Generic_Task labels.
+  GENERIC_TASK_MONITORED_RESOURCE = 'generic_task'.freeze
+  GENERIC_TASK_JOB = 'random_job'.freeze
+  GENERIC_TASK_TASK_ID = 'random_task_id'.freeze
+
   # Parameters used for authentication.
   AUTH_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:jwt-bearer'.freeze
   FAKE_AUTH_TOKEN = 'abc123'.freeze
@@ -369,6 +382,23 @@ module Constants
       "#{ML_CONSTANTS[:service]}/trial_id" : "#{ML_TRIAL_ID}"
     }
     label_map { "name": "#{ML_CONSTANTS[:service]}/job_id/log_area" }
+  ).freeze
+
+  GENERIC_NODE_CONFIG = %(
+    monitored_resource  #{GENERIC_NODE_MONITORED_RESOURCE}
+    project_id  #{PROJECT_ID}
+    location #{GENERIC_LOCATION}
+    namespace #{GENERIC_NAMESPACE}
+    node_id #{GENERIC_NODE_NODE_ID}
+  ).freeze
+
+  GENERIC_TASK_CONFIG = %(
+    monitored_resource #{GENERIC_TASK_MONITORED_RESOURCE}
+    project_id  #{PROJECT_ID}
+    location #{GENERIC_LOCATION}
+    namespace #{GENERIC_NAMESPACE}
+    job #{GENERIC_TASK_JOB}
+    task_id #{GENERIC_TASK_TASK_ID}   
   ).freeze
 
   CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED = %(
@@ -714,6 +744,39 @@ module Constants
     labels: {
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => CUSTOM_HOSTNAME
     }
+  }.freeze
+
+  # Generic Node.
+  GENERIC_NODE_PARAMS = {
+    resource: {
+      type: GENERIC_NODE_CONSTANTS[:resource_type],
+      labels: {
+        'namespace' => GENERIC_NAMESPACE,
+        'location' => GENERIC_LOCATION,
+        'node_id' => GENERIC_NODE_NODE_ID,
+        'project_id' => PROJECT_ID
+      }
+    },
+    log_name: 'test',
+    project_id: PROJECT_ID,
+    labels: {}
+  }.freeze
+
+  # Generic Task.
+  GENERIC_TASK_PARAMS = {
+    resource: {
+      type: GENERIC_TASK_CONSTANTS[:resource_type],
+      labels: {
+        'namespace' => GENERIC_NAMESPACE,
+        'location' => GENERIC_LOCATION,
+        'job' => GENERIC_TASK_JOB,
+        'task_id' => GENERIC_TASK_TASK_ID,
+        'project_id' => PROJECT_ID
+      }
+    },
+    log_name: 'test',
+    project_id: PROJECT_ID,
+    labels: {}
   }.freeze
 
   EC2_REGION_PARAMS = {
