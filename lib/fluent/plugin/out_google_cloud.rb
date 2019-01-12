@@ -121,7 +121,13 @@ module Fluent
         resource_type: 'ml_job',
         extra_resource_labels: %w(job_id task_name)
       }.freeze
-
+      GENERIC_NODE_CONSTANTS = {
+        resource_type: 'generic_node'
+      }.freeze
+      GENERIC_TASK_CONSTANTS = {
+        resource_type: 'generic_task'
+      }.freeze      
+        
       # The map between a subservice name and a resource type.
       SUBSERVICE_MAP =
         [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAFLOW_CONSTANTS,
@@ -432,6 +438,13 @@ module Fluent
     # "projects/[PROJECT-ID]/traces/[TRACE-ID]" when setting
     # LogEntry.trace.
     config_param :autoformat_stackdriver_trace, :bool, :default => true
+
+    config_param :monitored_resource, :string, :default => nil
+    config_param :namespace, :string, :default => nil
+    config_param :location, :string, :default => nil
+    config_param :node_id, :string, :default => nil
+    config_param :job, :string, :default => nil
+    config_param :task_id, :string, :default => nil
 
     # rubocop:enable Style/HashSyntax
 
@@ -1137,6 +1150,17 @@ module Fluent
       case @platform
       when Platform::OTHER
         # Unknown platform will be defaulted to GCE instance.
+
+        @log.info "monitored_resource <<<<<<<< >>>>>>> /#{@monitored_resource}"
+
+        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]         
+          return GENERIC_NODE_CONSTANTS[:resource_type]
+        end
+
+        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]     
+          return GENERIC_TASK_CONSTANTS[:resource_type]
+        end
+
         return COMPUTE_CONSTANTS[:resource_type]
 
       when Platform::EC2
@@ -1167,6 +1191,24 @@ module Fluent
     # type. Each resource type has its own labels that need to be filled in.
     def determine_agent_level_monitored_resource_labels(type)
       case type
+
+      when GENERIC_NODE_CONSTANTS[:resource_type]
+        return {
+          'project_id' => @project_id,
+          'location' => @location,
+          'namespace' => @namespace,
+          'node_id' => @node_id
+        }
+
+      when GENERIC_TASK_CONSTANTS[:resource_type]
+        return {
+          'project_id' => @project_id,
+          'location' => @location,
+          'namespace' => @namespace,
+          'job' => @job,
+          'task_id' => @task_id          
+        }
+
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]
         return {

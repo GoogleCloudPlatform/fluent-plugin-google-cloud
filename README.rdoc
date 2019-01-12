@@ -53,3 +53,87 @@ for authorization - for additional information see
 
 Copyright:: Copyright 2014 Google Inc. All rights reserved.
 License::   Apache License, Version 2.0
+
+
+-------------------------------------
+
+https://cloud.google.com/logging/docs/agent/authorization#copy-private-key
+
+https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud
+
+Setup:
+
+1) Create a service_accoutn JSON key on a GCP project, Download it and copy into `pwd`/certs/application_default_credentials.json
+
+start docker
+```
+docker run -ti -v `pwd`/certs/:/etc/google/auth/ debian /bin/bash
+```
+
+2) in docker install fluentd 
+```
+ apt-get update
+ apt-get install -y curl sudo gnupg make gcc ruby-full vim procps
+
+  curl -L https://toolbelt.treasuredata.com/sh/install-debian-stretch-td-agent3.sh | sh
+
+```
+3) Install fluent-plugin-google-cloud
+
+```
+/opt/td-agent/embedded/bin/gem install fluent-plugin-google-cloud
+```
+
+4) copy provided
+
+ out_google_cloud.rb `pwd`/certs
+
+ then in the container
+
+cp /certs/out_google_cloud.rb  --> /opt/td-agent/embedded/lib/ruby/gems/2.4.0/gems/fluent-plugin-google-cloud-0.7.3/lib/fluent/plugin/out_google_cloud.rb
+
+5) Edit /etc/td-agent/td-agent.conf
+
+Add
+```
+<match gcp_resource.**>
+  @type google_cloud
+  use_metadata_service false
+  monitored_resource generic_node
+  project_id  fabled-ray-104117
+  location us-central1-a
+  namespace default
+  node_id 10.10.10.1
+</match>
+
+<match gcp_task.**>
+  @type google_cloud
+  use_metadata_service false
+  monitored_resource generic_task
+  project_id  fabled-ray-104117
+  location us-central1-a
+  namespace default
+  job  random_job
+  task_id random_task
+</match>
+```
+
+6) restart fluentd 
+```
+service td-agent restart
+```
+
+7) Send sample traffic to http listner
+
+```
+curl -X POST -d 'json={"foo":"bar"}' http://localhost:8888/gcp_resource.log
+curl -X POST -d 'json={"foo":"bar"}' http://localhost:8888/gcp_task.log
+```
+
+8) tail log file
+
+```
+tail -f /var/log/td-agent/td-agent.log
+```
+
+
