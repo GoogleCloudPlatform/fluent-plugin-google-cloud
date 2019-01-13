@@ -751,10 +751,10 @@ module Constants
     resource: {
       type: GENERIC_NODE_CONSTANTS[:resource_type],
       labels: {
-        'namespace' => GENERIC_NAMESPACE,
-        'location' => GENERIC_LOCATION,
-        'node_id' => GENERIC_NODE_NODE_ID,
-        'project_id' => PROJECT_ID
+        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_NODE_CONSTANTS[:location]}" => GENERIC_LOCATION,
+        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => GENERIC_NODE_NODE_ID,
+        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => PROJECT_ID
       }
     },
     log_name: 'test',
@@ -767,11 +767,11 @@ module Constants
     resource: {
       type: GENERIC_TASK_CONSTANTS[:resource_type],
       labels: {
-        'namespace' => GENERIC_NAMESPACE,
-        'location' => GENERIC_LOCATION,
-        'job' => GENERIC_TASK_JOB,
-        'task_id' => GENERIC_TASK_TASK_ID,
-        'project_id' => PROJECT_ID
+        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_TASK_CONSTANTS[:location]}" => GENERIC_LOCATION,
+        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
+        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
+        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => PROJECT_ID
       }
     },
     log_name: 'test',

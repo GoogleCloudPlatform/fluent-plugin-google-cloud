@@ -1252,8 +1252,8 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, GENERIC_NODE_PARAMS)
-  end  
-
+  end
+  
   def test_generic_task_log
     setup_no_metadata_service_stubs
     ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]

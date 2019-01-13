@@ -122,10 +122,19 @@ module Fluent
         extra_resource_labels: %w(job_id task_name)
       }.freeze
       GENERIC_NODE_CONSTANTS = {
-        resource_type: 'generic_node'
+        resource_type: 'generic_node',
+        project_id: 'project_id',
+        location: 'location',
+        namespace: 'namespace',
+        node_id: 'node_id'
       }.freeze
       GENERIC_TASK_CONSTANTS = {
-        resource_type: 'generic_task'
+        resource_type: 'generic_task',
+        project_id: 'project_id',
+        location: 'location',
+        namespace: 'namespace',
+        job: 'job',
+        task_id: 'task_id'        
       }.freeze      
         
       # The map between a subservice name and a resource type.
@@ -439,10 +448,14 @@ module Fluent
     # LogEntry.trace.
     config_param :autoformat_stackdriver_trace, :bool, :default => true
 
+    # Values used for generic_task and generic_node
+    # monitored_resource:  generic_node or generic_task
     config_param :monitored_resource, :string, :default => nil
     config_param :namespace, :string, :default => nil
     config_param :location, :string, :default => nil
+    # for generic_node
     config_param :node_id, :string, :default => nil
+    # for generic_task
     config_param :job, :string, :default => nil
     config_param :task_id, :string, :default => nil
 
@@ -1149,9 +1162,8 @@ module Fluent
     def determine_agent_level_monitored_resource_type
       case @platform
       when Platform::OTHER
-        # Unknown platform will be defaulted to GCE instance.
-
-        @log.info "monitored_resource <<<<<<<< >>>>>>> /#{@monitored_resource}"
+        # Unknown platform will be defaulted to GCE instance unless generic
+        # node or tasks are defined in the configuration.
 
         if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]         
           return GENERIC_NODE_CONSTANTS[:resource_type]
@@ -1191,23 +1203,6 @@ module Fluent
     # type. Each resource type has its own labels that need to be filled in.
     def determine_agent_level_monitored_resource_labels(type)
       case type
-
-      when GENERIC_NODE_CONSTANTS[:resource_type]
-        return {
-          'project_id' => @project_id,
-          'location' => @location,
-          'namespace' => @namespace,
-          'node_id' => @node_id
-        }
-
-      when GENERIC_TASK_CONSTANTS[:resource_type]
-        return {
-          'project_id' => @project_id,
-          'location' => @location,
-          'namespace' => @namespace,
-          'job' => @job,
-          'task_id' => @task_id          
-        }
 
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]
@@ -1254,6 +1249,24 @@ module Fluent
         labels['aws_account'] = ec2_metadata['accountId'] if
           ec2_metadata.key?('accountId')
         return labels
+
+      when GENERIC_NODE_CONSTANTS[:resource_type]
+        return {
+          GENERIC_NODE_CONSTANTS[:project_id] => @project_id,
+          GENERIC_NODE_CONSTANTS[:location] => @location,
+          GENERIC_NODE_CONSTANTS[:namespace] => @namespace,
+          GENERIC_NODE_CONSTANTS[:node_id] => @node_id
+        }
+
+      when GENERIC_TASK_CONSTANTS[:resource_type]
+        return {
+          GENERIC_TASK_CONSTANTS[:project_id] => @project_id,
+          GENERIC_TASK_CONSTANTS[:location] => @location,
+          GENERIC_TASK_CONSTANTS[:namespace] => @namespace,
+          GENERIC_TASK_CONSTANTS[:job] => @job,
+          GENERIC_TASK_CONSTANTS[:task_id] => @task_id          
+        }
+
       end
 
       {}
