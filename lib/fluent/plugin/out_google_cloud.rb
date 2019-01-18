@@ -176,12 +176,9 @@ module Fluent
       # Map from each field name under LogEntry to corresponding variables
       # required to perform field value extraction from the log record.
       LOG_ENTRY_FIELDS_MAP = {
-        'http_request' => [
-          # The config to specify label name for field extraction from record.
-          '@http_request_key',
-          # Map from subfields' names to their types.
-          [
-            # subfield key in the payload, destination key, cast lambda (opt)
+        'http_request' => {
+          subfield_configs: [
+            # subfield key in the payload, destination key, cast lambda.
             %w(cacheFillBytes cache_fill_bytes parse_int),
             %w(cacheHit cache_hit parse_bool),
             %w(cacheLookup cache_lookup parse_bool),
@@ -199,32 +196,28 @@ module Fluent
             %w(status status parse_int),
             %w(userAgent user_agent parse_string)
           ],
-          # The grpc version class name.
-          'Google::Logging::Type::HttpRequest',
-          # The non-grpc version class name.
-          'Google::Apis::LoggingV2::HttpRequest'
-        ],
-        'source_location' => [
-          '@source_location_key',
-          [
+          grpc_class: 'Google::Logging::Type::HttpRequest',
+          non_grpc_class: 'Google::Apis::LoggingV2::HttpRequest'
+        },
+        'source_location' => {
+          subfield_configs: [
             %w(file file parse_string),
             %w(function function parse_string),
             %w(line line parse_int)
           ],
-          'Google::Logging::V2::LogEntrySourceLocation',
-          'Google::Apis::LoggingV2::LogEntrySourceLocation'
-        ],
-        'operation' => [
-          '@operation_key',
-          [
+          grpc_class: 'Google::Logging::V2::LogEntrySourceLocation',
+          non_grpc_class: 'Google::Apis::LoggingV2::LogEntrySourceLocation'
+        },
+        'operation' => {
+          subfield_configs: [
             %w(id id parse_string),
             %w(producer producer parse_string),
             %w(first first parse_bool),
             %w(last last parse_bool)
           ],
-          'Google::Logging::V2::LogEntryOperation',
-          'Google::Apis::LoggingV2::LogEntryOperation'
-        ]
+          grpc_class: 'Google::Logging::V2::LogEntryOperation',
+          non_grpc_class: 'Google::Apis::LoggingV2::LogEntryOperation'
+        }
       }.freeze
 
       # The name of the WriteLogEntriesPartialErrors field in the error details.
@@ -659,14 +652,6 @@ module Fluent
                                             ts_secs,
                                             ts_nanos)
 
-          trace = record.delete(@trace_key)
-          entry.trace = compute_trace(trace) if trace
-
-          span_id = record.delete(@span_id_key)
-          entry.span_id = span_id if span_id
-          insert_id = record.delete(@insert_id_key)
-          entry.insert_id = insert_id if insert_id
-
           set_log_entry_fields(record, entry)
           set_payload(entry_level_resource.type, record, entry, is_json)
 
@@ -709,12 +694,6 @@ module Fluent
     end
 
     private
-
-    def compute_trace(trace)
-      return trace unless @autoformat_stackdriver_trace &&
-                          STACKDRIVER_TRACE_ID_REGEXP.match(trace)
-      "projects/#{@project_id}/traces/#{trace}"
-    end
 
     def construct_log_entry_in_grpc_format(labels,
                                            resource,
@@ -1688,47 +1667,103 @@ module Fluent
       'DEFAULT'
     end
 
-    def set_log_entry_fields(record, entry)
-      LOG_ENTRY_FIELDS_MAP.each do |field_name, config|
-        payload_key, subfields, grpc_class, non_grpc_class = config
+    # Parse http request. Return nil if not set or not a hash.
+    def parse_http_request(record)
+      parse_subfields(
+        record, @http_request_key, LOG_ENTRY_FIELDS_MAP['http_request'])
+    end
+
+    # Parse insert ID. Return nil if not set.
+    def parse_insert_id(record)
+      record.delete(@insert_id_key)
+    end
+
+    # Parse operation and its subfields.
+    # Return nil if not set or not a hash.
+    def parse_operation(record)
+      parse_subfields(
+        record, @operation_key, LOG_ENTRY_FIELDS_MAP['operation'])
+    end
+
+    # Parse source location and its subfields.
+    # Return nil if not set or not a hash.
+    def parse_source_location(record)
+      parse_subfields(
+        record, @source_location_key, LOG_ENTRY_FIELDS_MAP['source_location'])
+    end
+
+    # Parse span id. Return nil if not set.
+    def parse_span_id(record)
+      record.delete(@span_id_key)
+    end
+
+    # Parse trace. Autoformat as needed. Return nil if not set.
+    def parse_trace(record)
+      payload_value = record.delete(@trace_key)
+      return nil unless payload_value
+      is_stackdriver_trace = STACKDRIVER_TRACE_ID_REGEXP.match(payload_value)
+      # Autoformat the trace ID as needed.
+      if @autoformat_stackdriver_trace && is_stackdriver_trace
+        return "projects/#{@project_id}/traces/#{payload_value}"
+      else
+        return payload_value
+      end
+    rescue StandardError => err
+      @log.error 'Failed to set log entry field for trace.' \
+                 "\nValue: #{payload_value}", err
+    end
+
+    def parse_subfields(record, payload_key, config)
+      fields = record[payload_key]
+      # Remove the field from payload if it's empty to reduce payload size.
+      record.delete(payload_key) if fields.nil?
+      # Skip parsing if the field is not a hash. But leave it in the log record
+      # as it is.
+      return nil unless fields.is_a?(Hash)
+
+      extracted_subfields = config[:subfield_configs].each_with_object({}) \
+        do |(original_key, destination_key, cast_fn), extracted_fields|
+        value = fields.delete(original_key)
+        next if value.nil?
         begin
-          payload_key = instance_variable_get(payload_key)
-          fields = record[payload_key]
-          record.delete(payload_key) if fields.nil?
-          next unless fields.is_a?(Hash)
-
-          extracted_subfields = subfields.each_with_object({}) \
-            do |(original_key, destination_key, cast_fn), extracted_fields|
-            value = fields.delete(original_key)
-            next if value.nil?
-            begin
-              casted_value = send(cast_fn, value)
-            rescue TypeError
-              @log.error "Failed to #{cast_fn} for #{field_name}." \
-                         "#{original_key} with value #{value.inspect}.", err
-              next
-            end
-            next if casted_value.nil?
-            extracted_fields[destination_key] = casted_value
-          end
-
-          next unless extracted_subfields
-
-          output = if @use_grpc
-                     Object.const_get(grpc_class).new
-                   else
-                     Object.const_get(non_grpc_class).new
-                   end
-          extracted_subfields.each do |key, value|
-            output.send("#{key}=", value)
-          end
-
-          record.delete(payload_key) if fields.empty?
-
-          entry.send("#{field_name}=", output)
-        rescue StandardError => err
-          @log.error "Failed to set log entry field for #{field_name}.", err
+          casted_value = send(cast_fn, value)
+        rescue TypeError
+          @log.error "Failed to #{cast_fn} for #{field_name}." \
+                     "#{original_key} with value #{value.inspect}.", err
+          next
         end
+        next if casted_value.nil?
+        extracted_fields[destination_key] = casted_value
+      end
+
+      return nil if extracted_subfields.empty?
+      if @use_grpc
+        # gRPC proto does not allow setting fields post class initiation
+        # if the field value is a Ruby hash.
+        output = Object.const_get(config[:grpc_class]).new(extracted_subfields)
+      else
+        # REST class does not allow passing in params when initiating
+        # the class.
+        output = Object.const_get(config[:non_grpc_class]).new
+        extracted_subfields.each do |key, value|
+          output.send("#{key}=", value)
+        end
+      end
+
+      record.delete(payload_key) if fields.empty?
+      return output
+    rescue StandardError => err
+      @log.error "Failed to set log entry field for #{payload_key}." \
+                 "\nValue: #{fields}", err
+    end
+
+    def set_log_entry_fields(record, entry)
+      %w(http_request insert_id operation source_location span_id trace
+        ).each do |field_name|
+        cast_fn_name = "parse_#{field_name}"
+        parsed_value = send(cast_fn_name, record)
+        # Skip setting the field if the parsed value is nil.
+        entry.send("#{field_name}=", parsed_value) if parsed_value
       end
     end
 
