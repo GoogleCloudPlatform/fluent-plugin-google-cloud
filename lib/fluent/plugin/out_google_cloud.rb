@@ -123,14 +123,12 @@ module Fluent
       }.freeze
       GENERIC_NODE_CONSTANTS = {
         resource_type: 'generic_node',
-        project_id: 'project_id',
         location: 'location',
         namespace: 'namespace',
         node_id: 'node_id'
       }.freeze
       GENERIC_TASK_CONSTANTS = {
         resource_type: 'generic_task',
-        project_id: 'project_id',
         location: 'location',
         namespace: 'namespace',
         job: 'job',
@@ -1176,9 +1174,44 @@ module Fluent
         return COMPUTE_CONSTANTS[:resource_type]
 
       when Platform::EC2
+        # set unspecified values if generic node or task is intended resource_type
+        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]          
+          if !@node_id
+            @node_id = @vm_id
+          end
+          if !@location
+            @location = @zone
+          end          
+          return GENERIC_NODE_CONSTANTS[:resource_type]
+        end
+
+        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]          
+          if !@location
+            @location = @zone
+          end          
+          return GENERIC_TASK_CONSTANTS[:resource_type]
+        end        
         return EC2_CONSTANTS[:resource_type]
 
       when Platform::GCE
+        # set unspecified values if generic node or task is intended resource_type
+        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]          
+          if !@node_id
+            @node_id = @vm_id
+          end
+          if !@location
+            @location = @zone
+          end          
+          return GENERIC_NODE_CONSTANTS[:resource_type]
+        end
+
+        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]          
+          if !@location
+            @location = @zone
+          end          
+          return GENERIC_TASK_CONSTANTS[:resource_type]
+        end
+
         # Resource types determined by @subservice_name config.
         return SUBSERVICE_MAP[@subservice_name] if @subservice_name
 
@@ -1250,6 +1283,7 @@ module Fluent
           ec2_metadata.key?('accountId')
         return labels
 
+      # Generic Node
       when GENERIC_NODE_CONSTANTS[:resource_type]
         return {
           GENERIC_NODE_CONSTANTS[:project_id] => @project_id,
@@ -1258,6 +1292,7 @@ module Fluent
           GENERIC_NODE_CONSTANTS[:node_id] => @node_id
         }
 
+      # Generic Type
       when GENERIC_TASK_CONSTANTS[:resource_type]
         return {
           GENERIC_TASK_CONSTANTS[:project_id] => @project_id,

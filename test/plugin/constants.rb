@@ -386,16 +386,43 @@ module Constants
 
   GENERIC_NODE_CONFIG = %(
     monitored_resource  #{GENERIC_NODE_MONITORED_RESOURCE}
-    project_id  #{PROJECT_ID}
     location #{GENERIC_LOCATION}
     namespace #{GENERIC_NAMESPACE}
     node_id #{GENERIC_NODE_NODE_ID}
   ).freeze
 
+  GENERIC_NODE_WITH_PROJECT_CONFIG = %(
+    monitored_resource  #{GENERIC_NODE_MONITORED_RESOURCE}
+    location #{GENERIC_LOCATION}
+    namespace #{GENERIC_NAMESPACE}
+    node_id #{GENERIC_NODE_NODE_ID}
+    project_id #{CUSTOM_PROJECT_ID}
+  ).freeze
+
+  GENERIC_NODE_CONFIG_DERIVED = %(
+    monitored_resource  #{GENERIC_NODE_MONITORED_RESOURCE}
+    namespace #{GENERIC_NAMESPACE}
+  ).freeze
+
   GENERIC_TASK_CONFIG = %(
     monitored_resource #{GENERIC_TASK_MONITORED_RESOURCE}
-    project_id  #{PROJECT_ID}
     location #{GENERIC_LOCATION}
+    namespace #{GENERIC_NAMESPACE}
+    job #{GENERIC_TASK_JOB}
+    task_id #{GENERIC_TASK_TASK_ID}
+  ).freeze
+
+  GENERIC_TASK_WITH_PROJECT_CONFIG = %(
+    monitored_resource #{GENERIC_TASK_MONITORED_RESOURCE}
+    location #{GENERIC_LOCATION}
+    namespace #{GENERIC_NAMESPACE}
+    job #{GENERIC_TASK_JOB}
+    task_id #{GENERIC_TASK_TASK_ID}
+    project_id #{CUSTOM_PROJECT_ID} 
+  ).freeze
+
+  GENERIC_TASK_CONFIG_DERIVED = %(
+    monitored_resource #{GENERIC_TASK_MONITORED_RESOURCE}
     namespace #{GENERIC_NAMESPACE}
     job #{GENERIC_TASK_JOB}
     task_id #{GENERIC_TASK_TASK_ID}   
@@ -746,7 +773,7 @@ module Constants
     }
   }.freeze
 
-  # Generic Node.
+  # Generic Node from config; project_id from JSON cert
   GENERIC_NODE_PARAMS = {
     resource: {
       type: GENERIC_NODE_CONSTANTS[:resource_type],
@@ -754,6 +781,38 @@ module Constants
         "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
         "#{GENERIC_NODE_CONSTANTS[:location]}" => GENERIC_LOCATION,
         "#{GENERIC_NODE_CONSTANTS[:node_id]}" => GENERIC_NODE_NODE_ID,
+        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+      }
+    },
+    log_name: 'test',
+    project_id: IAM_CREDENTIALS[:project_id],
+    labels: {}
+  }.freeze
+
+  # Generic Node with project_id override
+  GENERIC_NODE_WITH_PROJECT_PARAMS= {
+    resource: {
+      type: GENERIC_NODE_CONSTANTS[:resource_type],
+      labels: {
+        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_NODE_CONSTANTS[:location]}" => GENERIC_LOCATION,
+        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => GENERIC_NODE_NODE_ID,
+        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => CUSTOM_PROJECT_ID
+      }
+    },
+    log_name: 'test',
+    project_id: CUSTOM_PROJECT_ID,
+    labels: {}
+  }.freeze
+
+  # Generic Node inferred vm_id, location, project_id from GCE metadata
+  GENERIC_NODE_PARAMS_DERIVED_GCE = {
+    resource: {
+      type: GENERIC_NODE_CONSTANTS[:resource_type],
+      labels: {
+        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_NODE_CONSTANTS[:location]}" => ZONE,
+        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => VM_ID,
         "#{GENERIC_NODE_CONSTANTS[:project_id]}" => PROJECT_ID
       }
     },
@@ -762,7 +821,24 @@ module Constants
     labels: {}
   }.freeze
 
-  # Generic Task.
+  # Generic Node inferred vm_id, location from EC2 metadata.
+  # project_id from JSON CERT
+  GENERIC_NODE_PARAMS_DERIVED_EC2 = {
+    resource: {
+      type: GENERIC_NODE_CONSTANTS[:resource_type],
+      labels: {
+        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_NODE_CONSTANTS[:location]}" => EC2_PREFIXED_ZONE,
+        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => EC2_VM_ID,
+        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+      }
+    },
+    log_name: 'test',
+    project_id: IAM_CREDENTIALS[:project_id],
+    labels: {}
+  }.freeze
+
+  # Generic Task from config; project_id from JSON cert
   GENERIC_TASK_PARAMS = {
     resource: {
       type: GENERIC_TASK_CONSTANTS[:resource_type],
@@ -771,11 +847,63 @@ module Constants
         "#{GENERIC_TASK_CONSTANTS[:location]}" => GENERIC_LOCATION,
         "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
         "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
-        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => PROJECT_ID
+        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+      }
+    },
+    log_name: 'test',
+    project_id: IAM_CREDENTIALS[:project_id],
+    labels: {}
+  }.freeze
+
+  # Generic Task with project_id override
+  GENERIC_TASK_WITH_PROJECT_PARAMS = {
+    resource: {
+      type: GENERIC_TASK_CONSTANTS[:resource_type],
+      labels: {
+        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_TASK_CONSTANTS[:location]}" => GENERIC_LOCATION,
+        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
+        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
+        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => CUSTOM_PROJECT_ID
+      }
+    },
+    log_name: 'test',
+    project_id: CUSTOM_PROJECT_ID,
+    labels: {}
+  }.freeze
+  
+  # Generic Task inferred vm_id, location, project_id from GCE metadata
+  GENERIC_TASK_PARAMS_DERIVED_GCE = {
+    resource: {
+      type: GENERIC_TASK_CONSTANTS[:resource_type],
+      labels: {
+        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_TASK_CONSTANTS[:location]}" => ZONE,
+        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
+        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
+        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => PROJECT_ID        
       }
     },
     log_name: 'test',
     project_id: PROJECT_ID,
+    labels: {}
+  }.freeze
+
+  # Generic Task inferred vm_id, location from EC2 metadata.
+  # project_id from JSON CERT
+  GENERIC_TASK_PARAMS_DERIVED_EC2 = {
+    resource: {
+      type: GENERIC_TASK_CONSTANTS[:resource_type],
+      labels: {
+        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
+        "#{GENERIC_TASK_CONSTANTS[:location]}" => EC2_PREFIXED_ZONE,
+        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
+        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
+        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+      }
+    },
+    log_name: 'test',
+    project_id: IAM_CREDENTIALS[:project_id],
     labels: {}
   }.freeze
 
