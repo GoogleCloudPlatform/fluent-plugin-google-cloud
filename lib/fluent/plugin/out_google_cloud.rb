@@ -1174,7 +1174,7 @@ module Fluent
         return COMPUTE_CONSTANTS[:resource_type]
 
       when Platform::EC2
-        # set unspecified values if generic node or task is set 
+        # set unspecified values if generic node or task is set
         if @monitored_resource == GENERIC_NODE_CONSTANTS[:resource_type]
           @node_id = @vm_id unless @node_id
           @location = @zone unless @location
@@ -1188,7 +1188,7 @@ module Fluent
         return EC2_CONSTANTS[:resource_type]
 
       when Platform::GCE
-        # set unspecified values if generic node or task is set 
+        # set unspecified values if generic node or task is set
         if @monitored_resource == GENERIC_NODE_CONSTANTS[:resource_type]
           @node_id = @vm_id unless @node_id
           @location = @zone unless @location
