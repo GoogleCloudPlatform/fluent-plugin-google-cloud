@@ -1163,11 +1163,11 @@ module Fluent
         # Unknown platform will be defaulted to GCE instance unless generic
         # node or tasks are defined in the configuration.
 
-        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]
+        if @monitored_resource == GENERIC_NODE_CONSTANTS[:resource_type]
           return GENERIC_NODE_CONSTANTS[:resource_type]
         end
 
-        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]
+        if @monitored_resource == GENERIC_TASK_CONSTANTS[:resource_type]
           return GENERIC_TASK_CONSTANTS[:resource_type]
         end
 
@@ -1175,40 +1175,28 @@ module Fluent
 
       when Platform::EC2
         # set unspecified values if generic node or task is intended resource_type
-        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]
-          if !@node_id
-            @node_id = @vm_id
-          end
-          if !@location
-            @location = @zone
-          end
+        if @monitored_resource == GENERIC_NODE_CONSTANTS[:resource_type]
+          @node_id = @vm_id unless @node_id
+          @location = @zone unless @location
           return GENERIC_NODE_CONSTANTS[:resource_type]
         end
 
-        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]
-          if !@location
-            @location = @zone
-          end
+        if @monitored_resource == GENERIC_TASK_CONSTANTS[:resource_type]
+          @location = @zone unless @location
           return GENERIC_TASK_CONSTANTS[:resource_type]
         end
         return EC2_CONSTANTS[:resource_type]
 
       when Platform::GCE
         # set unspecified values if generic node or task is intended resource_type
-        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]
-          if !@node_id
-            @node_id = @vm_id
-          end
-          if !@location
-            @location = @zone
-          end
+        if @monitored_resource == GENERIC_NODE_CONSTANTS[:resource_type]
+          @node_id = @vm_id unless @node_id
+          @location = @zone unless @location
           return GENERIC_NODE_CONSTANTS[:resource_type]
         end
 
-        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]
-          if !@location
-            @location = @zone
-          end
+        if @monitored_resource == GENERIC_TASK_CONSTANTS[:resource_type]
+          @location = @zone unless @location
           return GENERIC_TASK_CONSTANTS[:resource_type]
         end
 

@@ -778,10 +778,10 @@ module Constants
     resource: {
       type: GENERIC_NODE_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_NODE_CONSTANTS[:location]}" => GENERIC_LOCATION,
-        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => GENERIC_NODE_NODE_ID,
-        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+	GENERIC_NODE_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_NODE_CONSTANTS[:location].to_s => GENERIC_LOCATION,
+	GENERIC_NODE_CONSTANTS[:node_id].to_s => GENERIC_NODE_NODE_ID,
+	GENERIC_NODE_CONSTANTS[:project_id].to_s => IAM_CREDENTIALS[:project_id]
       }
     },
     log_name: 'test',
@@ -790,14 +790,14 @@ module Constants
   }.freeze
 
   # Generic Node with project_id override
-  GENERIC_NODE_WITH_PROJECT_PARAMS= {
+  GENERIC_NODE_WITH_PROJECT_PARAMS = {
     resource: {
       type: GENERIC_NODE_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_NODE_CONSTANTS[:location]}" => GENERIC_LOCATION,
-        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => GENERIC_NODE_NODE_ID,
-        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => CUSTOM_PROJECT_ID
+	GENERIC_NODE_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_NODE_CONSTANTS[:location].to_s => GENERIC_LOCATION,
+	GENERIC_NODE_CONSTANTS[:node_id].to_s => GENERIC_NODE_NODE_ID,
+	GENERIC_NODE_CONSTANTS[:project_id].to_s => CUSTOM_PROJECT_ID
       }
     },
     log_name: 'test',
@@ -810,10 +810,10 @@ module Constants
     resource: {
       type: GENERIC_NODE_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_NODE_CONSTANTS[:location]}" => ZONE,
-        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => VM_ID,
-        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => PROJECT_ID
+	GENERIC_NODE_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_NODE_CONSTANTS[:location].to_s => ZONE,
+	GENERIC_NODE_CONSTANTS[:node_id].to_s => VM_ID,
+	GENERIC_NODE_CONSTANTS[:project_id].to_s => PROJECT_ID
       }
     },
     log_name: 'test',
@@ -827,10 +827,10 @@ module Constants
     resource: {
       type: GENERIC_NODE_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_NODE_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_NODE_CONSTANTS[:location]}" => EC2_PREFIXED_ZONE,
-        "#{GENERIC_NODE_CONSTANTS[:node_id]}" => EC2_VM_ID,
-        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+	GENERIC_NODE_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_NODE_CONSTANTS[:location].to_s => EC2_PREFIXED_ZONE,
+	GENERIC_NODE_CONSTANTS[:node_id].to_s => EC2_VM_ID,
+	GENERIC_NODE_CONSTANTS[:project_id].to_s => IAM_CREDENTIALS[:project_id]
       }
     },
     log_name: 'test',
@@ -843,11 +843,11 @@ module Constants
     resource: {
       type: GENERIC_TASK_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_TASK_CONSTANTS[:location]}" => GENERIC_LOCATION,
-        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
-        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
-        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+	GENERIC_TASK_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_TASK_CONSTANTS[:location].to_s => GENERIC_LOCATION,
+	GENERIC_TASK_CONSTANTS[:job].to_s => GENERIC_TASK_JOB,
+	GENERIC_TASK_CONSTANTS[:task_id].to_s => GENERIC_TASK_TASK_ID,
+	GENERIC_TASK_CONSTANTS[:project_id].to_s => IAM_CREDENTIALS[:project_id]
       }
     },
     log_name: 'test',
@@ -860,11 +860,11 @@ module Constants
     resource: {
       type: GENERIC_TASK_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_TASK_CONSTANTS[:location]}" => GENERIC_LOCATION,
-        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
-        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
-        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => CUSTOM_PROJECT_ID
+	GENERIC_TASK_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_TASK_CONSTANTS[:location].to_s => GENERIC_LOCATION,
+	GENERIC_TASK_CONSTANTS[:job].to_s => GENERIC_TASK_JOB,
+	GENERIC_TASK_CONSTANTS[:task_id].to_s => GENERIC_TASK_TASK_ID,
+	GENERIC_TASK_CONSTANTS[:project_id].to_s => CUSTOM_PROJECT_ID
       }
     },
     log_name: 'test',
@@ -877,11 +877,11 @@ module Constants
     resource: {
       type: GENERIC_TASK_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_TASK_CONSTANTS[:location]}" => ZONE,
-        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
-        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
-        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => PROJECT_ID
+	GENERIC_TASK_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_TASK_CONSTANTS[:location].to_s => ZONE,
+	GENERIC_TASK_CONSTANTS[:job].to_s => GENERIC_TASK_JOB,
+	GENERIC_TASK_CONSTANTS[:task_id].to_s => GENERIC_TASK_TASK_ID,
+	GENERIC_NODE_CONSTANTS[:project_id].to_s => PROJECT_ID
       }
     },
     log_name: 'test',
@@ -895,11 +895,11 @@ module Constants
     resource: {
       type: GENERIC_TASK_CONSTANTS[:resource_type],
       labels: {
-        "#{GENERIC_TASK_CONSTANTS[:namespace]}" => GENERIC_NAMESPACE,
-        "#{GENERIC_TASK_CONSTANTS[:location]}" => EC2_PREFIXED_ZONE,
-        "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
-        "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
-        "#{GENERIC_TASK_CONSTANTS[:project_id]}" => IAM_CREDENTIALS[:project_id]
+	GENERIC_TASK_CONSTANTS[:namespace].to_s => GENERIC_NAMESPACE,
+	GENERIC_TASK_CONSTANTS[:location].to_s => EC2_PREFIXED_ZONE,
+	GENERIC_TASK_CONSTANTS[:job].to_s => GENERIC_TASK_JOB,
+	GENERIC_TASK_CONSTANTS[:task_id].to_s => GENERIC_TASK_TASK_ID,
+	GENERIC_TASK_CONSTANTS[:project_id].to_s => IAM_CREDENTIALS[:project_id]
       }
     },
     log_name: 'test',
