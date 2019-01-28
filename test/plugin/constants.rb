@@ -418,14 +418,14 @@ module Constants
     namespace #{GENERIC_NAMESPACE}
     job #{GENERIC_TASK_JOB}
     task_id #{GENERIC_TASK_TASK_ID}
-    project_id #{CUSTOM_PROJECT_ID} 
+    project_id #{CUSTOM_PROJECT_ID}
   ).freeze
 
   GENERIC_TASK_CONFIG_DERIVED = %(
     monitored_resource #{GENERIC_TASK_MONITORED_RESOURCE}
     namespace #{GENERIC_NAMESPACE}
     job #{GENERIC_TASK_JOB}
-    task_id #{GENERIC_TASK_TASK_ID}   
+    task_id #{GENERIC_TASK_TASK_ID}
   ).freeze
 
   CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED = %(
@@ -871,7 +871,7 @@ module Constants
     project_id: CUSTOM_PROJECT_ID,
     labels: {}
   }.freeze
-  
+
   # Generic Task inferred vm_id, location, project_id from GCE metadata
   GENERIC_TASK_PARAMS_DERIVED_GCE = {
     resource: {
@@ -881,7 +881,7 @@ module Constants
         "#{GENERIC_TASK_CONSTANTS[:location]}" => ZONE,
         "#{GENERIC_TASK_CONSTANTS[:job]}" => GENERIC_TASK_JOB,
         "#{GENERIC_TASK_CONSTANTS[:task_id]}" => GENERIC_TASK_TASK_ID,
-        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => PROJECT_ID        
+        "#{GENERIC_NODE_CONSTANTS[:project_id]}" => PROJECT_ID
       }
     },
     log_name: 'test',

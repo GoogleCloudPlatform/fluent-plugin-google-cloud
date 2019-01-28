@@ -132,9 +132,9 @@ module Fluent
         location: 'location',
         namespace: 'namespace',
         job: 'job',
-        task_id: 'task_id'        
-      }.freeze      
-        
+        task_id: 'task_id'
+      }.freeze
+
       # The map between a subservice name and a resource type.
       SUBSERVICE_MAP =
         [APPENGINE_CONSTANTS, GKE_CONSTANTS, DATAFLOW_CONSTANTS,
@@ -1163,11 +1163,11 @@ module Fluent
         # Unknown platform will be defaulted to GCE instance unless generic
         # node or tasks are defined in the configuration.
 
-        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]         
+        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]
           return GENERIC_NODE_CONSTANTS[:resource_type]
         end
 
-        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]     
+        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]
           return GENERIC_TASK_CONSTANTS[:resource_type]
         end
 
@@ -1175,40 +1175,40 @@ module Fluent
 
       when Platform::EC2
         # set unspecified values if generic node or task is intended resource_type
-        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]          
+        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]
           if !@node_id
             @node_id = @vm_id
           end
           if !@location
             @location = @zone
-          end          
+          end
           return GENERIC_NODE_CONSTANTS[:resource_type]
         end
 
-        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]          
+        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]
           if !@location
             @location = @zone
-          end          
+          end
           return GENERIC_TASK_CONSTANTS[:resource_type]
-        end        
+        end
         return EC2_CONSTANTS[:resource_type]
 
       when Platform::GCE
         # set unspecified values if generic node or task is intended resource_type
-        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]          
+        if @monitored_resource  == GENERIC_NODE_CONSTANTS[:resource_type]
           if !@node_id
             @node_id = @vm_id
           end
           if !@location
             @location = @zone
-          end          
+          end
           return GENERIC_NODE_CONSTANTS[:resource_type]
         end
 
-        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]          
+        if @monitored_resource  == GENERIC_TASK_CONSTANTS[:resource_type]
           if !@location
             @location = @zone
-          end          
+          end
           return GENERIC_TASK_CONSTANTS[:resource_type]
         end
 
@@ -1299,7 +1299,7 @@ module Fluent
           GENERIC_TASK_CONSTANTS[:location] => @location,
           GENERIC_TASK_CONSTANTS[:namespace] => @namespace,
           GENERIC_TASK_CONSTANTS[:job] => @job,
-          GENERIC_TASK_CONSTANTS[:task_id] => @task_id          
+          GENERIC_TASK_CONSTANTS[:task_id] => @task_id
         }
 
       end

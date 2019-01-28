@@ -1242,7 +1242,7 @@ module BaseTest
     end
     verify_log_entries(1, DATAFLOW_PARAMS)
   end
-  
+
   # Test generic_node with namespace, location, node_id
   # without metadata server
   def test_generic_node_log
@@ -1270,32 +1270,32 @@ module BaseTest
   end
 
   # Test generic_node with namespace specified and node_id = @vm_id
-  # with GCE metadata server  
+  # with GCE metadata server
   def test_generic_node_derived_gce_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver(GENERIC_NODE_CONFIG_DERIVED)
       d.emit('message' => log_entry(0))
       d.run
-    end   
+    end
     verify_log_entries(1, GENERIC_NODE_PARAMS_DERIVED_GCE)
-  end  
+  end
 
   # Test generic_node with namespace specified and node_id = @vm_id
-  # with EC2 metadata server    
+  # with EC2 metadata server
   def test_generic_node_derived_ec2_log
     setup_ec2_metadata_stubs
-    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]    
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
     setup_logging_stubs do
       d = create_driver(GENERIC_NODE_CONFIG_DERIVED)
       d.emit('message' => log_entry(0))
       d.run
     end
     verify_log_entries(1, GENERIC_NODE_PARAMS_DERIVED_EC2)
-  end    
+  end
 
   # Test generic_task with namespace, location, node_id
-  # without metadata server  
+  # without metadata server
   def test_generic_task_log
     setup_no_metadata_service_stubs
     ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
@@ -1308,7 +1308,7 @@ module BaseTest
   end
 
   # Test generic_task with namespace, location, node_id
-  # and specified project_id override without metadata server  
+  # and specified project_id override without metadata server
   def test_generic_task_with_project_log
     setup_no_metadata_service_stubs
     ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
@@ -1321,7 +1321,7 @@ module BaseTest
   end
 
   # Test generic_task with namespace specified and node_id = @vm_id
-  # with GCE metadata server    
+  # with GCE metadata server
   def test_generic_task_derived_gce_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -1330,13 +1330,13 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, GENERIC_TASK_PARAMS_DERIVED_GCE)
-  end  
+  end
 
   # Test generic_task with namespace specified and node_id = @vm_id
-  # with EC2 metadata server      
-  def test_generic_task_derived_ec2_log    
+  # with EC2 metadata server
+  def test_generic_task_derived_ec2_log
     setup_ec2_metadata_stubs
-    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]    
+    ENV[CREDENTIALS_PATH_ENV_VAR] = IAM_CREDENTIALS[:path]
     setup_logging_stubs do
       d = create_driver(GENERIC_TASK_CONFIG_DERIVED)
       d.emit('message' => log_entry(0))
