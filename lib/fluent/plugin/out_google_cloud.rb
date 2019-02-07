@@ -95,6 +95,9 @@ module Fluent
       K8S_CONTAINER_CONSTANTS = {
         resource_type: 'k8s_container'
       }.freeze
+      K8S_POD_CONSTANTS = {
+        resource_type: 'k8s_pod'
+      }.freeze
       K8S_NODE_CONSTANTS = {
         resource_type: 'k8s_node'
       }.freeze
@@ -1366,6 +1369,7 @@ module Fluent
       # TODO(qingling128): Temporary fallback for metadata agent restarts.
       # K8s resources.
       when K8S_CONTAINER_CONSTANTS[:resource_type],
+           K8S_POD_CONSTANTS[:resource_type],
            K8S_NODE_CONSTANTS[:resource_type]
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
 
@@ -2261,6 +2265,10 @@ module Fluent
           \.(?<pod_name>[.0-9a-z-]+)
           \.(?<container_name>[0-9a-z-]+)$/x =~ local_resource_id ||
         /^
+          (?<resource_type>k8s_pod)
+          \.(?<namespace_name>[0-9a-z-]+)
+          \.(?<pod_name>[.0-9a-z-]+)$/x =~ local_resource_id ||
+        /^
           (?<resource_type>k8s_node)
           \.(?<node_name>[0-9a-z-]+)$/x =~ local_resource_id
 
@@ -2283,6 +2291,14 @@ module Fluent
           'namespace_name' => namespace_name,
           'pod_name' => pod_name,
           'container_name' => container_name,
+          'cluster_name' => @k8s_cluster_name,
+          'location' => @k8s_cluster_location
+        }
+        fallback_resource = GKE_CONSTANTS[:resource_type]
+      when K8S_POD_CONSTANTS[:resource_type]
+        labels = {
+          'namespace_name' => namespace_name,
+          'pod_name' => pod_name,
           'cluster_name' => @k8s_cluster_name,
           'location' => @k8s_cluster_location
         }
