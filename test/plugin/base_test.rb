@@ -1648,6 +1648,66 @@ module BaseTest
     end
   end
 
+  # Test k8s_pod monitored resource including the fallback when Metadata Agent
+  # restarts.
+  def test_k8s_pod_monitored_resource_fallback
+    [
+      {
+        config: APPLICATION_DEFAULT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_pod_log_entry(log_entry(0)),
+        expected_params: K8S_POD_PARAMS_FROM_LOCAL
+      },
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: true,
+        log_entry: k8s_pod_log_entry(log_entry(0)),
+        expected_params: K8S_POD_PARAMS_FROM_LOCAL
+      },
+      {
+        config: CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: false,
+        setup_k8s_stub: false,
+        log_entry: k8s_pod_log_entry(log_entry(0)),
+        expected_params: K8S_POD_PARAMS_CUSTOM
+      },
+      {
+        config: EMPTY_K8S_ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_pod_log_entry(log_entry(0)),
+        expected_params: K8S_POD_PARAMS
+      },
+      {
+        config: ENABLE_METADATA_AGENT_CONFIG,
+        setup_metadata_agent_stub: true,
+        setup_k8s_stub: true,
+        log_entry: k8s_pod_log_entry(log_entry(0)),
+        expected_params: K8S_POD_PARAMS
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
+        setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
+        setup_logging_stubs do
+          d = create_driver(test_params[:config])
+          d.emit(test_params[:log_entry])
+          d.run
+        end
+        verify_log_entries(1, test_params[:expected_params],
+                           'jsonPayload') do |entry|
+          fields = get_fields(entry['jsonPayload'])
+          assert_equal 2, fields.size, entry
+          assert_equal 'test log entry 0', get_string(fields['log']), entry
+          assert_equal K8S_STREAM, get_string(fields['stream']), entry
+        end
+      end
+    end
+  end
+
   # Test k8s_node monitored resource including the fallback when Metadata Agent
   # restarts.
   def test_k8s_node_monitored_resource_fallback
@@ -2020,6 +2080,18 @@ module BaseTest
       stream: K8S_STREAM,
       time: K8S_TIMESTAMP,
       LOCAL_RESOURCE_ID_KEY => local_resource_id
+    }
+  end
+
+  def k8s_pod_log_entry(log)
+    {
+      log: log,
+      stream: K8S_STREAM,
+      time: K8S_TIMESTAMP,
+      LOCAL_RESOURCE_ID_KEY =>
+        "#{K8S_POD_LOCAL_RESOURCE_ID_PREFIX}" \
+        ".#{K8S_NAMESPACE_NAME}" \
+        ".#{K8S_POD_NAME}"
     }
   end
 

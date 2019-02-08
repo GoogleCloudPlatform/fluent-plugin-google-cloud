@@ -156,6 +156,7 @@ module Constants
   K8S_SECONDS_EPOCH = 1_234_567_890
   K8S_NANOS = 987_654_321
   K8S_CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'k8s_container'.freeze
+  K8S_POD_LOCAL_RESOURCE_ID_PREFIX = 'k8s_pod'.freeze
   K8S_NODE_LOCAL_RESOURCE_ID_PREFIX = 'k8s_node'.freeze
   K8S_TAG =
     "var.log.containers.#{K8S_NAMESPACE_NAME}_#{K8S_POD_NAME}_" \
@@ -543,6 +544,36 @@ module Constants
     log_name: CONTAINER_TAG
   ).freeze
 
+  # K8s Pod.
+  K8S_POD_PARAMS = {
+    resource: {
+      type: K8S_POD_CONSTANTS[:resource_type],
+      labels: {
+        'namespace_name' => K8S_NAMESPACE_NAME,
+        'pod_name' => K8S_POD_NAME,
+        'cluster_name' => K8S_CLUSTER_NAME,
+        'location' => K8S_LOCATION
+      }
+    },
+    project_id: PROJECT_ID,
+    labels: {}
+  }.freeze
+  K8S_POD_PARAMS_FROM_LOCAL = K8S_POD_PARAMS.merge(
+    resource: K8S_POD_PARAMS[:resource].merge(
+      labels: K8S_POD_PARAMS[:resource][:labels].merge(
+        'location' => K8S_LOCATION2
+      )
+    )
+  ).freeze
+  K8S_POD_PARAMS_CUSTOM = K8S_POD_PARAMS.merge(
+    resource: K8S_POD_PARAMS[:resource].merge(
+      labels: K8S_POD_PARAMS[:resource][:labels].merge(
+        'cluster_name' => CUSTOM_K8S_CLUSTER_NAME,
+        'location' => CUSTOM_K8S_LOCATION
+      )
+    )
+  ).freeze
+
   # K8s Node.
   K8S_NODE_PARAMS = {
     resource: {
@@ -854,6 +885,18 @@ module Constants
           'namespace_name' => K8S_NAMESPACE_NAME,
           'pod_name' => K8S_POD_NAME,
           'container_name' => K8S_CONTAINER_NAME,
+          'cluster_name' => K8S_CLUSTER_NAME,
+          'location' => K8S_LOCATION
+        }
+      }.to_json,
+    # K8s pod logs.
+    "#{K8S_POD_LOCAL_RESOURCE_ID_PREFIX}.#{K8S_NAMESPACE_NAME}" \
+    ".#{K8S_POD_NAME}" =>
+      {
+        'type' => K8S_POD_CONSTANTS[:resource_type],
+        'labels' => {
+          'namespace_name' => K8S_NAMESPACE_NAME,
+          'pod_name' => K8S_POD_NAME,
           'cluster_name' => K8S_CLUSTER_NAME,
           'location' => K8S_LOCATION
         }
