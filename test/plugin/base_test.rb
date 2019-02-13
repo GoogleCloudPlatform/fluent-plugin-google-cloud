@@ -1249,12 +1249,12 @@ module BaseTest
     verify_subfields_from_record(DEFAULT_HTTP_REQUEST_KEY)
   end
 
-  def test_log_entry_source_location_field_from_record
-    verify_subfields_from_record(DEFAULT_SOURCE_LOCATION_KEY)
-  end
-
   def test_log_entry_operation_field_from_record
     verify_subfields_from_record(DEFAULT_OPERATION_KEY)
+  end
+
+  def test_log_entry_source_location_field_from_record
+    verify_subfields_from_record(DEFAULT_SOURCE_LOCATION_KEY)
   end
 
   # Verify the subfields extraction of LogEntry fields when there are other
@@ -1264,12 +1264,12 @@ module BaseTest
     verify_subfields_partial_from_record(DEFAULT_HTTP_REQUEST_KEY)
   end
 
-  def test_log_entry_source_location_field_partial_from_record
-    verify_subfields_partial_from_record(DEFAULT_SOURCE_LOCATION_KEY)
-  end
-
   def test_log_entry_operation_field_partial_from_record
     verify_subfields_partial_from_record(DEFAULT_OPERATION_KEY)
+  end
+
+  def test_log_entry_source_location_field_partial_from_record
+    verify_subfields_partial_from_record(DEFAULT_SOURCE_LOCATION_KEY)
   end
 
   # Verify the subfields extraction of LogEntry fields when they are not hashes.
@@ -1278,12 +1278,12 @@ module BaseTest
     verify_subfields_when_not_hash(DEFAULT_HTTP_REQUEST_KEY)
   end
 
-  def test_log_entry_source_location_field_when_not_hash
-    verify_subfields_when_not_hash(DEFAULT_SOURCE_LOCATION_KEY)
-  end
-
   def test_log_entry_operation_field_when_not_hash
     verify_subfields_when_not_hash(DEFAULT_OPERATION_KEY)
+  end
+
+  def test_log_entry_source_location_field_when_not_hash
+    verify_subfields_when_not_hash(DEFAULT_SOURCE_LOCATION_KEY)
   end
 
   # Verify the subfields extraction of LogEntry fields when they are nil.
@@ -1292,12 +1292,12 @@ module BaseTest
     verify_subfields_when_nil(DEFAULT_HTTP_REQUEST_KEY)
   end
 
-  def test_log_entry_source_location_field_when_nil
-    verify_subfields_when_nil(DEFAULT_SOURCE_LOCATION_KEY)
-  end
-
   def test_log_entry_operation_field_when_nil
     verify_subfields_when_nil(DEFAULT_OPERATION_KEY)
+  end
+
+  def test_log_entry_source_location_field_when_nil
+    verify_subfields_when_nil(DEFAULT_SOURCE_LOCATION_KEY)
   end
 
   def test_http_request_from_record_with_referer_nil_or_absent
@@ -2242,10 +2242,10 @@ module BaseTest
       # the subfield in LogEntry object and the expected value of that field.
       DEFAULT_HTTP_REQUEST_KEY => [
         'httpRequest', http_request_message],
-      DEFAULT_SOURCE_LOCATION_KEY => [
-        'sourceLocation', source_location_message],
       DEFAULT_OPERATION_KEY => [
-        'operation', OPERATION_MESSAGE]
+        'operation', OPERATION_MESSAGE],
+      DEFAULT_SOURCE_LOCATION_KEY => [
+        'sourceLocation', source_location_message]
     }
   end
 

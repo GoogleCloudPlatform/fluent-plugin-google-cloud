@@ -146,12 +146,12 @@ module Fluent
       # Default values for JSON payload keys to set the "httpRequest",
       # "operation", "sourceLocation", "trace" fields in the LogEntry.
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'.freeze
+      DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
       DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'.freeze
       DEFAULT_SOURCE_LOCATION_KEY =
         'logging.googleapis.com/sourceLocation'.freeze
-      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
       DEFAULT_SPAN_ID_KEY = 'logging.googleapis.com/spanId'.freeze
-      DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
+      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
@@ -204,16 +204,6 @@ module Fluent
           # The non-grpc version class name.
           'Google::Apis::LoggingV2::HttpRequest'
         ],
-        'source_location' => [
-          '@source_location_key',
-          [
-            %w(file file parse_string),
-            %w(function function parse_string),
-            %w(line line parse_int)
-          ],
-          'Google::Logging::V2::LogEntrySourceLocation',
-          'Google::Apis::LoggingV2::LogEntrySourceLocation'
-        ],
         'operation' => [
           '@operation_key',
           [
@@ -224,6 +214,16 @@ module Fluent
           ],
           'Google::Logging::V2::LogEntryOperation',
           'Google::Apis::LoggingV2::LogEntryOperation'
+        ],
+        'source_location' => [
+          '@source_location_key',
+          [
+            %w(file file parse_string),
+            %w(function function parse_string),
+            %w(line line parse_int)
+          ],
+          'Google::Logging::V2::LogEntrySourceLocation',
+          'Google::Apis::LoggingV2::LogEntrySourceLocation'
         ]
       }.freeze
 
@@ -298,12 +298,12 @@ module Fluent
     # Map keys from a JSON payload to corresponding LogEntry fields.
     config_param :http_request_key, :string, :default =>
       DEFAULT_HTTP_REQUEST_KEY
+    config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
     config_param :operation_key, :string, :default => DEFAULT_OPERATION_KEY
     config_param :source_location_key, :string, :default =>
       DEFAULT_SOURCE_LOCATION_KEY
-    config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
     config_param :span_id_key, :string, :default => DEFAULT_SPAN_ID_KEY
-    config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
+    config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
 
     # Whether to try to detect if the record is a text log entry with JSON
     # content that needs to be parsed.
