@@ -626,7 +626,9 @@ module BaseTest
       end
       d.run
     end
-    verify_log_entries(3, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+    expected_params = COMPUTE_PARAMS.merge(
+      labels: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE))
+    verify_log_entries(3, expected_params, 'jsonPayload') do |entry|
       fields = get_fields(entry['jsonPayload'])
       assert_equal 4, fields.size, entry
       assert_equal 'test log entry 0', get_string(fields['msg']), entry
@@ -1249,6 +1251,10 @@ module BaseTest
     verify_subfields_from_record(DEFAULT_HTTP_REQUEST_KEY)
   end
 
+  def test_log_entry_labels_field_from_record
+    verify_subfields_from_record(DEFAULT_LABELS_KEY)
+  end
+
   def test_log_entry_operation_field_from_record
     verify_subfields_from_record(DEFAULT_OPERATION_KEY)
   end
@@ -1264,6 +1270,10 @@ module BaseTest
     verify_subfields_partial_from_record(DEFAULT_HTTP_REQUEST_KEY)
   end
 
+  # Skip labels for verify_subfields_partial_from_record because labels are free
+  # range strings. Everything in the labels field should be in the resulting
+  # logEntry->labels field.
+
   def test_log_entry_operation_field_partial_from_record
     verify_subfields_partial_from_record(DEFAULT_OPERATION_KEY)
   end
@@ -1278,6 +1288,10 @@ module BaseTest
     verify_subfields_when_not_hash(DEFAULT_HTTP_REQUEST_KEY)
   end
 
+  def test_log_entry_labels_field_when_not_hash
+    verify_subfields_when_not_hash(DEFAULT_LABELS_KEY)
+  end
+
   def test_log_entry_operation_field_when_not_hash
     verify_subfields_when_not_hash(DEFAULT_OPERATION_KEY)
   end
@@ -1290,6 +1304,10 @@ module BaseTest
 
   def test_log_entry_http_request_field_when_nil
     verify_subfields_when_nil(DEFAULT_HTTP_REQUEST_KEY)
+  end
+
+  def test_log_entry_labels_field_when_nil
+    verify_subfields_when_nil(DEFAULT_LABELS_KEY)
   end
 
   def test_log_entry_operation_field_when_nil
@@ -1364,6 +1382,11 @@ module BaseTest
                      CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED, INSERT_ID)
   end
 
+  def test_log_entry_labels_field
+    verify_field_key('labels', DEFAULT_LABELS_KEY, 'custom_labels_key',
+                     CONFIG_CUSTOM_LABELS_KEY_SPECIFIED, LABELS_MESSAGE)
+  end
+
   def test_log_entry_operation_field
     verify_field_key('operation', DEFAULT_OPERATION_KEY, 'custom_operation_key',
                      CONFIG_CUSTOM_OPERATION_KEY_SPECIFIED, OPERATION_MESSAGE)
@@ -1395,6 +1418,13 @@ module BaseTest
       nested_level_value: INSERT_ID2)
   end
 
+  def test_cascading_json_detection_with_log_entry_labels_field
+    verify_cascading_json_detection_with_log_entry_fields(
+      'labels', DEFAULT_LABELS_KEY,
+      root_level_value: LABELS_MESSAGE,
+      nested_level_value: LABELS_MESSAGE2)
+  end
+
   def test_cascading_json_detection_with_log_entry_operation_field
     verify_cascading_json_detection_with_log_entry_fields(
       'operation', DEFAULT_OPERATION_KEY,
@@ -1422,6 +1452,81 @@ module BaseTest
       'trace', DEFAULT_TRACE_KEY,
       root_level_value: TRACE,
       nested_level_value: TRACE2)
+  end
+
+  # Expected order.
+  # 1. Labels from the field "logging.googleapis.com/labels" in payload.
+  # 2. Labels from the config "label_map".
+  # 3. Labels from the config "labels".
+  def test_labels_order
+    [
+      # Labels from the config "labels".
+      {
+        config: CONFIG_LABELS,
+        emitted_log: {},
+        expected_labels: LABELS_FROM_LABELS_CONFIG
+      },
+      # Labels from the config "label_map".
+      {
+        config: CONFIG_LABEL_MAP,
+        emitted_log: PAYLOAD_FOR_LABEL_MAP,
+        expected_labels: LABELS_FROM_LABEL_MAP_CONFIG
+      },
+      # Labels from the field "logging.googleapis.com/labels" in payload.
+      {
+        config: APPLICATION_DEFAULT_CONFIG,
+        emitted_log: { DEFAULT_LABELS_KEY => LABELS_MESSAGE },
+        expected_labels: LABELS_MESSAGE
+      },
+      # All three types of labels that do not conflict.
+      {
+        config: CONFIG_LABLES_AND_LABLE_MAP,
+        emitted_log: PAYLOAD_FOR_LABEL_MAP.merge(
+          DEFAULT_LABELS_KEY => LABELS_MESSAGE),
+        expected_labels: LABELS_MESSAGE.merge(LABELS_FROM_LABELS_CONFIG).merge(
+          LABELS_FROM_LABEL_MAP_CONFIG)
+      },
+      # labels from the config "labels" and "label_map" conflict.
+      {
+        config: CONFIG_LABLES_AND_LABLE_MAP_CONFLICTING,
+        emitted_log: PAYLOAD_FOR_LABEL_MAP_CONFLICTING,
+        expected_labels: LABELS_FROM_LABEL_MAP_CONFIG_CONFLICTING
+      },
+      # labels from the config "labels" and labels from the field
+      # "logging.googleapis.com/labels" in payload conflict.
+      {
+        config: CONFIG_LABELS_CONFLICTING,
+        emitted_log: { DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING },
+        expected_labels: LABELS_FROM_PAYLOAD_CONFLICTING
+      },
+      # labels from the config "label_map" and labels from the field
+      # "logging.googleapis.com/labels" in payload conflict.
+      {
+        config: CONFIG_LABEL_MAP_CONFLICTING,
+        emitted_log: PAYLOAD_FOR_LABEL_MAP_CONFLICTING.merge(
+          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING),
+        expected_labels: LABELS_FROM_PAYLOAD_CONFLICTING
+      },
+      # All three types of labels conflict.
+      {
+        config: CONFIG_LABLES_AND_LABLE_MAP_CONFLICTING,
+        emitted_log: PAYLOAD_FOR_LABEL_MAP_CONFLICTING.merge(
+          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING),
+        expected_labels: LABELS_FROM_PAYLOAD_CONFLICTING
+      }
+    ].each do |test_params|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(test_params[:config])
+          d.emit({ 'message' => log_entry(0) }.merge(test_params[:emitted_log]))
+          d.run
+        end
+        expected_params = COMPUTE_PARAMS.merge(
+          labels: COMPUTE_PARAMS[:labels].merge(test_params[:expected_labels]))
+        verify_log_entries(1, expected_params)
+      end
+    end
   end
 
   # Metadata Agent related tests.
@@ -2242,6 +2347,8 @@ module BaseTest
       # the subfield in LogEntry object and the expected value of that field.
       DEFAULT_HTTP_REQUEST_KEY => [
         'httpRequest', http_request_message],
+      DEFAULT_LABELS_KEY => [
+        'labels', LABELS_MESSAGE],
       DEFAULT_OPERATION_KEY => [
         'operation', OPERATION_MESSAGE],
       DEFAULT_SOURCE_LOCATION_KEY => [
@@ -2258,7 +2365,12 @@ module BaseTest
       d.emit(payload_key => payload_value)
       d.run
     end
-    verify_log_entries(1, COMPUTE_PARAMS, destination_key) do |entry|
+    expected_params = COMPUTE_PARAMS.dup
+    if payload_key == DEFAULT_LABELS_KEY
+      payload_value = payload_value.merge(COMPUTE_PARAMS[:labels])
+      expected_params[:labels] = payload_value
+    end
+    verify_log_entries(1, expected_params, destination_key) do |entry|
       assert_equal payload_value, entry[destination_key], entry
       fields = get_fields(entry['jsonPayload'])
       assert_nil fields[payload_key], entry
@@ -2292,9 +2404,22 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      field = get_fields(entry['jsonPayload'])[payload_key]
-      assert_equal 'a_string', get_string(field), entry
-      assert_false entry.key?(destination_key), entry
+      if payload_key == DEFAULT_LABELS_KEY
+        # The malformed field has been removed from the payload.
+        assert_true get_fields(entry['jsonPayload']).empty?, entry
+        # No additional labels.
+        assert_equal COMPUTE_PARAMS[:labels].size,
+                     entry[destination_key].size, entry
+      else
+        # Leave the malformed field as it is.
+        # TODO(qingling128) In the next breaking change release, make the older
+        # fields behave the same way: if the field is not a hash as expected,
+        # log an error in the Fluentd log and remove this field from payload.
+        # This is the preferred behavior per PM decision.
+        field = get_fields(entry['jsonPayload'])[payload_key]
+        assert_equal 'a_string', get_string(field), entry
+        assert_false entry.key?(destination_key), entry
+      end
     end
   end
 
@@ -2311,7 +2436,13 @@ module BaseTest
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       fields = get_fields(entry['jsonPayload'])
       assert_false fields.key?(payload_key), entry
-      assert_false entry.key?(destination_key), entry
+      if payload_key == DEFAULT_LABELS_KEY
+        # No additional labels.
+        assert_equal COMPUTE_PARAMS[:labels].size,
+                     entry[destination_key].size, entry
+      else
+        assert_false entry.key?(destination_key), entry
+      end
     end
   end
 
@@ -2374,7 +2505,12 @@ module BaseTest
         d.emit(input_log_entry)
         d.run
       end
-      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      expected_params = COMPUTE_PARAMS.dup
+      if log_entry_field == 'labels'
+        expected_value = expected_value.merge(COMPUTE_PARAMS[:labels])
+        expected_params[:labels] = expected_value
+      end
+      verify_log_entries(1, expected_params, 'jsonPayload') do |entry|
         assert_equal expected_value, entry[log_entry_field],
                      "Index #{index} failed. #{expected_value} is expected" \
                      " for #{log_entry_field} field."
@@ -2427,7 +2563,13 @@ module BaseTest
         d.emit(input[:emitted_log])
         d.run
       end
-      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      expected_params = COMPUTE_PARAMS.dup
+      if log_entry_field == 'labels'
+        input[:expected_field_value] = COMPUTE_PARAMS[:labels].merge(
+          input[:expected_field_value] || {})
+        expected_params[:labels] = input[:expected_field_value]
+      end
+      verify_log_entries(1, expected_params, 'jsonPayload') do |entry|
         assert_equal input[:expected_field_value], entry[log_entry_field], input
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal input[:expected_payload].size, payload_fields.size, input

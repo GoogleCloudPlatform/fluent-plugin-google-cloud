@@ -147,6 +147,7 @@ module Fluent
       # "operation", "sourceLocation", "trace" fields in the LogEntry.
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'.freeze
       DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
+      DEFAULT_LABELS_KEY = 'logging.googleapis.com/labels'.freeze
       DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'.freeze
       DEFAULT_SOURCE_LOCATION_KEY =
         'logging.googleapis.com/sourceLocation'.freeze
@@ -299,6 +300,7 @@ module Fluent
     config_param :http_request_key, :string, :default =>
       DEFAULT_HTTP_REQUEST_KEY
     config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
+    config_param :labels_key, :string, :default => DEFAULT_LABELS_KEY
     config_param :operation_key, :string, :default => DEFAULT_OPERATION_KEY
     config_param :source_location_key, :string, :default =>
       DEFAULT_SOURCE_LOCATION_KEY
@@ -620,6 +622,7 @@ module Fluent
               'severity',
               @http_request_key,
               @insert_id_key,
+              @labels_key,
               @operation_key,
               @source_location_key,
               @span_id_key,
@@ -652,6 +655,11 @@ module Fluent
             entry_level_resource.type, record, time)
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
+
+          dynamic_labels_from_payload = parse_labels(record)
+
+          entry_level_common_labels = entry_level_common_labels.merge!(
+            dynamic_labels_from_payload) if dynamic_labels_from_payload
 
           entry = @construct_log_entry.call(entry_level_common_labels,
                                             entry_level_resource,
@@ -1730,6 +1738,29 @@ module Fluent
           @log.error "Failed to set log entry field for #{field_name}.", err
         end
       end
+    end
+
+    # Parse labels. Return nil if not set.
+    def parse_labels(record)
+      payload_value = record.delete(@labels_key)
+      unless payload_value.is_a?(Hash)
+        @log.error 'Failed to set log entry field for labels. Labels need ' \
+                   'to be a hash where both keys and values are strings.' \
+                   "\nValue: #{payload_value}."
+        return nil
+      end
+      payload_value.each do |k, v|
+        next if k.is_a?(String) && v.is_a?(String)
+        @log.error 'Failed to set log entry field for labels. Labels need ' \
+                     'to be a hash where both keys and values are strings.' \
+                     "\nValue: #{payload_value}."
+        return nil
+      end
+      payload_value
+    rescue StandardError => err
+      @log.error 'Failed to set log entry field for labels.' \
+                 "\nValue: #{payload_value}", err
+      return nil
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
