@@ -1271,7 +1271,7 @@ module BaseTest
   end
 
   # We don't need a test like 'test_log_entry_labels_field_partial_from_record'
-  # becasue labels are free range strings. Everything in the labels field should
+  # because labels are free range strings. Everything in the labels field should
   # be in the resulting logEntry->labels field. There is no need to check
   # partial transformation (aka, some 'labels' fields are extracted, while
   # others are left as it is).

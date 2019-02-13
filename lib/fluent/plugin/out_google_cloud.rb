@@ -1745,13 +1745,13 @@ module Fluent
       payload_labels = record.delete(@labels_key)
       unless payload_labels.is_a?(Hash)
         @log.error "Invalid value of '#{@labels_key}' in the payload: " \
-                   "#{payload_labels}. Labels need to be a JSON object.", err
+                   "#{payload_labels}. Labels need to be a JSON object."
         return nil
       end
       payload_labels.each do |k, v|
         next if k.is_a?(String) && v.is_a?(String)
-        @log.error "Invalid value of '#{@labels_key}' in the payload. " \
-                   "#{payload_labels}. Labels need to have string values.", err
+        @log.error "Invalid value of '#{@labels_key}' in the payload: " \
+                   "#{payload_labels}. Labels need to have string values."
         return nil
       end
       payload_labels
