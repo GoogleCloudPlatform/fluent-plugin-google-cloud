@@ -1742,24 +1742,21 @@ module Fluent
 
     # Parse labels. Return nil if not set.
     def parse_labels(record)
-      payload_value = record.delete(@labels_key)
-      unless payload_value.is_a?(Hash)
-        @log.error 'Failed to set log entry field for labels. Labels need ' \
-                   'to be a hash where both keys and values are strings.' \
-                   "\nValue: #{payload_value}."
+      payload_labels = record.delete(@labels_key)
+      unless payload_labels.is_a?(Hash)
+        @log.error "Invalid value of '#{@labels_key}' in the payload: " \
+                   "#{payload_labels}. Labels need to be a JSON object.", err
         return nil
       end
-      payload_value.each do |k, v|
+      payload_labels.each do |k, v|
         next if k.is_a?(String) && v.is_a?(String)
-        @log.error 'Failed to set log entry field for labels. Labels need ' \
-                     'to be a hash where both keys and values are strings.' \
-                     "\nValue: #{payload_value}."
+        @log.error "Invalid value of '#{@labels_key}' in the payload. " \
+                   "#{payload_labels}. Labels need to have string values.", err
         return nil
       end
-      payload_value
+      payload_labels
     rescue StandardError => err
-      @log.error 'Failed to set log entry field for labels.' \
-                 "\nValue: #{payload_value}", err
+      @log.error "Failed to extract '#{@labels_key}' from payload.", err
       return nil
     end
 

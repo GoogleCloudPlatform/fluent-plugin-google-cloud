@@ -1270,9 +1270,11 @@ module BaseTest
     verify_subfields_partial_from_record(DEFAULT_HTTP_REQUEST_KEY)
   end
 
-  # Skip labels for verify_subfields_partial_from_record because labels are free
-  # range strings. Everything in the labels field should be in the resulting
-  # logEntry->labels field.
+  # We don't need a test like 'test_log_entry_labels_field_partial_from_record'
+  # becasue labels are free range strings. Everything in the labels field should
+  # be in the resulting logEntry->labels field. There is no need to check
+  # partial transformation (aka, some 'labels' fields are extracted, while
+  # others are left as it is).
 
   def test_log_entry_operation_field_partial_from_record
     verify_subfields_partial_from_record(DEFAULT_OPERATION_KEY)
@@ -2508,7 +2510,7 @@ module BaseTest
       end
       expected_params = COMPUTE_PARAMS.dup
       if log_entry_field == 'labels'
-        expected_value = expected_value.merge(COMPUTE_PARAMS[:labels])
+        expected_value = COMPUTE_PARAMS[:labels].merge(expected_value)
         expected_params[:labels] = expected_value
       end
       verify_log_entries(1, expected_params, 'jsonPayload') do |entry|
