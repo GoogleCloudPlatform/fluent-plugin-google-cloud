@@ -1454,7 +1454,8 @@ module BaseTest
       nested_level_value: TRACE2)
   end
 
-  # Expected order.
+  # Verify that labels present in multiple inputs respect the expected priority
+  # order:
   # 1. Labels from the field "logging.googleapis.com/labels" in payload.
   # 2. Labels from the config "label_map".
   # 3. Labels from the config "labels".
@@ -2412,10 +2413,10 @@ module BaseTest
                      entry[destination_key].size, entry
       else
         # Leave the malformed field as it is.
-        # TODO(qingling128) In the next breaking change release, make the older
-        # fields behave the same way: if the field is not a hash as expected,
-        # log an error in the Fluentd log and remove this field from payload.
-        # This is the preferred behavior per PM decision.
+        # TODO(qingling128) On the next major after 0.7.4, make the rest of
+        # logEntry subfields behave the same way: if the field is not a hash as
+        # expected, log an error in the Fluentd log and remove this field from
+        # payload. This is the preferred behavior per PM decision.
         field = get_fields(entry['jsonPayload'])[payload_key]
         assert_equal 'a_string', get_string(field), entry
         assert_false entry.key?(destination_key), entry
