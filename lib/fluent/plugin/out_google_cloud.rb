@@ -1181,6 +1181,8 @@ module Fluent
 
       # GCE.
       when COMPUTE_CONSTANTS[:resource_type]
+        raise "Cannot construct a #{type} resource without vm_id and zone" \
+          unless @vm_id and @zone
         return {
           'instance_id' => @vm_id,
           'zone' => @zone
@@ -1188,6 +1190,8 @@ module Fluent
 
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
+        raise "Cannot construct a #{type} resource without vm_id and zone" \
+          unless @vm_id and @zone
         return {
           'instance_id' => @vm_id,
           'zone' => @zone,
@@ -1208,6 +1212,8 @@ module Fluent
 
       # EC2.
       when EC2_CONSTANTS[:resource_type]
+        raise "Cannot construct a #{type} resource without vm_id and zone" \
+          unless @vm_id and @zone
         labels = {
           'instance_id' => @vm_id,
           'region' => @zone
