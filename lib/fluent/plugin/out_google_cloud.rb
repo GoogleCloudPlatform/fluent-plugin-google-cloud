@@ -1743,6 +1743,7 @@ module Fluent
     # Parse labels. Return nil if not set.
     def parse_labels(record)
       payload_labels = record.delete(@labels_key)
+      return nil unless payload_labels
       unless payload_labels.is_a?(Hash)
         @log.error "Invalid value of '#{@labels_key}' in the payload: " \
                    "#{payload_labels}. Labels need to be a JSON object."
