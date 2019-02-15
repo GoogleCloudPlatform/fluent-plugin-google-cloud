@@ -146,12 +146,13 @@ module Fluent
       # Default values for JSON payload keys to set the "httpRequest",
       # "operation", "sourceLocation", "trace" fields in the LogEntry.
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'.freeze
+      DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
+      DEFAULT_LABELS_KEY = 'logging.googleapis.com/labels'.freeze
       DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'.freeze
       DEFAULT_SOURCE_LOCATION_KEY =
         'logging.googleapis.com/sourceLocation'.freeze
-      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
       DEFAULT_SPAN_ID_KEY = 'logging.googleapis.com/spanId'.freeze
-      DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
+      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
@@ -204,16 +205,6 @@ module Fluent
           # The non-grpc version class name.
           'Google::Apis::LoggingV2::HttpRequest'
         ],
-        'source_location' => [
-          '@source_location_key',
-          [
-            %w(file file parse_string),
-            %w(function function parse_string),
-            %w(line line parse_int)
-          ],
-          'Google::Logging::V2::LogEntrySourceLocation',
-          'Google::Apis::LoggingV2::LogEntrySourceLocation'
-        ],
         'operation' => [
           '@operation_key',
           [
@@ -224,6 +215,16 @@ module Fluent
           ],
           'Google::Logging::V2::LogEntryOperation',
           'Google::Apis::LoggingV2::LogEntryOperation'
+        ],
+        'source_location' => [
+          '@source_location_key',
+          [
+            %w(file file parse_string),
+            %w(function function parse_string),
+            %w(line line parse_int)
+          ],
+          'Google::Logging::V2::LogEntrySourceLocation',
+          'Google::Apis::LoggingV2::LogEntrySourceLocation'
         ]
       }.freeze
 
@@ -298,12 +299,13 @@ module Fluent
     # Map keys from a JSON payload to corresponding LogEntry fields.
     config_param :http_request_key, :string, :default =>
       DEFAULT_HTTP_REQUEST_KEY
+    config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
+    config_param :labels_key, :string, :default => DEFAULT_LABELS_KEY
     config_param :operation_key, :string, :default => DEFAULT_OPERATION_KEY
     config_param :source_location_key, :string, :default =>
       DEFAULT_SOURCE_LOCATION_KEY
-    config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
     config_param :span_id_key, :string, :default => DEFAULT_SPAN_ID_KEY
-    config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
+    config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
 
     # Whether to try to detect if the record is a text log entry with JSON
     # content that needs to be parsed.
@@ -620,6 +622,7 @@ module Fluent
               'severity',
               @http_request_key,
               @insert_id_key,
+              @labels_key,
               @operation_key,
               @source_location_key,
               @span_id_key,
@@ -652,6 +655,11 @@ module Fluent
             entry_level_resource.type, record, time)
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
+
+          dynamic_labels_from_payload = parse_labels(record)
+
+          entry_level_common_labels = entry_level_common_labels.merge!(
+            dynamic_labels_from_payload) if dynamic_labels_from_payload
 
           entry = @construct_log_entry.call(entry_level_common_labels,
                                             entry_level_resource,
@@ -1695,6 +1703,10 @@ module Fluent
     end
 
     def set_log_entry_fields(record, entry)
+      # TODO(qingling128) On the next major after 0.7.4, make all logEntry
+      # subfields behave the same way: if the field is not in the correct
+      # format, log an error in the Fluentd log and remove this field from
+      # payload. This is the preferred behavior per PM decision.
       LOG_ENTRY_FIELDS_MAP.each do |field_name, config|
         payload_key, subfields, grpc_class, non_grpc_class = config
         begin
@@ -1736,6 +1748,31 @@ module Fluent
           @log.error "Failed to set log entry field for #{field_name}.", err
         end
       end
+    end
+
+    # Parse labels. Return nil if not set.
+    def parse_labels(record)
+      payload_labels = record.delete(@labels_key)
+      return nil unless payload_labels
+      unless payload_labels.is_a?(Hash)
+        @log.error "Invalid value of '#{@labels_key}' in the payload: " \
+                   "#{payload_labels}. Labels need to be a JSON object."
+        return nil
+      end
+
+      non_string_keys = payload_labels.each_with_object([]) do |(k, v), a|
+        a << k unless k.is_a?(String) && v.is_a?(String)
+      end
+      unless non_string_keys.empty?
+        @log.error "Invalid value of '#{@labels_key}' in the payload: " \
+                   "#{payload_labels}. Labels need string values for all " \
+                   "keys; keys #{non_string_keys} don't."
+        return nil
+      end
+      payload_labels
+    rescue StandardError => err
+      @log.error "Failed to extract '#{@labels_key}' from payload.", err
+      return nil
     end
 
     # Values permitted by the API for 'severity' (which is an enum).

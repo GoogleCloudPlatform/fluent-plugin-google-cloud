@@ -376,6 +376,10 @@ module Constants
     insert_id_key custom_insert_id_key
   ).freeze
 
+  CONFIG_CUSTOM_LABELS_KEY_SPECIFIED = %(
+    labels_key custom_labels_key
+  ).freeze
+
   CONFIG_CUSTOM_OPERATION_KEY_SPECIFIED = %(
     operation_key custom_operation_key
   ).freeze
@@ -390,6 +394,69 @@ module Constants
 
   CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
     trace_key custom_trace_key
+  ).freeze
+
+  # For 'labels' config.
+  LABELS_FROM_LABELS_CONFIG = {
+    'a_label_from_labels_config' => 'some_value',
+    'another_label_from_labels_config' => 'some_value'
+  }.freeze
+  CONFIG_LABELS = %(
+    labels #{LABELS_FROM_LABELS_CONFIG.to_json}
+  ).freeze
+
+  # For 'label_map' config.
+  LABEL_MAP_HASH = {
+    'target_field_from_payload' => 'a_label_from_label_map_config',
+    'another_target_field_from_payload' => 'another_label_from_label_map_config'
+  }.freeze
+  PAYLOAD_FOR_LABEL_MAP = {
+    'target_field_from_payload' => 'a_value',
+    'another_target_field_from_payload' => 'b_value'
+  }.freeze
+  LABELS_FROM_LABEL_MAP_CONFIG = {
+    'a_label_from_label_map_config' => 'a_value',
+    'another_label_from_label_map_config' => 'b_value'
+  }.freeze
+  CONFIG_LABEL_MAP = %(
+    label_map #{LABEL_MAP_HASH.to_json}
+  ).freeze
+
+  CONFIG_LABLES_AND_LABLE_MAP = %(
+    #{CONFIG_LABELS}
+    #{CONFIG_LABEL_MAP}
+  ).freeze
+
+  # For conflicting labels.
+  CONFLICTING_LABEL_NAME = 'conflicting_label_key'.freeze
+  CONFLICTING_LABEL_VALUE1 = 'conflicting_value_1'.freeze
+  CONFLICTING_LABEL_VALUE2 = 'conflicting_value_2'.freeze
+  CONFLICTING_LABEL_VALUE3 = 'conflicting_value_3'.freeze
+  LABELS_FROM_PAYLOAD_CONFLICTING = {
+    CONFLICTING_LABEL_NAME => CONFLICTING_LABEL_VALUE1
+  }.freeze
+  LABELS_FROM_LABEL_MAP_CONFIG_CONFLICTING = {
+    CONFLICTING_LABEL_NAME => CONFLICTING_LABEL_VALUE2
+  }.freeze
+  LABELS_FROM_LABELS_CONFIG_CONFLICTING = {
+    CONFLICTING_LABEL_NAME => CONFLICTING_LABEL_VALUE3
+  }.freeze
+
+  LABEL_MAP_HASH_CONFLICTING = {
+    'target_field_from_payload' => CONFLICTING_LABEL_NAME
+  }.freeze
+  PAYLOAD_FOR_LABEL_MAP_CONFLICTING = {
+    'target_field_from_payload' => CONFLICTING_LABEL_VALUE2
+  }.freeze
+  CONFIG_LABEL_MAP_CONFLICTING = %(
+    label_map #{LABEL_MAP_HASH_CONFLICTING.to_json}
+  ).freeze
+  CONFIG_LABELS_CONFLICTING = %(
+    labels #{LABELS_FROM_LABELS_CONFIG_CONFLICTING.to_json}
+  ).freeze
+  CONFIG_LABLES_AND_LABLE_MAP_CONFLICTING = %(
+    #{CONFIG_LABELS_CONFLICTING}
+    #{CONFIG_LABEL_MAP_CONFLICTING}
   ).freeze
 
   # Service configurations for various services.
@@ -812,6 +879,18 @@ module Constants
     'last' => false
   }.freeze
 
+  LABELS_MESSAGE = {
+    'component' => 'front-end',
+    'source' => 'user',
+    'app' => 'request-router'
+  }.freeze
+
+  LABELS_MESSAGE2 = {
+    'component' => 'front-end',
+    'source' => 'system',
+    'app' => 'request-router'
+  }.freeze
+
   CUSTOM_LABELS_MESSAGE = {
     'customKey' => 'value'
   }.freeze
@@ -1023,6 +1102,7 @@ module Constants
     'severity' => CONTAINER_SEVERITY,
     DEFAULT_HTTP_REQUEST_KEY => HTTP_REQUEST_MESSAGE,
     DEFAULT_INSERT_ID_KEY => INSERT_ID,
+    DEFAULT_LABELS_KEY => LABELS_MESSAGE,
     DEFAULT_OPERATION_KEY => OPERATION_MESSAGE,
     DEFAULT_SOURCE_LOCATION_KEY => SOURCE_LOCATION_MESSAGE,
     DEFAULT_SPAN_ID_KEY => SPAN_ID,
