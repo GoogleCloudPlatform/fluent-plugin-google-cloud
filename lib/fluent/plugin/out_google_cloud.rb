@@ -1749,10 +1749,14 @@ module Fluent
                    "#{payload_labels}. Labels need to be a JSON object."
         return nil
       end
-      payload_labels.each do |k, v|
-        next if k.is_a?(String) && v.is_a?(String)
+
+      non_string_keys = payload_labels.each_with_object([]) do |(k, v), a|
+        a << k unless k.is_a?(String) && v.is_a?(String)
+      end
+      unless non_string_keys.empty?
         @log.error "Invalid value of '#{@labels_key}' in the payload: " \
-                   "#{payload_labels}. Labels need to have string values."
+                   "#{payload_labels}. Labels need string values for all " \
+                   "keys; keys #{non_string_keys} don't."
         return nil
       end
       payload_labels

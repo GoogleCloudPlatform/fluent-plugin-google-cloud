@@ -1424,7 +1424,10 @@ module BaseTest
     verify_cascading_json_detection_with_log_entry_fields(
       'labels', DEFAULT_LABELS_KEY,
       root_level_value: LABELS_MESSAGE,
-      nested_level_value: LABELS_MESSAGE2)
+      nested_level_value: LABELS_MESSAGE2,
+      expected_value_from_root: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE),
+      expected_value_from_nested: COMPUTE_PARAMS[:labels].merge(
+        LABELS_MESSAGE2))
   end
 
   def test_cascading_json_detection_with_log_entry_operation_field
@@ -2262,18 +2265,25 @@ module BaseTest
     "test log entry #{i}"
   end
 
-  def check_labels(labels, expected_labels)
-    return if labels.empty? && expected_labels.empty?
-    labels.each do |key, value|
-      assert value.is_a?(String), "Value #{value} for label #{key} " \
-        'is not a string: ' + value.class.name
-      assert expected_labels.key?(key), "Unexpected label #{key} => #{value}"
-      assert_equal expected_labels[key], value, 'Value mismatch - expected ' \
-        "#{expected_labels[key]} in #{key} => #{value}"
+  # If check_exact_labels is true, assert 'labels' and 'expected_labels' match
+  # exactly. If check_exact_labels is false, assert 'labels' is a subset of
+  # 'expected_labels'.
+  def check_labels(expected_labels, labels, check_exact_labels = true)
+    return if expected_labels.empty? && labels.empty?
+    expected_labels.each do |expected_key, expected_value|
+      assert labels.key?(expected_key), "Expected label #{expected_key} not" \
+             " found. Got labels: #{labels}."
+      actual_value = labels[expected_key]
+      assert actual_value.is_a?(String), 'Value for label' \
+             " #{expected_key} is not a string: #{actual_value}."
+      assert_equal expected_value, actual_value, "Value for #{expected_key}" \
+                   " mismatch. Expected #{expected_value}. Got #{actual_value}"
     end
-    assert_equal expected_labels.length, labels.length, 'Expected ' \
-      "#{expected_labels.length} labels: #{expected_labels}, got " \
-      "#{labels.length} labels: #{labels}"
+    if check_exact_labels
+      assert_equal expected_labels.length, labels.length, 'Expected ' \
+        "#{expected_labels.length} labels: #{expected_labels}, got " \
+        "#{labels.length} labels: #{labels}"
+    end
   end
 
   def verify_default_log_entry_text(text, i, entry)
@@ -2282,7 +2292,8 @@ module BaseTest
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_json_log_entries(n, params, payload_type = 'textPayload')
+  def verify_json_log_entries(n, params, payload_type = 'textPayload',
+                              check_exact_entry_labels = true)
     entry_count = 0
     @logs_sent.each do |request|
       request['entries'].each do |entry|
@@ -2307,8 +2318,10 @@ module BaseTest
             log_name
         end
         assert_equal params[:resource][:type], resource['type']
-        check_labels resource['labels'], params[:resource][:labels]
-        check_labels labels, params[:labels]
+
+        check_labels params[:resource][:labels], resource['labels']
+        check_labels params[:labels], labels, check_exact_entry_labels
+
         if block_given?
           yield(entry, entry_count)
         elsif payload_type == 'textPayload'
@@ -2508,12 +2521,8 @@ module BaseTest
         d.emit(input_log_entry)
         d.run
       end
-      expected_params = COMPUTE_PARAMS.dup
-      if log_entry_field == 'labels'
-        expected_value = COMPUTE_PARAMS[:labels].merge(expected_value)
-        expected_params[:labels] = expected_value
-      end
-      verify_log_entries(1, expected_params, 'jsonPayload') do |entry|
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload',
+                         false) do |entry|
         assert_equal expected_value, entry[log_entry_field],
                      "Index #{index} failed. #{expected_value} is expected" \
                      " for #{log_entry_field} field."
@@ -2566,13 +2575,11 @@ module BaseTest
         d.emit(input[:emitted_log])
         d.run
       end
-      expected_params = COMPUTE_PARAMS.dup
-      if log_entry_field == 'labels'
-        input[:expected_field_value] = COMPUTE_PARAMS[:labels].merge(
-          input[:expected_field_value] || {})
-        expected_params[:labels] = input[:expected_field_value]
-      end
-      verify_log_entries(1, expected_params, 'jsonPayload') do |entry|
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload', false) do |entry|
+        if log_entry_field == 'labels'
+          input[:expected_field_value] = COMPUTE_PARAMS[:labels].merge(
+            input[:expected_field_value] || {})
+        end
         assert_equal input[:expected_field_value], entry[log_entry_field], input
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal input[:expected_payload].size, payload_fields.size, input
@@ -2630,7 +2637,8 @@ module BaseTest
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(_n, _params, _payload_type = 'textPayload', &_block)
+  def verify_log_entries(_n, _params, _payload_type = 'textPayload',
+                         _check_exact_entry_labels = true, &_block)
     _undefined
   end
 

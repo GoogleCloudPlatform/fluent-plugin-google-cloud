@@ -413,7 +413,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
+  def verify_log_entries(n, params, payload_type = 'textPayload',
+                         check_exact_entry_labels = true, &block)
     @requests_sent.each do |request|
       @logs_sent << {
         'entries' => request.entries.map { |entry| JSON.parse(entry.to_json) },
@@ -422,7 +423,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         'logName' => request.log_name
       }
     end
-    verify_json_log_entries(n, params, payload_type, &block)
+    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
+                            &block)
   end
 
   # Use the right single quotation mark as the sample non-utf8 character.
