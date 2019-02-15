@@ -1401,7 +1401,9 @@ module BaseTest
 
   def test_log_entry_labels_field
     verify_field_key('labels', DEFAULT_LABELS_KEY, 'custom_labels_key',
-                     CONFIG_CUSTOM_LABELS_KEY_SPECIFIED, LABELS_MESSAGE)
+                     CONFIG_CUSTOM_LABELS_KEY_SPECIFIED,
+                     COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE),
+                     COMPUTE_PARAMS[:labels])
   end
 
   def test_log_entry_operation_field
@@ -2541,8 +2543,7 @@ module BaseTest
         d.emit(input_log_entry)
         d.run
       end
-      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload',
-                         false) do |entry|
+      verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload', false) do |entry|
         assert_equal expected_value, entry[log_entry_field],
                      "Index #{index} failed. #{expected_value} is expected" \
                      " for #{log_entry_field} field."
@@ -2556,7 +2557,7 @@ module BaseTest
   end
 
   def verify_field_key(log_entry_field, default_key, custom_key,
-                       custom_key_config, sample_value)
+                       custom_key_config, sample_value, default_value = nil)
     setup_gce_metadata_stubs
     message = log_entry(0)
     [
@@ -2565,7 +2566,7 @@ module BaseTest
         driver_config: APPLICATION_DEFAULT_CONFIG,
         emitted_log: { 'msg' => message },
         expected_payload: { 'msg' => message },
-        expected_field_value: nil
+        expected_field_value: default_value
       },
       {
         # By default, it sets log entry field via a default key.
@@ -2586,7 +2587,7 @@ module BaseTest
         driver_config: custom_key_config,
         emitted_log: { 'msg' => message, default_key => sample_value },
         expected_payload: { 'msg' => message, default_key => sample_value },
-        expected_field_value: nil
+        expected_field_value: default_value
       }
     ].each do |input|
       setup_logging_stubs do
@@ -2596,10 +2597,6 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload', false) do |entry|
-        if log_entry_field == 'labels'
-          input[:expected_field_value] = COMPUTE_PARAMS[:labels].merge(
-            input[:expected_field_value] || {})
-        end
         assert_equal input[:expected_field_value], entry[log_entry_field], input
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal input[:expected_payload].size, payload_fields.size, input
