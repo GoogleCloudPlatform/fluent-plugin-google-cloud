@@ -2437,7 +2437,6 @@ module BaseTest
     end
   end
 
-  # Verify that we remove the malformed field.
   def verify_subfields_removed_when_not_hash(payload_key)
     destination_key = log_entry_subfields_params[payload_key][0]
     @logs_sent = []
@@ -2456,7 +2455,6 @@ module BaseTest
     end
   end
 
-  # Verify that we leave the malformed field as it is.
   def verify_subfields_untouched_when_not_hash(payload_key)
     destination_key = log_entry_subfields_params[payload_key][0]
     @logs_sent = []
@@ -2467,6 +2465,7 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      # Verify that we leave the malformed field as it is.
       field = get_fields(entry['jsonPayload'])[payload_key]
       assert_equal 'a_string', get_string(field), entry
       assert_false entry.key?(destination_key), entry
