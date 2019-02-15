@@ -1287,19 +1287,34 @@ module BaseTest
   # Verify the subfields extraction of LogEntry fields when they are not hashes.
 
   def test_log_entry_http_request_field_when_not_hash
-    verify_subfields_when_not_hash(DEFAULT_HTTP_REQUEST_KEY)
+    # Leave the malformed field as it is.
+    # TODO(qingling128) On the next major after 0.7.4, make the rest of
+    # logEntry subfields behave the same way: if the field is not a hash as
+    # expected, log an error in the Fluentd log and remove this field from
+    # payload. This is the preferred behavior per PM decision.
+    verify_subfields_untouched_when_not_hash(DEFAULT_HTTP_REQUEST_KEY)
   end
 
   def test_log_entry_labels_field_when_not_hash
-    verify_subfields_when_not_hash(DEFAULT_LABELS_KEY)
+    verify_subfields_removed_when_not_hash(DEFAULT_LABELS_KEY)
   end
 
   def test_log_entry_operation_field_when_not_hash
-    verify_subfields_when_not_hash(DEFAULT_OPERATION_KEY)
+    # Leave the malformed field as it is.
+    # TODO(qingling128) On the next major after 0.7.4, make the rest of
+    # logEntry subfields behave the same way: if the field is not a hash as
+    # expected, log an error in the Fluentd log and remove this field from
+    # payload. This is the preferred behavior per PM decision.
+    verify_subfields_untouched_when_not_hash(DEFAULT_OPERATION_KEY)
   end
 
   def test_log_entry_source_location_field_when_not_hash
-    verify_subfields_when_not_hash(DEFAULT_SOURCE_LOCATION_KEY)
+    # Leave the malformed field as it is.
+    # TODO(qingling128) On the next major after 0.7.4, make the rest of
+    # logEntry subfields behave the same way: if the field is not a hash as
+    # expected, log an error in the Fluentd log and remove this field from
+    # payload. This is the preferred behavior per PM decision.
+    verify_subfields_untouched_when_not_hash(DEFAULT_SOURCE_LOCATION_KEY)
   end
 
   # Verify the subfields extraction of LogEntry fields when they are nil.
@@ -2318,8 +2333,8 @@ module BaseTest
             log_name
         end
         assert_equal params[:resource][:type], resource['type']
-
         check_labels params[:resource][:labels], resource['labels']
+
         check_labels params[:labels], labels, check_exact_entry_labels
 
         if block_given?
@@ -2410,7 +2425,7 @@ module BaseTest
     end
   end
 
-  def verify_subfields_when_not_hash(payload_key)
+  def verify_subfields_removed_when_not_hash(payload_key)
     destination_key = log_entry_subfields_params[payload_key][0]
     @logs_sent = []
     setup_gce_metadata_stubs
@@ -2420,22 +2435,27 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      if payload_key == DEFAULT_LABELS_KEY
-        # The malformed field has been removed from the payload.
-        assert_true get_fields(entry['jsonPayload']).empty?, entry
-        # No additional labels.
-        assert_equal COMPUTE_PARAMS[:labels].size,
-                     entry[destination_key].size, entry
-      else
-        # Leave the malformed field as it is.
-        # TODO(qingling128) On the next major after 0.7.4, make the rest of
-        # logEntry subfields behave the same way: if the field is not a hash as
-        # expected, log an error in the Fluentd log and remove this field from
-        # payload. This is the preferred behavior per PM decision.
-        field = get_fields(entry['jsonPayload'])[payload_key]
-        assert_equal 'a_string', get_string(field), entry
-        assert_false entry.key?(destination_key), entry
-      end
+      # The malformed field has been removed from the payload.
+      assert_true get_fields(entry['jsonPayload']).empty?, entry
+      # No additional labels.
+      assert_equal COMPUTE_PARAMS[:labels].size,
+                   entry[destination_key].size, entry
+    end
+  end
+
+  def verify_subfields_untouched_when_not_hash(payload_key)
+    destination_key = log_entry_subfields_params[payload_key][0]
+    @logs_sent = []
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(payload_key => 'a_string')
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      field = get_fields(entry['jsonPayload'])[payload_key]
+      assert_equal 'a_string', get_string(field), entry
+      assert_false entry.key?(destination_key), entry
     end
   end
 
