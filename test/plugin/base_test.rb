@@ -1287,11 +1287,10 @@ module BaseTest
   # Verify the subfields extraction of LogEntry fields when they are not hashes.
 
   def test_log_entry_http_request_field_when_not_hash
-    # Leave the malformed field as it is.
-    # TODO(qingling128) On the next major after 0.7.4, make the rest of
-    # logEntry subfields behave the same way: if the field is not a hash as
-    # expected, log an error in the Fluentd log and remove this field from
-    # payload. This is the preferred behavior per PM decision.
+    # TODO(qingling128) On the next major after 0.7.4, make all logEntry
+    # subfields behave the same way: if the field is not in the correct format,
+    # log an error in the Fluentd log and remove this field from payload. This
+    # is the preferred behavior per PM decision.
     verify_subfields_untouched_when_not_hash(DEFAULT_HTTP_REQUEST_KEY)
   end
 
@@ -1300,20 +1299,18 @@ module BaseTest
   end
 
   def test_log_entry_operation_field_when_not_hash
-    # Leave the malformed field as it is.
-    # TODO(qingling128) On the next major after 0.7.4, make the rest of
-    # logEntry subfields behave the same way: if the field is not a hash as
-    # expected, log an error in the Fluentd log and remove this field from
-    # payload. This is the preferred behavior per PM decision.
+    # TODO(qingling128) On the next major after 0.7.4, make all logEntry
+    # subfields behave the same way: if the field is not in the correct format,
+    # log an error in the Fluentd log and remove this field from payload. This
+    # is the preferred behavior per PM decision.
     verify_subfields_untouched_when_not_hash(DEFAULT_OPERATION_KEY)
   end
 
   def test_log_entry_source_location_field_when_not_hash
-    # Leave the malformed field as it is.
-    # TODO(qingling128) On the next major after 0.7.4, make the rest of
-    # logEntry subfields behave the same way: if the field is not a hash as
-    # expected, log an error in the Fluentd log and remove this field from
-    # payload. This is the preferred behavior per PM decision.
+    # TODO(qingling128) On the next major after 0.7.4, make all logEntry
+    # subfields behave the same way: if the field is not in the correct format,
+    # log an error in the Fluentd log and remove this field from payload. This
+    # is the preferred behavior per PM decision.
     verify_subfields_untouched_when_not_hash(DEFAULT_SOURCE_LOCATION_KEY)
   end
 
@@ -2440,6 +2437,7 @@ module BaseTest
     end
   end
 
+  # Verify that we remove the malformed field.
   def verify_subfields_removed_when_not_hash(payload_key)
     destination_key = log_entry_subfields_params[payload_key][0]
     @logs_sent = []
@@ -2458,6 +2456,7 @@ module BaseTest
     end
   end
 
+  # Verify that we leave the malformed field as it is.
   def verify_subfields_untouched_when_not_hash(payload_key)
     destination_key = log_entry_subfields_params[payload_key][0]
     @logs_sent = []

@@ -1697,6 +1697,10 @@ module Fluent
     end
 
     def set_log_entry_fields(record, entry)
+      # TODO(qingling128) On the next major after 0.7.4, make all logEntry
+      # subfields behave the same way: if the field is not in the correct
+      # format, log an error in the Fluentd log and remove this field from
+      # payload. This is the preferred behavior per PM decision.
       LOG_ENTRY_FIELDS_MAP.each do |field_name, config|
         payload_key, subfields, grpc_class, non_grpc_class = config
         begin
