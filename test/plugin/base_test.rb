@@ -1252,7 +1252,7 @@ module BaseTest
   end
 
   def test_log_entry_labels_field_from_record
-    verify_subfields_from_record(DEFAULT_LABELS_KEY)
+    verify_subfields_from_record(DEFAULT_LABELS_KEY, false)
   end
 
   def test_log_entry_operation_field_from_record
@@ -2381,7 +2381,7 @@ module BaseTest
       DEFAULT_HTTP_REQUEST_KEY => [
         'httpRequest', http_request_message],
       DEFAULT_LABELS_KEY => [
-        'labels', LABELS_MESSAGE],
+        'labels', COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)],
       DEFAULT_OPERATION_KEY => [
         'operation', OPERATION_MESSAGE],
       DEFAULT_SOURCE_LOCATION_KEY => [
@@ -2389,7 +2389,7 @@ module BaseTest
     }
   end
 
-  def verify_subfields_from_record(payload_key)
+  def verify_subfields_from_record(payload_key, check_exact_entry_labels = true)
     destination_key, payload_value = log_entry_subfields_params[payload_key]
     @logs_sent = []
     setup_gce_metadata_stubs
@@ -2398,12 +2398,8 @@ module BaseTest
       d.emit(payload_key => payload_value)
       d.run
     end
-    expected_params = COMPUTE_PARAMS.dup
-    if payload_key == DEFAULT_LABELS_KEY
-      payload_value = payload_value.merge(COMPUTE_PARAMS[:labels])
-      expected_params[:labels] = payload_value
-    end
-    verify_log_entries(1, expected_params, destination_key) do |entry|
+    verify_log_entries(1, COMPUTE_PARAMS, destination_key,
+                       check_exact_entry_labels) do |entry|
       assert_equal payload_value, entry[destination_key], entry
       fields = get_fields(entry['jsonPayload'])
       assert_nil fields[payload_key], entry
