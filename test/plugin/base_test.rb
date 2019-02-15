@@ -1395,37 +1395,54 @@ module BaseTest
   # Verify the default and customization of LogEntry field extraction key.
 
   def test_log_entry_insert_id_field
-    verify_field_key('insertId', DEFAULT_INSERT_ID_KEY, 'custom_insert_id_key',
-                     CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED, INSERT_ID)
+    verify_field_key('insertId',
+                     default_key: DEFAULT_INSERT_ID_KEY,
+                     custom_key: 'custom_insert_id_key',
+                     custom_key_config: CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED,
+                     sample_value: INSERT_ID)
   end
 
   def test_log_entry_labels_field
-    verify_field_key('labels', DEFAULT_LABELS_KEY, 'custom_labels_key',
-                     CONFIG_CUSTOM_LABELS_KEY_SPECIFIED,
-                     COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE),
-                     COMPUTE_PARAMS[:labels])
+    verify_field_key('labels',
+                     default_key: DEFAULT_LABELS_KEY,
+                     custom_key: 'custom_labels_key',
+                     custom_key_config: CONFIG_CUSTOM_LABELS_KEY_SPECIFIED,
+                     sample_value: COMPUTE_PARAMS[:labels].merge(
+                       LABELS_MESSAGE),
+                     default_value: COMPUTE_PARAMS[:labels])
   end
 
   def test_log_entry_operation_field
-    verify_field_key('operation', DEFAULT_OPERATION_KEY, 'custom_operation_key',
-                     CONFIG_CUSTOM_OPERATION_KEY_SPECIFIED, OPERATION_MESSAGE)
+    verify_field_key('operation',
+                     default_key: DEFAULT_OPERATION_KEY,
+                     custom_key: 'custom_operation_key',
+                     custom_key_config: CONFIG_CUSTOM_OPERATION_KEY_SPECIFIED,
+                     sample_value: OPERATION_MESSAGE)
   end
 
   def test_log_entry_source_location_field
-    verify_field_key('sourceLocation', DEFAULT_SOURCE_LOCATION_KEY,
-                     'custom_source_location_key',
-                     CONFIG_CUSTOM_SOURCE_LOCATION_KEY_SPECIFIED,
-                     source_location_message)
+    verify_field_key('sourceLocation',
+                     default_key: DEFAULT_SOURCE_LOCATION_KEY,
+                     custom_key: 'custom_source_location_key',
+                     custom_key_config: \
+                       CONFIG_CUSTOM_SOURCE_LOCATION_KEY_SPECIFIED,
+                     sample_value: source_location_message)
   end
 
   def test_log_entry_span_id_field
-    verify_field_key('spanId', DEFAULT_SPAN_ID_KEY, 'custom_span_id_key',
-                     CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED, SPAN_ID)
+    verify_field_key('spanId',
+                     default_key: DEFAULT_SPAN_ID_KEY,
+                     custom_key: 'custom_span_id_key',
+                     custom_key_config: CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED,
+                     sample_value: SPAN_ID)
   end
 
   def test_log_entry_trace_field
-    verify_field_key('trace', DEFAULT_TRACE_KEY, 'custom_trace_key',
-                     CONFIG_CUSTOM_TRACE_KEY_SPECIFIED, TRACE)
+    verify_field_key('trace',
+                     default_key: DEFAULT_TRACE_KEY,
+                     custom_key: 'custom_trace_key',
+                     custom_key_config: CONFIG_CUSTOM_TRACE_KEY_SPECIFIED,
+                     sample_value: TRACE)
   end
 
   # Verify the cascading JSON detection of LogEntry fields.
@@ -2552,8 +2569,13 @@ module BaseTest
     end
   end
 
-  def verify_field_key(log_entry_field, default_key, custom_key,
-                       custom_key_config, sample_value, default_value = nil)
+  def verify_field_key(log_entry_field, test_params)
+    default_key = test_params[:default_key]
+    custom_key = test_params[:custom_key]
+    custom_key_config = test_params[:custom_key_config]
+    sample_value = test_params[:sample_value]
+    default_value = test_params.fetch(:default_value, nil)
+
     setup_gce_metadata_stubs
     message = log_entry(0)
     [
