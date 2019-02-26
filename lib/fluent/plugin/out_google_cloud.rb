@@ -723,6 +723,10 @@ module Fluent
       end
     end
 
+    def multi_workers_ready?
+      true
+    end
+
     private
 
     def compute_trace(trace)
