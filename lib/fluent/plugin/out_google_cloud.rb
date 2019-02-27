@@ -648,7 +648,7 @@ module Fluent
               # override these keys in the JSON we've just parsed.
               preserved_keys.each do |key|
                 record_json[key] ||= record[key] if
-                  record.key?(key) and !record_json.key?(key)
+                  record.key?(key) && !record_json.key?(key)
               end
 
               record = record_json
