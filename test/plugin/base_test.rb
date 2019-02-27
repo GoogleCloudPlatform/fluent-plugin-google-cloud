@@ -2589,16 +2589,10 @@ module BaseTest
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload', false) do |entry|
-        if default_value.nil?
-          assert_equal expected_value, entry[log_entry_field],
-                       "Index #{index} failed. #{expected_value} is expected" \
-                       " for #{log_entry_field} field."
-        else
-          assert_equal_with_default \
-            entry[log_entry_field], expected_value, default_value,
-            "Index #{index} failed. #{expected_value} is expected for " \
-            "#{log_entry_field} field."
-        end
+        assert_equal_with_default \
+          entry[log_entry_field], expected_value, default_value,
+          "Index #{index} failed. #{expected_value} is expected for " \
+          "#{log_entry_field} field."
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal structured_log_entry.size, payload_fields.size
         payload_fields.each do |key, value|
