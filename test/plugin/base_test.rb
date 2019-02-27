@@ -1442,6 +1442,15 @@ module BaseTest
                      sample_value: TRACE)
   end
 
+  def test_log_entry_trace_sampled_field
+    verify_field_key('traceSampled',
+                     default_key: DEFAULT_TRACE_SAMPLED_KEY,
+                     custom_key: 'custom_trace_sampled_key',
+                     custom_key_config:
+                       CONFIG_CUSTOM_TRACE_SAMPLED_KEY_SPECIFIED,
+                     sample_value: TRACE_SAMPLED)
+  end
+
   # Verify the cascading JSON detection of LogEntry fields.
 
   def test_cascading_json_detection_with_log_entry_insert_id_field
@@ -1488,6 +1497,15 @@ module BaseTest
       'trace', DEFAULT_TRACE_KEY,
       root_level_value: TRACE,
       nested_level_value: TRACE2)
+  end
+
+  def test_cascading_json_detection_with_log_entry_trace_sampled_field
+    verify_cascading_json_detection_with_log_entry_fields(
+      'traceSampled', DEFAULT_TRACE_SAMPLED_KEY,
+      root_level_value: TRACE_SAMPLED,
+      nested_level_value: TRACE_SAMPLED2,
+      default_value_from_root: false,
+      default_value_from_nested: false)
   end
 
   # Verify that labels present in multiple inputs respect the expected priority
@@ -2506,6 +2524,10 @@ module BaseTest
       :expected_value_from_root, root_level_value)
     expected_value_from_nested = expectation.fetch(
       :expected_value_from_nested, nested_level_value)
+    default_value_from_root = expectation.fetch(
+      :default_value_from_root, nil)
+    default_value_from_nested = expectation.fetch(
+      :default_value_from_nested, nil)
 
     setup_gce_metadata_stubs
 
@@ -2543,21 +2565,40 @@ module BaseTest
     log_entry_with_both_level_fields = log_entry_with_nested_level_field.merge(
       default_key => root_level_value)
 
-    {
-      log_entry_with_root_level_field => expected_value_from_root,
-      log_entry_with_nested_level_field => expected_value_from_nested,
-      log_entry_with_both_level_fields => expected_value_from_nested
-    }.each_with_index do |(input_log_entry, expected_value), index|
+    [
+      [
+        log_entry_with_root_level_field,
+        expected_value_from_root,
+        default_value_from_root
+      ],
+      [
+        log_entry_with_nested_level_field,
+        expected_value_from_nested,
+        default_value_from_nested
+      ],
+      [
+        log_entry_with_both_level_fields,
+        expected_value_from_nested,
+        default_value_from_nested
+      ]
+    ].each_with_index do |(log_entry, expected_value, default_value), index|
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(DETECT_JSON_CONFIG)
-        d.emit(input_log_entry)
+        d.emit(log_entry)
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload', false) do |entry|
-        assert_equal expected_value, entry[log_entry_field],
-                     "Index #{index} failed. #{expected_value} is expected" \
-                     " for #{log_entry_field} field."
+        if default_value.nil?
+          assert_equal expected_value, entry[log_entry_field],
+                       "Index #{index} failed. #{expected_value} is expected" \
+                       " for #{log_entry_field} field."
+        else
+          assert_equal_with_default \
+            entry[log_entry_field], expected_value, default_value,
+            "Index #{index} failed. #{expected_value} is expected for " \
+            "#{log_entry_field} field."
+        end
         payload_fields = get_fields(entry['jsonPayload'])
         assert_equal structured_log_entry.size, payload_fields.size
         payload_fields.each do |key, value|
