@@ -99,12 +99,14 @@ module Constants
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'.freeze
 
   # LogEntry fields for extraction.
-  TRACE = 'projects/proj1/traces/1234567890abcdef1234567890abcdef'.freeze
-  TRACE2 = 'projects/proj1/traces/1234567890abcdef1234567890fedcba'.freeze
-  SPAN_ID = '000000000000004a'.freeze
-  SPAN_ID2 = '000000000000007e'.freeze
   INSERT_ID = 'fah7yr7iw64tg857y'.freeze
   INSERT_ID2 = 'fah7yr7iw64tgaeuf'.freeze
+  SPAN_ID = '000000000000004a'.freeze
+  SPAN_ID2 = '000000000000007e'.freeze
+  TRACE = 'projects/proj1/traces/1234567890abcdef1234567890abcdef'.freeze
+  TRACE2 = 'projects/proj1/traces/1234567890abcdef1234567890fedcba'.freeze
+  TRACE_SAMPLED = true
+  TRACE_SAMPLED2 = false
 
   STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdef'.freeze
   FULL_STACKDRIVER_TRACE = \
@@ -394,6 +396,10 @@ module Constants
 
   CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
     trace_key custom_trace_key
+  ).freeze
+
+  CONFIG_CUSTOM_TRACE_SAMPLED_KEY_SPECIFIED = %(
+    trace_sampled_key custom_trace_sampled_key
   ).freeze
 
   # For 'labels' config.
@@ -1106,6 +1112,7 @@ module Constants
     DEFAULT_OPERATION_KEY => OPERATION_MESSAGE,
     DEFAULT_SOURCE_LOCATION_KEY => SOURCE_LOCATION_MESSAGE,
     DEFAULT_SPAN_ID_KEY => SPAN_ID,
-    DEFAULT_TRACE_KEY => TRACE
+    DEFAULT_TRACE_KEY => TRACE,
+    DEFAULT_TRACE_SAMPLED_KEY => TRACE_SAMPLED
   }.freeze
 end

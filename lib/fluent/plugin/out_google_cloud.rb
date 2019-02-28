@@ -153,6 +153,7 @@ module Fluent
         'logging.googleapis.com/sourceLocation'.freeze
       DEFAULT_SPAN_ID_KEY = 'logging.googleapis.com/spanId'.freeze
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
+      DEFAULT_TRACE_SAMPLED_KEY = 'logging.googleapis.com/trace_sampled'.freeze
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
@@ -306,6 +307,8 @@ module Fluent
       DEFAULT_SOURCE_LOCATION_KEY
     config_param :span_id_key, :string, :default => DEFAULT_SPAN_ID_KEY
     config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
+    config_param :trace_sampled_key, :string, :default =>
+      DEFAULT_TRACE_SAMPLED_KEY
 
     # Whether to try to detect if the record is a text log entry with JSON
     # content that needs to be parsed.
@@ -626,7 +629,8 @@ module Fluent
               @operation_key,
               @source_location_key,
               @span_id_key,
-              @trace_key
+              @trace_key,
+              @trace_sampled_key
             ]
 
             # If the log is json, we want to export it as a structured log
@@ -643,7 +647,8 @@ module Fluent
               # Propagate these if necessary. Note that we don't want to
               # override these keys in the JSON we've just parsed.
               preserved_keys.each do |key|
-                record_json[key] ||= record[key] if record.key?(key)
+                record_json[key] ||= record[key] if
+                  record.key?(key) && !record_json.key?(key)
               end
 
               record = record_json
@@ -667,13 +672,15 @@ module Fluent
                                             ts_secs,
                                             ts_nanos)
 
-          trace = record.delete(@trace_key)
-          entry.trace = compute_trace(trace) if trace
-
-          span_id = record.delete(@span_id_key)
-          entry.span_id = span_id if span_id
           insert_id = record.delete(@insert_id_key)
           entry.insert_id = insert_id if insert_id
+          span_id = record.delete(@span_id_key)
+          entry.span_id = span_id if span_id
+          trace = record.delete(@trace_key)
+          entry.trace = compute_trace(trace) if trace
+          trace_sampled = record.delete(@trace_sampled_key)
+          entry.trace_sampled = parse_bool(trace_sampled) unless
+            trace_sampled.nil?
 
           set_log_entry_fields(record, entry)
           set_payload(entry_level_resource.type, record, entry, is_json)
