@@ -245,7 +245,7 @@ module Fluent
     PLUGIN_VERSION = begin
       # Extract plugin version from file path.
       match_data = __FILE__.match(
-        %r{fluent-plugin-google-cloud-(?<version>[0-9a-zA-Z\.]*)/})
+        %r{fluent-plugin-google-cloud-(?<version>[^/]*)/})
       if match_data
         match_data['version']
       else
