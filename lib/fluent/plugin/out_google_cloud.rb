@@ -977,7 +977,7 @@ module Fluent
 
     def parse_json_or_nil(input)
       # Only here to please rubocop...
-      return nil if input.nil?
+      return input unless input.is_a?(String)
 
       input.each_codepoint do |c|
         if c == 123
