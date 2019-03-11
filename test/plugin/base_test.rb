@@ -537,27 +537,31 @@ module BaseTest
   end
 
   def test_structured_payload_json_log_detect_json_not_parsed_hash
-    setup_gce_metadata_stubs
     hash_value = {
-      "msg" => "test log entry 0",
-      "tag2" => "test",
-      "data" => 5000,
-      "some_null_field" => nil
+      'msg' => 'test log entry 0',
+      'tag2' => 'test',
+      'data' => 5000,
+      'some_null_field' => nil
     }
-    setup_logging_stubs do
-      d = create_driver(DETECT_JSON_CONFIG)
-      %w(log message msg).each do |field|
-        d.emit(field => hash_value)
+    %w(log msg).each do |field|
+      new_stub_context do
+        setup_gce_metadata_stubs
+        setup_logging_stubs do
+          d = create_driver(DETECT_JSON_CONFIG)
+          d.emit(field => hash_value)
+          d.run
+        end
+        verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+          json_payload = get_fields(entry['jsonPayload'])
+          assert_equal 1, json_payload.size, entry
+          fields = get_fields(get_struct(json_payload[field]))
+          assert_equal 4, fields.size, entry
+          assert_equal 'test log entry 0', get_string(fields['msg']), entry
+          assert_equal 'test', get_string(fields['tag2']), entry
+          assert_equal 5000, get_number(fields['data']), entry
+          assert_equal null_value, fields['some_null_field'], entry
+        end
       end
-      d.run
-    end
-    verify_log_entries(3, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
-      assert_equal 4, fields.size, entry
-      assert_equal 'test log entry 0', get_string(fields['msg']), entry
-      assert_equal 'test', get_string(fields['tag2']), entry
-      assert_equal 5000, get_number(fields['data']), entry
-      assert_equal null_value, fields['some_null_field'], entry
     end
   end
 
