@@ -2040,10 +2040,11 @@ module Fluent
                                json_payload
                              end
       elsif text_payload
+        text_payload = text_payload.to_s
         entry.text_payload = if @use_grpc
-                               convert_to_utf8(text_payload.to_s)
+                               convert_to_utf8(text_payload)
                              else
-                               text_payload.to_s
+                               text_payload
                              end
       end
     end
