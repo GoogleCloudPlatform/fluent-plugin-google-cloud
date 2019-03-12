@@ -2003,6 +2003,8 @@ module Fluent
       ret
     end
 
+    # TODO(qingling128): Fix the inconsistent behavior of 'message', 'log' and
+    # 'msg' in the next major version 1.0.0.
     def set_payload(resource_type, record, entry, is_json)
       # Only one of {text_payload, json_payload} will be set.
       text_payload = nil

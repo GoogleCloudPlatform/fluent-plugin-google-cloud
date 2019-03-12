@@ -536,54 +536,75 @@ module BaseTest
     end
   end
 
-  def test_structured_payload_json_log_detect_json_not_parsed_log_msg_hash
+  # TODO(qingling128): Fix the inconsistent behavior of 'message', 'log' and
+  # 'msg' in the next major version 1.0.0.
+  def test_structured_payload_json_log_detect_json_with_hash_input
     hash_value = {
       'msg' => 'test log entry 0',
       'tag2' => 'test',
       'data' => 5000,
       'some_null_field' => nil
     }
-    %w(log msg).each do |field|
+    [
+      {
+        config: APPLICATION_DEFAULT_CONFIG,
+        field_name: 'log',
+        expected_payload: 'jsonPayload'
+      },
+      {
+        config: APPLICATION_DEFAULT_CONFIG,
+        field_name: 'msg',
+        expected_payload: 'jsonPayload'
+      },
+      {
+        config: APPLICATION_DEFAULT_CONFIG,
+        field_name: 'message',
+        expected_payload: 'textPayload'
+      },
+      {
+        config: DETECT_JSON_CONFIG,
+        field_name: 'log',
+        expected_payload: 'jsonPayload'
+      },
+      {
+        config: DETECT_JSON_CONFIG,
+        field_name: 'msg',
+        expected_payload: 'jsonPayload'
+      },
+      {
+        config: DETECT_JSON_CONFIG,
+        field_name: 'message',
+        expected_payload: 'textPayload'
+      }
+    ].each do |test_params|
       new_stub_context do
         setup_gce_metadata_stubs
         setup_logging_stubs do
-          d = create_driver(DETECT_JSON_CONFIG)
-          d.emit(field => hash_value)
+          d = create_driver(test_params[:config])
+          d.emit(test_params[:field_name] => hash_value)
           d.run
         end
-        verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-          json_payload = get_fields(entry['jsonPayload'])
-          assert_equal 1, json_payload.size, entry
-          fields = get_fields(get_struct(json_payload[field]))
-          assert_equal 4, fields.size, entry
-          assert_equal 'test log entry 0', get_string(fields['msg']), entry
-          assert_equal 'test', get_string(fields['tag2']), entry
-          assert_equal 5000, get_number(fields['data']), entry
-          assert_equal null_value, fields['some_null_field'], entry
+        if test_params[:expected_payload] == 'textPayload'
+          verify_log_entries(1, COMPUTE_PARAMS, 'textPayload') do |entry|
+            text_payload = entry['textPayload']
+            assert_equal '{"msg"=>"test log entry 0", "tag2"=>"test", ' \
+                         '"data"=>5000, "some_null_field"=>nil}',
+                         text_payload, entry
+          end
+        else
+          verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+            json_payload = get_fields(entry['jsonPayload'])
+            assert_equal 1, json_payload.size, entry
+            fields = get_fields(
+              get_struct(json_payload[test_params[:field_name]]))
+            assert_equal 4, fields.size, entry
+            assert_equal 'test log entry 0', get_string(fields['msg']), entry
+            assert_equal 'test', get_string(fields['tag2']), entry
+            assert_equal 5000, get_number(fields['data']), entry
+            assert_equal null_value, fields['some_null_field'], entry
+          end
         end
       end
-    end
-  end
-
-  # TODO(qingling128): Fix the inconsistent behavior of 'message', 'log' and
-  # 'msg' in the next major version 1.0.0.
-  def test_structured_payload_json_log_detect_json_not_parsed_message_hash
-    hash_value = {
-      'msg' => 'test log entry 0',
-      'tag2' => 'test',
-      'data' => 5000,
-      'some_null_field' => nil
-    }
-    setup_gce_metadata_stubs
-    setup_logging_stubs do
-      d = create_driver(DETECT_JSON_CONFIG)
-      d.emit('message' => hash_value)
-      d.run
-    end
-    verify_log_entries(1, COMPUTE_PARAMS, 'textPayload') do |entry|
-      text_payload = entry['textPayload']
-      assert_equal '{"msg"=>"test log entry 0", "tag2"=>"test", "data"=>5000,' \
-                   ' "some_null_field"=>nil}', text_payload, entry
     end
   end
 
