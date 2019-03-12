@@ -536,7 +536,7 @@ module BaseTest
     end
   end
 
-  def test_structured_payload_json_log_detect_json_not_parsed_hash
+  def test_structured_payload_json_log_detect_json_not_parsed_log_msg_hash
     hash_value = {
       'msg' => 'test log entry 0',
       'tag2' => 'test',
@@ -562,6 +562,28 @@ module BaseTest
           assert_equal null_value, fields['some_null_field'], entry
         end
       end
+    end
+  end
+
+  # TODO(qingling128): Fix the inconsistent behavior of 'message', 'log' and
+  # 'msg' in the next major version 1.0.0.
+  def test_structured_payload_json_log_detect_json_not_parsed_message_hash
+    hash_value = {
+      'msg' => 'test log entry 0',
+      'tag2' => 'test',
+      'data' => 5000,
+      'some_null_field' => nil
+    }
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver(DETECT_JSON_CONFIG)
+      d.emit('message' => hash_value)
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'textPayload') do |entry|
+      text_payload = entry['textPayload']
+      assert_equal '{"msg"=>"test log entry 0", "tag2"=>"test", "data"=>5000,' \
+                   ' "some_null_field"=>nil}', text_payload, entry
     end
   end
 

@@ -2039,9 +2039,9 @@ module Fluent
                              end
       elsif text_payload
         entry.text_payload = if @use_grpc
-                               convert_to_utf8(text_payload)
+                               convert_to_utf8(text_payload.to_s)
                              else
-                               text_payload
+                               text_payload.to_s
                              end
       end
     end
