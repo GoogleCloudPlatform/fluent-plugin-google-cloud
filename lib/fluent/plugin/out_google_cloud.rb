@@ -980,8 +980,7 @@ module Fluent
     end
 
     def parse_json_or_nil(input)
-      # Only here to please rubocop...
-      return nil if input.nil?
+      return nil unless input.is_a?(String)
 
       input.each_codepoint do |c|
         if c == 123
@@ -2008,6 +2007,8 @@ module Fluent
       ret
     end
 
+    # TODO(qingling128): Fix the inconsistent behavior of 'message', 'log' and
+    # 'msg' in the next major version 1.0.0.
     def set_payload(resource_type, record, entry, is_json)
       # Only one of {text_payload, json_payload} will be set.
       text_payload = nil
@@ -2043,6 +2044,7 @@ module Fluent
                                json_payload
                              end
       elsif text_payload
+        text_payload = text_payload.to_s
         entry.text_payload = if @use_grpc
                                convert_to_utf8(text_payload)
                              else
