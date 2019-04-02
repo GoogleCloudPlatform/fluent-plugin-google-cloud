@@ -994,6 +994,24 @@ module BaseTest
     end
   end
 
+  def test_fluent_event_time_format
+    current_time = Time.now
+    setup_gce_metadata_stubs
+    setup_logging_stubs do
+      d = create_driver
+      d.emit(
+        'message' => log_entry(0),
+        'some_field' => Fluent::EventTime.from_time(current_time))
+      d.run
+    end
+    verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
+      fields = get_fields(entry['jsonPayload'])
+      assert_equal 2, fields.size, entry
+      assert_equal current_time.to_i,
+                   get_number(fields['some_field']), entry
+    end
+  end
+
   # Make parse_severity public so we can test it.
   class Fluent::GoogleCloudOutput # rubocop:disable Style/ClassAndModuleChildren
     public :parse_severity

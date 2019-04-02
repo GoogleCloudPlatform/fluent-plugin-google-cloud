@@ -1984,6 +1984,13 @@ module Fluent
         ret.list_value = value
       when Array
         ret.list_value = list_from_ruby(value)
+      when Fluent::EventTime
+        # Fluentd 'time' can be either an Integer or Fluent::EventTime. The
+        # record payload is not supposed to include a field in the format of
+        # Fluent::EventTime. But in rare cases, we've observed such behavior.
+        # The gRPC path should be able to handle it in the same way as the REST
+        # path (convert the field to Integer instead of erroring out).
+        ret.number_value = value.to_i
       else
         @log.error "Unknown type: #{value.class}"
         raise Google::Protobuf::Error, "Unknown type: #{value.class}"
