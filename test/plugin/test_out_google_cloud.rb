@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'fluent/test/startup_shutdown'
+require 'net/http'
+
 require_relative 'base_test'
 require_relative 'test_driver'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
   include BaseTest
+  extend Fluent::Test::StartupShutdown
 
   def test_configure_use_grpc
     setup_gce_metadata_stubs
@@ -327,6 +331,18 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         assert_equal timestamp, entry['timestamp'], 'Test with timestamp ' \
                      "'#{timestamp}' failed for entry: '#{entry}'."
       end
+    end
+  end
+
+  def test_statusz_endpoint
+    setup_gce_metadata_stubs
+    WebMock.disable_net_connect!(allow_localhost: true)
+    # TODO(davidbtucker): Consider searching for an unused port
+    # instead of hardcoding a constant here.
+    d = create_driver('statusz_port 5678')
+    d.run do
+      assert_match Regexp.new('.*<h1>Status</h1>.*'),
+                   Net::HTTP.get('127.0.0.1', '/statusz', 5678)
     end
   end
 
