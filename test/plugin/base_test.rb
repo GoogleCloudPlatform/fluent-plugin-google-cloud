@@ -29,12 +29,13 @@ module BaseTest
     # delete environment variables that googleauth uses to find credentials.
     ENV.delete(CREDENTIALS_PATH_ENV_VAR)
     # service account env.
-    ENV.delete('PRIVATE_KEY_VAR')
-    ENV.delete('CLIENT_EMAIL_VAR')
+    ENV.delete(PRIVATE_KEY_VAR)
+    ENV.delete(CLIENT_EMAIL_VAR)
+    ENV.delete(PROJECT_ID_VAR)
     # authorized_user env.
-    ENV.delete('CLIENT_ID_VAR')
-    ENV.delete('CLIENT_SECRET_VAR')
-    ENV.delete('REFRESH_TOKEN_VAR')
+    ENV.delete(CLIENT_ID_VAR)
+    ENV.delete(CLIENT_SECRET_VAR)
+    ENV.delete(REFRESH_TOKEN_VAR)
     # home var, which is used to find $HOME/.gcloud/...
     ENV.delete('HOME')
 
