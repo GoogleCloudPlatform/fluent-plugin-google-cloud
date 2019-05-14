@@ -19,7 +19,7 @@ eos
   gem.test_files    = gem.files.grep(/^(test)/)
   gem.require_paths = ['lib']
 
-  gem.add_runtime_dependency 'fluentd', '1.2.5'
+  gem.add_runtime_dependency 'fluentd', '1.4.2'
   gem.add_runtime_dependency 'googleapis-common-protos', '1.3.7'
   gem.add_runtime_dependency 'googleauth', '0.8.1'
   gem.add_runtime_dependency 'google-api-client', '0.28.4'
