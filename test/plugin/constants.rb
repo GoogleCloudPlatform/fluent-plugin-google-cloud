@@ -232,6 +232,14 @@ module Constants
     project_id: ''
   }.freeze
 
+  # Special googleauth environment variables.
+  PROJECT_ID_VAR = 'GOOGLE_PROJECT_ID'.freeze
+  PRIVATE_KEY_VAR = 'GOOGLE_PRIVATE_KEY'.freeze
+  CLIENT_EMAIL_VAR = 'GOOGLE_CLIENT_EMAIL'.freeze
+  CLIENT_ID_VAR = 'GOOGLE_CLIENT_ID'.freeze
+  CLIENT_SECRET_VAR = 'GOOGLE_CLIENT_SECRET'.freeze
+  REFRESH_TOKEN_VAR = 'GOOGLE_REFRESH_TOKEN'.freeze
+
   # Configuration files for various test scenarios.
   APPLICATION_DEFAULT_CONFIG = %(
   ).freeze

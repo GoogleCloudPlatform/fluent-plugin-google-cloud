@@ -377,9 +377,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   class GRPCLoggingMockFailingService <
       Google::Cloud::Logging::V2::LoggingServiceV2Client
     def initialize(error, failed_attempts)
+      super()
       @error = error
       @failed_attempts = failed_attempts
-      super()
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
