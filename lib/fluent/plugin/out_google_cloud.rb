@@ -40,6 +40,16 @@ module Google
   end
 end
 
+# Patch the gcloud command used by googleauth to avoid spamming stderr.
+module Google
+  module Auth
+    module CredentialsLoader
+      GCLOUD_CONFIG_COMMAND =
+        'config config-helper --format json --verbosity none'.freeze
+    end
+  end
+end
+
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
