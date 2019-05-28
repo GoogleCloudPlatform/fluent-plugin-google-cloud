@@ -408,6 +408,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     yield
   end
 
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '32 s' => { 'seconds' => 32 },
+      '32s' => { 'seconds' => 32 },
+      '0.32s' => { 'nanos' => 320_000_000 },
+      ' 123 s ' => { 'seconds' => 123 },
+      '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 },
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123.5\ts\t" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\rs\r" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\n123.5\ns\n" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\v123.5\vs\v" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\f123.5\fs\f" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\ts\f" => { 'seconds' => 123, 'nanos' => 500_000_000 }
+    }
+  end
+
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
                     tag = 'test',
@@ -444,31 +465,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the payload.
-  def get_fields(payload)
-    payload
-  end
-
-  # Get the value of a struct field.
-  def get_struct(field)
-    field
-  end
-
-  # Get the value of a string field.
-  def get_string(field)
-    field
-  end
-
-  # Get the value of a number field.
-  def get_number(field)
-    field
-  end
-
-  # The null value.
-  def null_value
-    nil
-  end
-
   # Convert certain fields to strings for compatibility between gRPC and REST.
   # See more details in:
   # https://github.com/google/google-api-ruby-client/issues/619.
@@ -503,10 +499,19 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     OPERATION_MESSAGE2
   end
 
-  # Both expected and actual are Ruby hashes that represent JSON
-  # objects.
-  # This method has a different implementation at the gRPC side.
-  def assert_hash_equal_json(expected, actual)
-    assert_equal expected, actual, "expected: #{expected}\nactual: #{actual}"
+  def enable_grpc
+    false
+  end
+
+  def default_nano_value
+    0
+  end
+
+  def entry_timestamp_seconds(timestamp)
+    timestamp['seconds']
+  end
+
+  def entry_timestamp_nanos(timestamp)
+    timestamp['nanos']
   end
 end

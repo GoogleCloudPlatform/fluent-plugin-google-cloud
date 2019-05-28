@@ -273,14 +273,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
+      fields = entry['jsonPayload']
       assert_equal 5, fields.size, entry
-      assert_equal 'test log entry 0', get_string(fields['msg']), entry
-      assert_equal 'test non utf8', get_string(fields['normal_key']), entry
-      assert_equal 5000, get_number(fields['non_utf8 key']), entry
-      assert_equal 'test non utf8', get_string(get_fields(get_struct(fields \
-                   ['nested_struct']))['non_utf8 key']), entry
-      assert_equal null_value, fields['null_field'], entry
+      assert_equal 'test log entry 0', fields['msg'], entry
+      assert_equal 'test non utf8', fields['normal_key'], entry
+      assert_equal 5000, fields['non_utf8 key'], entry
+      assert_equal 'test non utf8', fields['nested_struct']['non_utf8 key'],
+                   entry
+      assert_equal nil, fields['null_field'], entry
     end
   end
 
@@ -292,9 +292,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       { 'seconds' => nil, 'nanos' => time.tv_nsec } => nil,
       { 'seconds' => 'seconds', 'nanos' => time.tv_nsec } => nil,
       { 'seconds' => time.tv_sec, 'nanos' => 'nanos' } => \
-        { 'seconds' => time.tv_sec },
+        time.utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
       { 'seconds' => time.tv_sec, 'nanos' => nil } => \
-        { 'seconds' => time.tv_sec }
+        time.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
     }.each do |input, expected|
       setup_logging_stubs do
         d = create_driver
@@ -317,6 +317,27 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   USE_GRPC_CONFIG = %(
     use_grpc true
   ).freeze
+
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '32 s' => '32s',
+      '32s' => '32s',
+      '0.32s' => '0.320000000s',
+      ' 123 s ' => '123s',
+      '1.3442 s' => '1.344200000s',
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123.5\ts\t" => '123.500000000s',
+      "\r123.5\rs\r" => '123.500000000s',
+      "\n123.5\ns\n" => '123.500000000s',
+      "\v123.5\vs\v" => '123.500000000s',
+      "\f123.5\fs\f" => '123.500000000s',
+      "\r123.5\ts\f" => '123.500000000s'
+    }
+  end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
@@ -448,35 +469,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the payload.
-  def get_fields(payload)
-    payload['fields']
-  end
-
-  # Get the value of a struct field.
-  def get_struct(field)
-    field['structValue']
-  end
-
-  # Get the value of a string field.
-  def get_string(field)
-    field['stringValue']
-  end
-
-  # Get the value of a number field.
-  def get_number(field)
-    field['numberValue']
-  end
-
-  def get_bool(field)
-    field['boolValue']
-  end
-
-  # The null value.
-  def null_value
-    { 'nullValue' => 'NULL_VALUE' }
-  end
-
   def http_request_message
     HTTP_REQUEST_MESSAGE
   end
@@ -495,52 +487,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
   end
 
-  # expected: A Ruby hash that represents a JSON object.
-  # e.g.:
-  #   {
-  #     "file" => "source/file",
-  #     "function" => "my_function",
-  #     "line" => 18
-  #   }
-  #
-  # actual: A Ruby hash that represents a Proto object.
-  # e.g.:
-  #   {
-  #     "structValue" => {
-  #       "fields" => {
-  #         "file" => {
-  #           "stringValue" => "source/file"
-  #         },
-  #         "function" => {
-  #           "stringValue" => "my_function"
-  #         },
-  #         "line" => {
-  #           "numberValue" => 18
-  #         }
-  #       }
-  #     }
-  #   }
-  # This method has a different implementation at the REST side.
-  def assert_hash_equal_json(expected, actual)
-    error_message = "expected: #{expected}\nactual: #{actual}"
-    assert_true actual.is_a?(Hash),
-                "Expect the actual value to be a hash. #{error_message}"
-    if actual.key?('stringValue')
-      assert_equal expected, get_string(actual), error_message
-    elsif actual.key?('numberValue')
-      assert_equal expected, get_number(actual), error_message
-    elsif actual.key?('boolValue')
-      assert_equal expected, get_bool(actual), error_message
-    elsif actual.key?('structValue')
-      expected_copy = expected.dup
-      get_fields(get_struct(actual)).each do |field_name, nested_actual|
-        assert_hash_equal_json expected_copy[field_name], nested_actual
-        expected_copy.reject! { |k, _| k == field_name }
-      end
-      # Make sure all fields are matched.
-      assert_true expected_copy.empty?
-    else
-      assert_true false, "Unsupported proto format. #{error_message}"
-    end
+  def enable_grpc
+    true
+  end
+
+  def default_nano_value
+    nil
+  end
+
+  def entry_timestamp_seconds(timestamp)
+    Time.parse(timestamp).tv_sec
+  end
+
+  def entry_timestamp_nanos(timestamp)
+    Time.parse(timestamp).tv_nsec
   end
 end
