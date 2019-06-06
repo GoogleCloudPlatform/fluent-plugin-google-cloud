@@ -60,14 +60,6 @@ module Fluent
         resource_type: 'gae_app',
         metadata_attributes: %w(gae_backend_name gae_backend_version)
       }.freeze
-      CLOUDFUNCTIONS_CONSTANTS = {
-        service: 'cloudfunctions.googleapis.com',
-        resource_type: 'cloud_function',
-        stream_severity_map: {
-          'stdout' => 'INFO',
-          'stderr' => 'ERROR'
-        }
-      }.freeze
       COMPUTE_CONSTANTS = {
         service: 'compute.googleapis.com',
         resource_type: 'gce_instance'
@@ -541,21 +533,9 @@ module Fluent
       @resource ||= determine_agent_level_monitored_resource_via_legacy
 
       # Set regexp that we should match tags against later on. Using a list
-      # instead of a map to ensure order. For example, tags will be matched
-      # against Cloud Functions first, then GKE.
+      # instead of a map to ensure order.
       @tag_regexp_list = []
       if @resource.type == GKE_CONSTANTS[:resource_type]
-        # We only support Cloud Functions logs for GKE right now.
-        if fetch_gce_metadata('instance/attributes/'
-                             ).split.include?('gcf_region')
-          # Fetch this info and store it to avoid recurring
-          # metadata server calls.
-          @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
-          @tag_regexp_list << [
-            CLOUDFUNCTIONS_CONSTANTS[:resource_type],
-            @compiled_cloudfunctions_tag_regexp
-          ]
-        end
         @tag_regexp_list << [
           GKE_CONSTANTS[:resource_type], @compiled_kubernetes_tag_regexp
         ]
@@ -667,8 +647,7 @@ module Fluent
             end
           end
 
-          ts_secs, ts_nanos = compute_timestamp(
-            entry_level_resource.type, record, time)
+          ts_secs, ts_nanos = compute_timestamp(record, time)
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
 
@@ -1087,14 +1066,6 @@ module Fluent
       @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp) if
         @kubernetes_tag_regexp
 
-      @compiled_cloudfunctions_tag_regexp =
-        /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
-      @compiled_cloudfunctions_log_regexp = /^
-        (?:\[(?<severity>.)\])?
-        \[(?<timestamp>.{24})\]
-        (?:\[(?<execution_id>[^\]]+)\])?
-        [ ](?<text>.*)$/x
-
       @compiled_http_latency_regexp =
         /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
     end
@@ -1364,23 +1335,6 @@ module Fluent
 
       # Once the resource type is settled down, determine the labels.
       case resource.type
-      # Cloud Functions.
-      when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        resource.labels.merge!(
-          'region' => @gcf_region,
-          'function_name' => decode_cloudfunctions_function_name(
-            matched_regexp_group['encoded_function_name'])
-        )
-        instance_id = resource.labels.delete('instance_id')
-        common_labels.merge!(
-          "#{GKE_CONSTANTS[:service]}/instance_id" => instance_id,
-          "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
-          "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-            resource.labels.delete('cluster_name'),
-          "#{COMPUTE_CONSTANTS[:service]}/zone" =>
-            resource.labels.delete('zone')
-        )
-
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
         if matched_regexp_group
@@ -1475,17 +1429,6 @@ module Fluent
       common_labels = group_level_common_labels.dup
 
       case resource.type
-      # Cloud Functions.
-      when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        if record.key?('log')
-          @cloudfunctions_log_match =
-            @compiled_cloudfunctions_log_regexp.match(record['log'])
-          common_labels['execution_id'] =
-            @cloudfunctions_log_match['execution_id'] if
-              @cloudfunctions_log_match &&
-              @cloudfunctions_log_match['execution_id']
-        end
-
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
@@ -1627,7 +1570,7 @@ module Fluent
       nil
     end
 
-    def compute_timestamp(resource_type, record, time)
+    def compute_timestamp(record, time)
       current_time = Time.now
       if record.key?('timestamp') &&
          record['timestamp'].is_a?(Hash) &&
@@ -1655,12 +1598,6 @@ module Fluent
             'timestampSeconds and timestampNanos instead.'
         end
         timestamp = time_or_nil(ts_secs, ts_nanos)
-      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-            @cloudfunctions_log_match
-        timestamp = DateTime.parse(
-          @cloudfunctions_log_match['timestamp']).to_time
-        ts_secs = timestamp.tv_sec
-        ts_nanos = timestamp.tv_nsec
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1718,14 +1655,7 @@ module Fluent
     end
 
     def compute_severity(resource_type, record, entry_level_common_labels)
-      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
-          return parse_severity(@cloudfunctions_log_match['severity'])
-        elsif record.key?('stream')
-          return CLOUDFUNCTIONS_CONSTANTS[:stream_severity_map].fetch(
-            record.delete('stream'), 'DEFAULT')
-        end
-      elsif record.key?('severity')
+      if record.key?('severity')
         return parse_severity(record.delete('severity'))
       elsif resource_type == GKE_CONSTANTS[:resource_type]
         stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
@@ -1946,14 +1876,6 @@ module Fluent
       end
     end
 
-    def decode_cloudfunctions_function_name(function_name)
-      function_name.gsub(/c\.[a-z]/) { |s| s.upcase[-1] }
-                   .gsub('u.u', '_')
-                   .gsub('d.d', '$')
-                   .gsub('a.a', '@')
-                   .gsub('p.p', '.')
-    end
-
     def format(tag, time, record)
       Fluent::Engine.msgpack_factory.packer.write([tag, time, record]).to_s
     end
@@ -2035,19 +1957,11 @@ module Fluent
       # Only one of {text_payload, json_payload} will be set.
       text_payload = nil
       json_payload = nil
-      # If this is a Cloud Functions log that matched the expected regexp,
-      # use text payload. Otherwise, use JSON if we found valid JSON, or text
-      # payload in the following cases:
-      # 1. This is a Cloud Functions log and the 'log' key is available
-      # 2. This is an unstructured Container log and the 'log' key is available
-      # 3. The only remaining key is 'message'
-      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-         @cloudfunctions_log_match
-        text_payload = @cloudfunctions_log_match['text']
-      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-            record.key?('log')
-        text_payload = record['log']
-      elsif is_json
+      # Use JSON if we found valid JSON, or text payload in the following
+      # cases:
+      # 1. This is an unstructured Container log and the 'log' key is available
+      # 2. The only remaining key is 'message'
+      if is_json
         json_payload = record
       elsif [GKE_CONSTANTS[:resource_type],
              DOCKER_CONSTANTS[:resource_type]].include?(resource_type) &&
@@ -2076,9 +1990,7 @@ module Fluent
     end
 
     def log_name(tag, resource)
-      if resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        tag = 'cloud-functions'
-      elsif resource.type == APPENGINE_CONSTANTS[:resource_type]
+      if resource.type == APPENGINE_CONSTANTS[:resource_type]
         # Add a prefix to Managed VM logs to prevent namespace collisions.
         tag = "#{APPENGINE_CONSTANTS[:service]}/#{tag}"
       elsif resource.type == GKE_CONSTANTS[:resource_type]

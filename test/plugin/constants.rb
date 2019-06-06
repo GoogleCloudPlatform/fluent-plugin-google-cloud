@@ -178,16 +178,6 @@ module Constants
   CONTAINER_SEVERITY = 'INFO'.freeze
   CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'gke_container'.freeze
 
-  # Cloud Functions specific labels.
-  CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'.freeze
-  CLOUDFUNCTIONS_REGION = 'us-central1'.freeze
-  CLOUDFUNCTIONS_EXECUTION_ID = '123-0'.freeze
-  CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'.freeze
-  CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'.freeze
-  CLOUDFUNCTIONS_POD_NAME =
-    'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'.freeze
-  CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'.freeze
-
   # Dataflow specific labels.
   DATAFLOW_REGION = 'us-central1'.freeze
   DATAFLOW_JOB_NAME = 'job_name_1'.freeze
@@ -708,52 +698,6 @@ module Constants
   ).freeze
   DOCKER_CONTAINER_PARAMS_NO_STREAM =
     DOCKER_CONTAINER_PARAMS.merge(labels: {}).freeze
-
-  # Cloud Functions.
-  CLOUDFUNCTIONS_TAG = "kubernetes.#{CLOUDFUNCTIONS_POD_NAME}_" \
-                        "#{CLOUDFUNCTIONS_NAMESPACE_NAME}_" \
-                        "#{CLOUDFUNCTIONS_CONTAINER_NAME}".freeze
-
-  CLOUDFUNCTIONS_PARAMS = {
-    resource: {
-      type: CLOUDFUNCTIONS_CONSTANTS[:resource_type],
-      labels: {
-        'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
-        'region' => CLOUDFUNCTIONS_REGION
-      }
-    },
-    log_name: 'cloud-functions',
-    project_id: PROJECT_ID,
-    labels: {
-      'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
-      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-        CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
-      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
-    }
-  }.freeze
-
-  CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
-    resource: {
-      type: CLOUDFUNCTIONS_CONSTANTS[:resource_type],
-      labels: {
-        'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
-        'region' => CLOUDFUNCTIONS_REGION
-      }
-    },
-    log_name: 'cloud-functions',
-    project_id: PROJECT_ID,
-    labels: {
-      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-        CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
-      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
-    }
-  }.freeze
 
   # Cloud Dataflow.
   DATAFLOW_PARAMS = {
