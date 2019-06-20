@@ -1279,7 +1279,7 @@ module Fluent
       chunk.msgpack_each do |tag, time, record|
         unless record.is_a?(Hash)
           @log.warn 'Dropping log entries with malformed record: ' \
-                    "'#{record.inspect}' from tag '#{tag}'. " \
+                    "'#{record.inspect}' from tag '#{tag}' at '#{time}'. " \
                     'A log record should be in JSON format.'
           next
         end
