@@ -44,8 +44,13 @@ end
 module Google
   module Auth
     module CredentialsLoader
+      # Set $VERBOSE to nil to mute the following warning:
+      # "warning: already initialized constant Google::Auth::CredentialsLoader::GCLOUD_CONFIG_COMMAND"
+      warn_level = $VERBOSE
+      $VERBOSE = nil
       GCLOUD_CONFIG_COMMAND =
         'config config-helper --format json --verbosity none'.freeze
+      $VERBOSE = warn_level
     end
   end
 end
