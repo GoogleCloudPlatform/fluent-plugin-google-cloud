@@ -42,16 +42,15 @@ end
 
 module Google
   module Auth
-    # Patch the gcloud command used by googleauth to avoid spamming stderr.
+    # Disable gcloud lookup in googleauth to avoid picking up its project id.
     module CredentialsLoader
-      # Set $VERBOSE to nil to mute the following warning:
-      # "warning: already initialized constant
-      # Google::Auth::CredentialsLoader::GCLOUD_CONFIG_COMMAND".
+      # Set $VERBOSE to nil to mute the "already initialized constant" warnings.
       warn_level = $VERBOSE
       begin
         $VERBOSE = nil
-        GCLOUD_CONFIG_COMMAND =
-          'config config-helper --format json --verbosity none'.freeze
+        GCLOUD_POSIX_COMMAND = '/bin/true'.freeze
+        GCLOUD_WINDOWS_COMMAND = 'cd .'.freeze
+        GCLOUD_CONFIG_COMMAND = ''.freeze
       ensure
         $VERBOSE = warn_level
       end
