@@ -1411,12 +1411,12 @@ module Fluent
           resource.type = 'container' if resource.type == 'gke_container'
           return resource
         end
+        @log.debug('Failed to retrieve monitored resource from Metadata' \
+                   " Agent with local_resource_id #{local_resource_id}.")
       end
       # Fall back to constructing monitored resource locally.
       # TODO(qingling128): This entire else clause is temporary until we
       # implement buffering and caching.
-      @log.debug('Failed to retrieve monitored resource from Metadata' \
-                 " Agent with local_resource_id #{local_resource_id}.")
       construct_k8s_resource_locally(local_resource_id)
     end
 
