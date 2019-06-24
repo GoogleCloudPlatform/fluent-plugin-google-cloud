@@ -40,12 +40,21 @@ module Google
   end
 end
 
-# Patch the gcloud command used by googleauth to avoid spamming stderr.
 module Google
   module Auth
+    # Patch the gcloud command used by googleauth to avoid spamming stderr.
     module CredentialsLoader
-      GCLOUD_CONFIG_COMMAND =
-        'config config-helper --format json --verbosity none'.freeze
+      # Set $VERBOSE to nil to mute the following warning:
+      # "warning: already initialized constant
+      # Google::Auth::CredentialsLoader::GCLOUD_CONFIG_COMMAND".
+      warn_level = $VERBOSE
+      begin
+        $VERBOSE = nil
+        GCLOUD_CONFIG_COMMAND =
+          'config config-helper --format json --verbosity none'.freeze
+      ensure
+        $VERBOSE = warn_level
+      end
     end
   end
 end
