@@ -48,6 +48,11 @@ module Google
       warn_level = $VERBOSE
       begin
         $VERBOSE = nil
+        # These constants are used to invoke gcloud on Linux and Windows,
+        # respectively. Ideally, we would have overridden
+        # CredentialsLoader.load_gcloud_project_id, but we cannot catch it
+        # before it's invoked via "require 'googleauth'". So we override the
+        # constants instead.
         GCLOUD_POSIX_COMMAND = '/bin/true'.freeze
         GCLOUD_WINDOWS_COMMAND = 'cd .'.freeze
         GCLOUD_CONFIG_COMMAND = ''.freeze
