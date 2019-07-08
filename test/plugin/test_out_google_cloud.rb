@@ -339,10 +339,125 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     WebMock.disable_net_connect!(allow_localhost: true)
     # TODO(davidbtucker): Consider searching for an unused port
     # instead of hardcoding a constant here.
-    d = create_driver('statusz_port 5678')
+    d = create_driver(%(
+      statusz_port                  5678
+
+      adjust_invalid_timestamps     false
+      autoformat_stackdriver_trace  false
+      coerce_to_utf8                false
+      detect_json                   true
+      detect_subservice             false
+      enable_metadata_agent         true
+      enable_monitoring             true
+      http_request_key              test_http_request_key
+      insert_id_key                 test_insert_id_key
+      k8s_cluster_location          test-k8s-cluster-location
+      k8s_cluster_name              test-k8s-cluster-name
+      kubernetes_tag_regexp         .*test-regexp.*
+      label_map                     { "label_map_key": "label_map_value" }
+      labels_key                    test_labels_key
+      labels                        { "labels_key": "labels_value" }
+      logging_api_url               http://localhost:52000
+      metadata_agent_url            http://localhost:12345
+      monitoring_type               not_prometheus
+      non_utf8_replacement_string   zzz
+      operation_key                 test_operation_key
+      partial_success               false
+      project_id                    test-project-id-123
+      require_valid_tags            true
+      source_location_key           test_source_location_key
+      span_id_key                   test_span_id_key
+      split_logs_by_tag             true
+      subservice_name               test_subservice_name
+      trace_key                     test_trace_key
+      trace_sampled_key             test_trace_sampled_key
+      use_aws_availability_zone     false
+      use_grpc                      true
+      use_metadata_service          false
+      vm_id                         12345
+      vm_name                       test.hostname.org
+      zone                          asia-east2
+    ))
     d.run do
-      assert_match Regexp.new('.*<h1>Status</h1>.*'),
-                   Net::HTTP.get('127.0.0.1', '/statusz', 5678)
+      resp = Net::HTTP.get('127.0.0.1', '/statusz', 5678)
+      assert_match Regexp.new('<h1>Status for .*</h1>.*'), resp
+
+      # rubocop:disable LineLength
+      assert_match Regexp.new('<tr><th>adjust_invalid_timestamps</th>' \
+                              '<td>false</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>autoformat_stackdriver_trace</th>' \
+                              '<td>false</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>coerce_to_utf8</th>' \
+                              '<td>false</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>detect_json</th>' \
+                              '<td>true</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>detect_subservice</th>' \
+                              '<td>false</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>enable_metadata_agent</th>' \
+                              '<td>true</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>enable_monitoring</th>' \
+                              '<td>true</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>http_request_key</th>' \
+                              '<td>test_http_request_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>insert_id_key</th>' \
+                              '<td>test_insert_id_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>k8s_cluster_location</th>' \
+                              '<td>test-k8s-cluster-location</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>k8s_cluster_name</th>' \
+                              '<td>test-k8s-cluster-name</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>kubernetes_tag_regexp</th>' \
+                              '<td>.*test-regexp.*</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>label_map</th>' \
+                              '<td>{\"label_map_key\"=>\"label_map_value\"}</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>labels_key</th>' \
+                              '<td>test_labels_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>labels</th>' \
+                              '<td>{\"labels_key\"=>\"labels_value\"}</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>logging_api_url</th>' \
+                              '<td>http://localhost:52000</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>metadata_agent_url</th>' \
+                              '<td>http://localhost:12345</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>monitoring_type</th>' \
+                              '<td>not_prometheus</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>non_utf8_replacement_string</th>' \
+                              '<td>zzz</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>operation_key</th>' \
+                              '<td>test_operation_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>partial_success</th>' \
+                              '<td>false</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>project_id</th>' \
+                              '<td>test-project-id-123</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>require_valid_tags</th>' \
+                              '<td>true</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>source_location_key</th>' \
+                              '<td>test_source_location_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>span_id_key</th>' \
+                              '<td>test_span_id_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>split_logs_by_tag</th>' \
+                              '<td>true</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>statusz_port</th>' \
+                              '<td>5678</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>subservice_name</th>' \
+                              '<td>test_subservice_name</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>trace_key</th>' \
+                              '<td>test_trace_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>trace_sampled_key</th>' \
+                              '<td>test_trace_sampled_key</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>use_aws_availability_zone</th>' \
+                              '<td>false</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>use_grpc</th>' \
+                              '<td>true</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>use_metadata_service</th>' \
+                              '<td>false</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>vm_id</th>' \
+                              '<td>12345</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>vm_name</th>' \
+                              '<td>test.hostname.org</td></tr>'), resp
+      assert_match Regexp.new('<tr><th>zone</th>' \
+                              '<td>asia-east2</td></tr>'), resp
+      # rubocop:enable LineLength
+
+      assert_match Regexp.new('^</html>$'), resp
     end
   end
 

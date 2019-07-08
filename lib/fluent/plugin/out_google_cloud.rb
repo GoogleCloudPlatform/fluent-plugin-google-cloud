@@ -597,7 +597,7 @@ module Fluent
                       @statusz_port,
                       bind: '127.0.0.1') do |data, conn|
           if data.split(' ')[1] == '/statusz'
-            write_html_response(data, conn, 200, Statusz.response)
+            write_html_response(data, conn, 200, Statusz.response(self))
           else
             write_html_response(data, conn, 404, "Not found\n")
           end
