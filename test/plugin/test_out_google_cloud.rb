@@ -346,6 +346,14 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_monitoring_config
+    setup_gce_metadata_stubs
+    create_driver(%(
+      enable_monitoring  true
+      monitoring_type    not_prometheus
+    ))
+  end
+
   private
 
   WRITE_LOG_ENTRIES_URI =

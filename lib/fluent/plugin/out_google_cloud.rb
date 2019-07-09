@@ -511,6 +511,10 @@ module Fluent
             ' Stackdriver output plugin due to a transient error and were'\
             ' retried')
         @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
+        unless @successful_requests_count
+          @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
+                    'there will be no metrics'
+        end
       end
 
       # Alert on old authentication configuration.

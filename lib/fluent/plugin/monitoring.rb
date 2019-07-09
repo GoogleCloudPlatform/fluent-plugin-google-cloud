@@ -16,7 +16,7 @@ module Monitoring
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
     def counter(_name, _desc)
-      _undefined
+      nil
     end
   end
 
