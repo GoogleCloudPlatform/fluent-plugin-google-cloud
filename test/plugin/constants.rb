@@ -465,7 +465,7 @@ module Constants
   ).freeze
 
   # For monitoring config.
-  CONFIG_MONITORING_TYPE_NOT_PROMETHEUS = %(
+  CONFIG_UNKNOWN_MONITORING_TYPE = %(
     enable_monitoring  true
     monitoring_type    not_prometheus
   ).freeze
