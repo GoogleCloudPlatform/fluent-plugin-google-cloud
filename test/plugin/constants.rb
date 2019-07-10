@@ -464,6 +464,12 @@ module Constants
     #{CONFIG_LABEL_MAP_CONFLICTING}
   ).freeze
 
+  # For monitoring config.
+  CONFIG_MONITORING_TYPE_NOT_PROMETHEUS = %(
+    enable_monitoring  true
+    monitoring_type    not_prometheus
+  ).freeze
+
   # Service configurations for various services.
 
   # GCE.

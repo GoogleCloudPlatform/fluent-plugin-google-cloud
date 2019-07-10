@@ -48,6 +48,10 @@ module Monitoring
         PrometheusMonitoringRegistry
     }
 
+    def self.supports_monitoring_type(name)
+      @known_registry_types.key?(name)
+    end
+
     def self.create(name)
       (@known_registry_types[name] || BaseMonitoringRegistry).new
     end

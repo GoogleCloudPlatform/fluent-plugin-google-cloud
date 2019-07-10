@@ -347,11 +347,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   def test_monitoring_config
+    # Verify that driver creation succeeds when monitoring type is not
+    # "prometheus" (in which case, we simply don't record metrics).
     setup_gce_metadata_stubs
-    create_driver(%(
-      enable_monitoring  true
-      monitoring_type    not_prometheus
-    ))
+    create_driver(CONFIG_MONITORING_TYPE_NOT_PROMETHEUS)
   end
 
   private
