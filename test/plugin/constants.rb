@@ -470,6 +470,47 @@ module Constants
     monitoring_type    not_prometheus
   ).freeze
 
+  # For statusz.
+  CONFIG_STATUSZ = %(
+    statusz_port                  5678
+
+    adjust_invalid_timestamps     false
+    autoformat_stackdriver_trace  false
+    coerce_to_utf8                false
+    detect_json                   true
+    detect_subservice             false
+    enable_metadata_agent         true
+    enable_monitoring             true
+    http_request_key              test_http_request_key
+    insert_id_key                 test_insert_id_key
+    k8s_cluster_location          test-k8s-cluster-location
+    k8s_cluster_name              test-k8s-cluster-name
+    kubernetes_tag_regexp         .*test-regexp.*
+    label_map                     { "label_map_key": "label_map_value" }
+    labels_key                    test_labels_key
+    labels                        { "labels_key": "labels_value" }
+    logging_api_url               http://localhost:52000
+    metadata_agent_url            http://localhost:12345
+    monitoring_type               not_prometheus
+    non_utf8_replacement_string   zzz
+    operation_key                 test_operation_key
+    partial_success               false
+    project_id                    test-project-id-123
+    require_valid_tags            true
+    source_location_key           test_source_location_key
+    span_id_key                   test_span_id_key
+    split_logs_by_tag             true
+    subservice_name               test_subservice_name
+    trace_key                     test_trace_key
+    trace_sampled_key             test_trace_sampled_key
+    use_aws_availability_zone     false
+    use_grpc                      true
+    use_metadata_service          false
+    vm_id                         12345
+    vm_name                       test.hostname.org
+    zone                          asia-east2
+  ).freeze
+
   # Service configurations for various services.
 
   # GCE.
