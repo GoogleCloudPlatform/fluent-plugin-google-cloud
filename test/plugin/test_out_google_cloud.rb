@@ -339,10 +339,54 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     WebMock.disable_net_connect!(allow_localhost: true)
     # TODO(davidbtucker): Consider searching for an unused port
     # instead of hardcoding a constant here.
-    d = create_driver('statusz_port 5678')
+    d = create_driver(CONFIG_STATUSZ)
     d.run do
-      assert_match Regexp.new('.*<h1>Status</h1>.*'),
-                   Net::HTTP.get('127.0.0.1', '/statusz', 5678)
+      resp = Net::HTTP.get('127.0.0.1', '/statusz', 5678)
+      must_match = [
+        '<h1>Status for .*</h1>.*',
+
+        '\badjust_invalid_timestamps\b.*\bfalse\b',
+        '\bautoformat_stackdriver_trace\b.*\bfalse\b',
+        '\bcoerce_to_utf8\b.*\bfalse\b',
+        '\bdetect_json\b.*\btrue\b',
+        '\bdetect_subservice\b.*\bfalse\b',
+        '\benable_metadata_agent\b.*\btrue\b',
+        '\benable_monitoring\b.*\btrue\b',
+        '\bhttp_request_key\b.*\btest_http_request_key\b',
+        '\binsert_id_key\b.*\btest_insert_id_key\b',
+        '\bk8s_cluster_location\b.*\btest-k8s-cluster-location\b',
+        '\bk8s_cluster_name\b.*\btest-k8s-cluster-name\b',
+        '\bkubernetes_tag_regexp\b.*\b.*test-regexp.*\b',
+        '\blabel_map\b.*{"label_map_key"=>"label_map_value"}',
+        '\blabels_key\b.*\btest_labels_key\b',
+        '\blabels\b.*{"labels_key"=>"labels_value"}',
+        '\blogging_api_url\b.*\bhttp://localhost:52000\b',
+        '\bmetadata_agent_url\b.*\bhttp://localhost:12345\b',
+        '\bmonitoring_type\b.*\bnot_prometheus\b',
+        '\bnon_utf8_replacement_string\b.*\bzzz\b',
+        '\boperation_key\b.*\btest_operation_key\b',
+        '\bpartial_success\b.*\bfalse\b',
+        '\bproject_id\b.*\btest-project-id-123\b',
+        '\brequire_valid_tags\b.*\btrue\b',
+        '\bsource_location_key\b.*\btest_source_location_key\b',
+        '\bspan_id_key\b.*\btest_span_id_key\b',
+        '\bsplit_logs_by_tag\b.*\btrue\b',
+        '\bstatusz_port\b.*\b5678\b',
+        '\bsubservice_name\b.*\btest_subservice_name\b',
+        '\btrace_key\b.*\btest_trace_key\b',
+        '\btrace_sampled_key\b.*\btest_trace_sampled_key\b',
+        '\buse_aws_availability_zone\b.*\bfalse\b',
+        '\buse_grpc\b.*\btrue\b',
+        '\buse_metadata_service\b.*\bfalse\b',
+        '\bvm_id\b.*\b12345\b',
+        '\bvm_name\b.*\btest.hostname.org\b',
+        '\bzone\b.*\basia-east2\b',
+
+        '^</html>$'
+      ]
+      must_match.each do |re|
+        assert_match Regexp.new(re), resp
+      end
     end
   end
 
