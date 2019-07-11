@@ -39,6 +39,14 @@ module BaseTest
     # home var, which is used to find $HOME/.gcloud/...
     ENV.delete('HOME')
 
+    # Unregister Prometheus metrics.
+    registry = Prometheus::Client.registry
+    registry.unregister(:stackdriver_successful_requests_count)
+    registry.unregister(:stackdriver_failed_requests_count)
+    registry.unregister(:stackdriver_ingested_entries_count)
+    registry.unregister(:stackdriver_dropped_entries_count)
+    registry.unregister(:stackdriver_retried_entries_count)
+
     setup_auth_stubs
     @logs_sent = []
   end
