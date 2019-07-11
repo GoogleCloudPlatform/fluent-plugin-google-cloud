@@ -19,6 +19,7 @@ require 'erb'
 module Statusz
   module_function
 
+  # Note: The plugin parameter is referenced in STATUSZ_TMPL.
   def response(plugin)
     uptime = Time.now - SERVER_START
     uptime_str = format('%d hr %02d min %02d sec',
