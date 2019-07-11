@@ -342,7 +342,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d = create_driver(CONFIG_STATUSZ)
     d.run do
       resp = Net::HTTP.get('127.0.0.1', '/statusz', 5678)
-      # rubocop:disable LineLength
       must_match = [
         '<h1>Status for .*</h1>.*',
 
@@ -385,7 +384,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
         '^</html>$'
       ]
-      # rubocop:enable LineLength
       must_match.each do |re|
         assert_match Regexp.new(re), resp
       end
