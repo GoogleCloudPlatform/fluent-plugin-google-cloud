@@ -1036,7 +1036,7 @@ module Fluent
       end
 
       begin
-        open('http://' + METADATA_SERVICE_ADDR, :proxy => false) do |f|
+        open('http://' + METADATA_SERVICE_ADDR, proxy: false) do |f|
           if f.meta['metadata-flavor'] == 'Google'
             @log.info 'Detected GCE platform'
             return Platform::GCE
@@ -1059,7 +1059,8 @@ module Fluent
         @platform == Platform::GCE
       # See https://cloud.google.com/compute/docs/metadata
       open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
-           metadata_path, 'Metadata-Flavor' => 'Google', :proxy => false, &:read)
+           metadata_path, 'Metadata-Flavor' => 'Google', :proxy => false,
+           &:read)
     end
 
     # EC2 Metadata server returns everything in one call. Store it after the
@@ -1070,7 +1071,7 @@ module Fluent
       unless @ec2_metadata
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
         open('http://' + METADATA_SERVICE_ADDR +
-             '/latest/dynamic/instance-identity/document', :proxy => false) do |f|
+             '/latest/dynamic/instance-identity/document', proxy: false) do |f|
           contents = f.read
           @ec2_metadata = JSON.parse(contents)
         end
