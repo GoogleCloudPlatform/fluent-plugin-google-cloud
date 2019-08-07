@@ -36,6 +36,7 @@ module Google
     # Alias the has_key? method to have the same interface as a regular map.
     class Map
       alias key? has_key?
+      alias to_hash to_h
     end
   end
 end
@@ -2254,7 +2255,7 @@ module Fluent
       raise JSON::ParserError, 'No partial error info in error details.' unless
         error_details[0].is_a?(
           Google::Logging::V2::WriteLogEntriesPartialErrors)
-      log_entry_errors = ensure_hash_grpc(error_details[0].log_entry_errors)
+      log_entry_errors = ensure_hash(error_details[0].log_entry_errors)
       log_entry_errors.each do |index, log_entry_error|
         error_key = [log_entry_error[:code], log_entry_error[:message]].freeze
         error_details_map[error_key] << index
@@ -2340,15 +2341,9 @@ module Fluent
       Array.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
     end
 
-    # Convert the value to a Ruby hash for the REST path.
+    # Convert the value to a Ruby hash.
     def ensure_hash(value)
       Hash.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
-    end
-
-    # Convert the value to a Ruby hash for the gRPC path.
-    # This method raises JSON::ParserError for backward compatibility.
-    def ensure_hash_grpc(value)
-      value.to_h || (raise JSON::ParserError, value.class.to_s)
     end
 
     # Increment the metric for the number of successful requests.
