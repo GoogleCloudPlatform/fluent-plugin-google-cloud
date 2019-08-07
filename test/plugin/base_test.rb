@@ -984,17 +984,13 @@ module BaseTest
             verify_default_log_entry_text(entry['textPayload'], i, entry)
             actual_seconds = timestamp_seconds(entry['timestamp'])
             actual_nanos = timestamp_nanos(entry['timestamp'])
-            assert_equal_with_default actual_seconds, expected_ts.tv_sec,
-                                      default_nano_value, entry
-            assert_equal_with_default actual_nanos, expected_ts.tv_nsec,
-                                      default_nano_value, entry do
-              # Fluentd v0.14 onwards supports nanosecond timestamp values.
-              # Added in 600 ns delta to avoid flaky tests introduced
-              # due to rounding error in double-precision floating-point numbers
-              # (to account for the missing 9 bits of precision ~ 512 ns).
-              # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
-              assert_in_delta expected_ts.tv_nsec, actual_nanos, 600, entry
-            end
+            assert_equal actual_seconds, expected_ts.tv_sec, entry
+            # Fluentd v0.14 onwards supports nanosecond timestamp values.
+            # Added in 600 ns delta to avoid flaky tests introduced
+            # due to rounding error in double-precision floating-point numbers
+            # (to account for the missing 9 bits of precision ~ 512 ns).
+            # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
+            assert_in_delta expected_ts.tv_nsec, actual_nanos, 600, entry
           end
         end
       end
@@ -2687,23 +2683,6 @@ module BaseTest
   # The conversions from user input to output.
   def latency_conversion
     _undefined
-    {
-      '32 s' => '32s',
-      '32s' => '32s',
-      '0.32s' => '0.320000000s',
-      ' 123 s ' => '123s',
-      '1.3442 s' => '1.344200000s',
-
-      # Test whitespace.
-      # \t: tab. \r: carriage return. \n: line break.
-      # \v: vertical whitespace. \f: form feed.
-      "\t123.5\ts\t" => '123.500000000s',
-      "\r123.5\rs\r" => '123.500000000s',
-      "\n123.5\ns\n" => '123.500000000s',
-      "\v123.5\vs\v" => '123.500000000s',
-      "\f123.5\fs\f" => '123.500000000s',
-      "\r123.5\ts\f" => '123.500000000s'
-    }
   end
 
   # This module expects the methods below to be overridden.
