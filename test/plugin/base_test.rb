@@ -361,7 +361,7 @@ module BaseTest
       verify_default_log_entry_text(fields['msg'], i, entry)
       assert_equal 'test', fields['tag2'], entry
       assert_equal 5000, fields['data'], entry
-      assert_equal nil, fields['some_null_field'], entry
+      assert_nil fields['some_null_field'], entry
     end
   end
 
@@ -623,7 +623,7 @@ module BaseTest
             assert_equal 'test log entry 0', fields['msg'], entry
             assert_equal 'test', fields['tag2'], entry
             assert_equal 5000, fields['data'], entry
-            assert_equal nil, fields['some_null_field'], entry
+            assert_nil fields['some_null_field'], entry
           end
         end
       end
@@ -648,7 +648,7 @@ module BaseTest
       assert_equal 'test log entry 0', fields['msg'], entry
       assert_equal 'test', fields['tag2'], entry
       assert_equal 5000, fields['data'], entry
-      assert_equal nil, fields['some_null_field'], entry
+      assert_nil fields['some_null_field'], entry
     end
   end
 
@@ -702,7 +702,7 @@ module BaseTest
         assert_equal 'test log entry 0', fields['msg'], entry
         assert_equal 'test', fields['tag2'], entry
         assert_equal 5000, fields['data'], entry
-        assert_equal nil, fields['some_null_field'], entry
+        assert_nil fields['some_null_field'], entry
       end
   end
 
@@ -728,7 +728,7 @@ module BaseTest
       assert_equal 'test log entry 0', fields['msg'], entry
       assert_equal 'test', fields['tag2'], entry
       assert_equal 5000, fields['data'], entry
-      assert_equal nil, fields['some_null_field'], entry
+      assert_nil fields['some_null_field'], entry
     end
   end
 
@@ -2753,10 +2753,6 @@ module BaseTest
 
   # Defined in specific gRPC or REST files.
   def expected_operation_message2
-    _undefined
-  end
-
-  def enable_grpc
     _undefined
   end
 

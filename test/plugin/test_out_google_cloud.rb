@@ -469,10 +469,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     OPERATION_MESSAGE2
   end
 
-  def enable_grpc
-    false
-  end
-
   def default_nano_value
     0
   end

@@ -260,6 +260,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  # TODO(qingling128): Verify if we need this on the REST side and add it if
+  # needed.
   def test_struct_payload_non_utf8_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -280,7 +282,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_equal 5000, fields['non_utf8 key'], entry
       assert_equal 'test non utf8', fields['nested_struct']['non_utf8 key'],
                    entry
-      assert_equal nil, fields['null_field'], entry
+      assert_nil fields['null_field'], entry
     end
   end
 
@@ -473,10 +475,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     # 'last' is a boolean field with false as default value. Protobuf omit
     # fields with default values during deserialization.
     OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
-  end
-
-  def enable_grpc
-    true
   end
 
   def default_nano_value
