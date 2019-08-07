@@ -499,7 +499,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     Time.parse(timestamp).tv_sec
   end
 
-  def entry_timestamp_nanos(timestamp)
+  def timestamp_nanos(timestamp)
     Time.parse(timestamp).tv_nsec
   end
 end

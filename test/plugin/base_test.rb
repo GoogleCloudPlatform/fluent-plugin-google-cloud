@@ -983,7 +983,7 @@ module BaseTest
           verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
             verify_default_log_entry_text(entry['textPayload'], i, entry)
             actual_seconds = timestamp_seconds(entry['timestamp'])
-            actual_nanos = entry_timestamp_nanos(entry['timestamp'])
+            actual_nanos = timestamp_nanos(entry['timestamp'])
             assert_equal_with_default actual_seconds, expected_ts.tv_sec,
                                       default_nano_value, entry
             assert_equal_with_default actual_nanos, expected_ts.tv_nsec,
@@ -1193,7 +1193,7 @@ module BaseTest
     verify_log_entries(1, expected_params) do |entry, i|
       verify_default_log_entry_text(entry['textPayload'], i, entry)
       actual_seconds = timestamp_seconds(entry['timestamp'])
-      actual_nanos = entry_timestamp_nanos(entry['timestamp'])
+      actual_nanos = timestamp_nanos(entry['timestamp'])
       assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
       assert_equal K8S_NANOS, actual_nanos, entry
       assert_equal 'ERROR', entry['severity'], entry
@@ -1218,7 +1218,7 @@ module BaseTest
       assert_equal 'test', fields['tag2'], entry
       assert_equal 5000, fields['data'], entry
       actual_seconds = timestamp_seconds(entry['timestamp'])
-      actual_nanos = entry_timestamp_nanos(entry['timestamp'])
+      actual_nanos = timestamp_nanos(entry['timestamp'])
       assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
       assert_equal K8S_NANOS, actual_nanos, entry
       assert_equal 'WARNING', entry['severity'], entry
@@ -1243,7 +1243,7 @@ module BaseTest
       assert_equal 'test', fields['tag2'], entry
       assert_equal 5000, fields['data'], entry
       actual_seconds = timestamp_seconds(entry['timestamp'])
-      actual_nanos = entry_timestamp_nanos(entry['timestamp'])
+      actual_nanos = timestamp_nanos(entry['timestamp'])
       assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
       assert_equal K8S_NANOS, actual_nanos, entry
       assert_equal 'WARNING', entry['severity'], entry
@@ -1979,7 +1979,7 @@ module BaseTest
         verify_default_log_entry_text(entry['textPayload'], i, entry)
         # Timestamp in 'time' field from log entry should be set properly.
         actual_seconds = timestamp_seconds(entry['timestamp'])
-        actual_nanos = entry_timestamp_nanos(entry['timestamp'])
+        actual_nanos = timestamp_nanos(entry['timestamp'])
         assert_equal DOCKER_CONTAINER_SECONDS_EPOCH, actual_seconds, entry
         assert_equal DOCKER_CONTAINER_NANOS, actual_nanos, entry
       end
@@ -2409,7 +2409,7 @@ module BaseTest
       verify_log_entries(n, expected_params) do |entry, i|
         verify_default_log_entry_text(entry['textPayload'], i, entry)
         actual_seconds = timestamp_seconds(entry['timestamp'])
-        actual_nanos = entry_timestamp_nanos(entry['timestamp'])
+        actual_nanos = timestamp_nanos(entry['timestamp'])
         assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
         assert_equal K8S_NANOS, actual_nanos, entry
         assert_equal CONTAINER_SEVERITY, entry['severity'], entry
@@ -2783,7 +2783,7 @@ module BaseTest
     _undefined
   end
 
-  def entry_timestamp_nanos(_timestamp)
+  def timestamp_nanos(_timestamp)
     _undefined
   end
 end

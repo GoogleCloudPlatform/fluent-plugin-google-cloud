@@ -511,7 +511,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     timestamp['seconds']
   end
 
-  def entry_timestamp_nanos(timestamp)
+  def timestamp_nanos(timestamp)
     timestamp['nanos']
   end
 end

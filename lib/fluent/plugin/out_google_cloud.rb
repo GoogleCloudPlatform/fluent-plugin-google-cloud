@@ -2346,6 +2346,7 @@ module Fluent
     end
 
     # Convert the value to a Ruby hash for the gRPC path.
+    # This method raises JSON::ParserError for backward compatibility.
     def ensure_hash_grpc(value)
       value.to_h || (raise JSON::ParserError, value.class.to_s)
     end
