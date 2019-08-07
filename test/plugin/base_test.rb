@@ -476,8 +476,7 @@ module BaseTest
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
       fields = entry['jsonPayload']
       assert_equal 7, fields.size, entry
-      assert_equal message, fields['int_key']['1'],
-                   entry
+      assert_equal message, fields['int_key']['1'], entry
       assert_equal message, fields['int_array_key']['[1, 2, 3, 4]'], entry
       assert_equal message, fields['string_array_key']['["a", "b", "c"]'], entry
       assert_equal message, fields['hash_key']['{"some_key"=>"some_value"}'],
@@ -2660,9 +2659,7 @@ module BaseTest
         payload_fields = entry['jsonPayload']
         assert_equal input[:expected_payload].size, payload_fields.size, input
         payload_fields.each do |key, value|
-          expected = input[:expected_payload][key]
-          assert_equal expected, value,
-                       "expected: #{expected}\nactual: #{value}"
+          assert_equal input[:expected_payload][key], value
         end
       end
     end
@@ -2726,10 +2723,6 @@ module BaseTest
     assert_equal(expected_value, metric_value)
   end
 
-  def _undefined
-    raise "Method #{__callee__} is unimplemented and needs to be overridden."
-  end
-
   # Defined in specific gRPC or REST files.
   def expected_operation_message2
     _undefined
@@ -2745,5 +2738,9 @@ module BaseTest
 
   def timestamp_nanos(_timestamp)
     _undefined
+  end
+
+  def _undefined
+    raise "Method #{__callee__} is unimplemented and needs to be overridden."
   end
 end
