@@ -981,15 +981,14 @@ module BaseTest
           d.run
           verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
             verify_default_log_entry_text(entry['textPayload'], i, entry)
-            actual_seconds = timestamp_seconds(entry['timestamp'])
-            actual_nanos = timestamp_nanos(entry['timestamp'])
-            assert_equal actual_seconds, expected_ts.tv_sec, entry
+            actual_timestamp = timestamp_parse(entry['timestamp'])
+            assert_equal actual_timestamp['seconds'], expected_ts.tv_sec, entry
             # Fluentd v0.14 onwards supports nanosecond timestamp values.
             # Added in 600 ns delta to avoid flaky tests introduced
             # due to rounding error in double-precision floating-point numbers
             # (to account for the missing 9 bits of precision ~ 512 ns).
             # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
-            assert_in_delta expected_ts.tv_nsec, actual_nanos, 600, entry
+            assert_in_delta expected_ts.tv_nsec, actual_timestamp['nanos'], 600, entry
           end
         end
       end
@@ -1187,10 +1186,9 @@ module BaseTest
     ) { |_, oldval, newval| oldval.merge(newval) }
     verify_log_entries(1, expected_params) do |entry, i|
       verify_default_log_entry_text(entry['textPayload'], i, entry)
-      actual_seconds = timestamp_seconds(entry['timestamp'])
-      actual_nanos = timestamp_nanos(entry['timestamp'])
-      assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
-      assert_equal K8S_NANOS, actual_nanos, entry
+      actual_timestamp = timestamp_parse(entry['timestamp'])
+      assert_equal K8S_SECONDS_EPOCH, actual_timestamp['seconds'], entry
+      assert_equal K8S_NANOS, actual_timestamp['nanos'], entry
       assert_equal 'ERROR', entry['severity'], entry
     end
   end
@@ -1212,10 +1210,9 @@ module BaseTest
       assert_equal 'test log entry 0', fields['msg'], entry
       assert_equal 'test', fields['tag2'], entry
       assert_equal 5000, fields['data'], entry
-      actual_seconds = timestamp_seconds(entry['timestamp'])
-      actual_nanos = timestamp_nanos(entry['timestamp'])
-      assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
-      assert_equal K8S_NANOS, actual_nanos, entry
+      actual_timestamp = timestamp_parse(entry['timestamp'])
+      assert_equal K8S_SECONDS_EPOCH, actual_timestamp['seconds'], entry
+      assert_equal K8S_NANOS, actual_timestamp['nanos'], entry
       assert_equal 'WARNING', entry['severity'], entry
     end
   end
@@ -1237,10 +1234,9 @@ module BaseTest
       assert_equal 'test log entry 0', fields['msg'], entry
       assert_equal 'test', fields['tag2'], entry
       assert_equal 5000, fields['data'], entry
-      actual_seconds = timestamp_seconds(entry['timestamp'])
-      actual_nanos = timestamp_nanos(entry['timestamp'])
-      assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
-      assert_equal K8S_NANOS, actual_nanos, entry
+      actual_timestamp = timestamp_parse(entry['timestamp'])
+      assert_equal K8S_SECONDS_EPOCH, actual_timestamp['seconds'], entry
+      assert_equal K8S_NANOS, actual_timestamp['nanos'], entry
       assert_equal 'WARNING', entry['severity'], entry
     end
   end
@@ -1973,10 +1969,9 @@ module BaseTest
       verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM) do |entry, i|
         verify_default_log_entry_text(entry['textPayload'], i, entry)
         # Timestamp in 'time' field from log entry should be set properly.
-        actual_seconds = timestamp_seconds(entry['timestamp'])
-        actual_nanos = timestamp_nanos(entry['timestamp'])
-        assert_equal DOCKER_CONTAINER_SECONDS_EPOCH, actual_seconds, entry
-        assert_equal DOCKER_CONTAINER_NANOS, actual_nanos, entry
+        actual_timestamp = timestamp_parse(entry['timestamp'])
+        assert_equal DOCKER_CONTAINER_SECONDS_EPOCH, actual_timestamp['seconds'], entry
+        assert_equal DOCKER_CONTAINER_NANOS, actual_timestamp['nanos'], entry
       end
       assert_requested_metadata_agent_stub(
         "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_NAME}")
@@ -2403,10 +2398,9 @@ module BaseTest
       end
       verify_log_entries(n, expected_params) do |entry, i|
         verify_default_log_entry_text(entry['textPayload'], i, entry)
-        actual_seconds = timestamp_seconds(entry['timestamp'])
-        actual_nanos = timestamp_nanos(entry['timestamp'])
-        assert_equal K8S_SECONDS_EPOCH, actual_seconds, entry
-        assert_equal K8S_NANOS, actual_nanos, entry
+        actual_timestamp = timestamp_parse(entry['timestamp'])
+        assert_equal K8S_SECONDS_EPOCH, actual_timestamp['seconds'], entry
+        assert_equal K8S_NANOS, actual_timestamp['nanos'], entry
         assert_equal CONTAINER_SEVERITY, entry['severity'], entry
       end
     end
@@ -2728,15 +2722,7 @@ module BaseTest
     _undefined
   end
 
-  def default_nano_value
-    _undefined
-  end
-
-  def timestamp_seconds(_timestamp)
-    _undefined
-  end
-
-  def timestamp_nanos(_timestamp)
+  def timestamp_parse(_timestamp)
     _undefined
   end
 

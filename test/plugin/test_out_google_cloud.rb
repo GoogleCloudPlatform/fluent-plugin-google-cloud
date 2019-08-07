@@ -469,15 +469,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     OPERATION_MESSAGE2
   end
 
-  def default_nano_value
-    0
-  end
-
-  def timestamp_seconds(timestamp)
-    timestamp['seconds']
-  end
-
-  def timestamp_nanos(timestamp)
-    timestamp['nanos']
+  def timestamp_parse(timestamp)
+    timestamp
   end
 end

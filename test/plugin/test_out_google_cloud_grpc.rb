@@ -477,15 +477,11 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
   end
 
-  def default_nano_value
-    nil
-  end
-
-  def timestamp_seconds(timestamp)
-    Time.parse(timestamp).tv_sec
-  end
-
-  def timestamp_nanos(timestamp)
-    Time.parse(timestamp).tv_nsec
+  def timestamp_parse(timestamp)
+    parsed = Time.parse(timestamp)
+    {
+      'seconds' => parsed.tv_sec,
+      'nanos' => parsed.tv_nsec
+    }
   end
 end
