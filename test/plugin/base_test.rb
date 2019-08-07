@@ -1394,11 +1394,11 @@ module BaseTest
       setup_logging_stubs do
         d = create_driver
         @logs_sent = []
-        d.emit('httpRequest' => http_request_message.merge('latency' => input))
+        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-        assert_equal http_request_message.merge('latency' => expected),
+        assert_equal HTTP_REQUEST_MESSAGE.merge('latency' => expected),
                      entry['httpRequest'], entry
         assert_nil entry['jsonPayload']['httpRequest'], entry
       end
@@ -1415,11 +1415,11 @@ module BaseTest
       setup_logging_stubs do
         d = create_driver
         @logs_sent = []
-        d.emit('httpRequest' => http_request_message.merge('latency' => input))
+        d.emit('httpRequest' => HTTP_REQUEST_MESSAGE.merge('latency' => input))
         d.run
       end
       verify_log_entries(1, COMPUTE_PARAMS, 'httpRequest') do |entry|
-        assert_equal http_request_message, entry['httpRequest'], entry
+        assert_equal HTTP_REQUEST_MESSAGE, entry['httpRequest'], entry
         assert_nil entry['jsonPayload']['httpRequest'], entry
       end
     end
@@ -1459,7 +1459,7 @@ module BaseTest
                      custom_key: 'custom_source_location_key',
                      custom_key_config: \
                        CONFIG_CUSTOM_SOURCE_LOCATION_KEY_SPECIFIED,
-                     sample_value: source_location_message)
+                     sample_value: SOURCE_LOCATION_MESSAGE)
   end
 
   def test_log_entry_span_id_field
@@ -1517,8 +1517,8 @@ module BaseTest
   def test_cascading_json_detection_with_log_entry_source_location_field
     verify_cascading_json_detection_with_log_entry_fields(
       'sourceLocation', DEFAULT_SOURCE_LOCATION_KEY,
-      root_level_value: source_location_message,
-      nested_level_value: source_location_message2)
+      root_level_value: SOURCE_LOCATION_MESSAGE,
+      nested_level_value: SOURCE_LOCATION_MESSAGE2)
   end
 
   def test_cascading_json_detection_with_log_entry_span_id_field
@@ -2423,13 +2423,13 @@ module BaseTest
       # LogEntry info from. The values are lists of two elements: the name of
       # the subfield in LogEntry object and the expected value of that field.
       DEFAULT_HTTP_REQUEST_KEY => [
-        'httpRequest', http_request_message],
+        'httpRequest', HTTP_REQUEST_MESSAGE],
       DEFAULT_LABELS_KEY => [
         'labels', COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)],
       DEFAULT_OPERATION_KEY => [
         'operation', OPERATION_MESSAGE],
       DEFAULT_SOURCE_LOCATION_KEY => [
-        'sourceLocation', source_location_message]
+        'sourceLocation', SOURCE_LOCATION_MESSAGE]
     }
   end
 
@@ -2674,12 +2674,12 @@ module BaseTest
 
   # Replace the 'referer' field with nil.
   def http_request_message_with_nil_referer
-    http_request_message.merge('referer' => nil)
+    HTTP_REQUEST_MESSAGE.merge('referer' => nil)
   end
 
   # Unset the 'referer' field.
   def http_request_message_with_absent_referer
-    http_request_message.reject do |k, _|
+    HTTP_REQUEST_MESSAGE.reject do |k, _|
       k == 'referer'
     end
   end
@@ -2747,28 +2747,13 @@ module BaseTest
     assert_equal(expected_value, metric_value)
   end
 
-  # Defined in specific gRPC or REST files.
-  def http_request_message
-    _undefined
-  end
-
-  # Defined in specific gRPC or REST files.
-  def source_location_message
-    _undefined
-  end
-
-  # Defined in specific gRPC or REST files.
-  def source_location_message2
-    _undefined
+  def _undefined
+    raise "Method #{__callee__} is unimplemented and needs to be overridden."
   end
 
   # Defined in specific gRPC or REST files.
   def expected_operation_message2
     _undefined
-  end
-
-  def _undefined
-    raise "Method #{__callee__} is unimplemented and needs to be overridden."
   end
 
   def enable_grpc

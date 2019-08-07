@@ -465,36 +465,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # Convert certain fields to strings for compatibility between gRPC and REST.
-  # See more details in:
-  # https://github.com/google/google-api-ruby-client/issues/619.
-  def convert_subfields_to_strings(full_hash, fields_to_convert)
-    full_hash.merge(Hash[
-      fields_to_convert.collect do |field_name|
-        [field_name, full_hash[field_name].to_s]
-      end
-    ])
-  end
-
-  # 'responseSize', 'requestSize', and 'cacheFillBytes' are Integers in the gRPC
-  # protos, yet Strings in REST API client libraries.
-  def http_request_message
-    convert_subfields_to_strings(
-      HTTP_REQUEST_MESSAGE, %w(cacheFillBytes responseSize requestSize))
-  end
-
-  # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
-  def source_location_message
-    convert_subfields_to_strings(
-      SOURCE_LOCATION_MESSAGE, ['line'])
-  end
-
-  # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
-  def source_location_message2
-    convert_subfields_to_strings(
-      SOURCE_LOCATION_MESSAGE2, ['line'])
-  end
-
   def expected_operation_message2
     OPERATION_MESSAGE2
   end

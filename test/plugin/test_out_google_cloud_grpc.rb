@@ -469,18 +469,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  def http_request_message
-    HTTP_REQUEST_MESSAGE
-  end
-
-  def source_location_message
-    SOURCE_LOCATION_MESSAGE
-  end
-
-  def source_location_message2
-    SOURCE_LOCATION_MESSAGE2
-  end
-
   def expected_operation_message2
     # 'last' is a boolean field with false as default value. Protobuf omit
     # fields with default values during deserialization.
