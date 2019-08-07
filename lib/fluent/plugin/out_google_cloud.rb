@@ -2335,16 +2335,19 @@ module Fluent
       constructed_resource
     end
 
+    # Convert the value to a Ruby array.
     def ensure_array(value)
-      Array.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
+      Array.try_convert(value) || (raise TypeError, value.class.to_s)
     end
 
+    # Convert the value to a Ruby hash for the REST path.
     def ensure_hash(value)
-      Hash.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
+      Hash.try_convert(value) || (raise TypeError, value.class.to_s)
     end
 
+    # Convert the value to a Ruby hash for the gRPC path.
     def ensure_hash_grpc(value)
-      value.to_h || (raise JSON::ParserError, value.class.to_s)
+      value.to_h || (raise TypeError, value.class.to_s)
     end
 
     # Increment the metric for the number of successful requests.

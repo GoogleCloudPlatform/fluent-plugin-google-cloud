@@ -507,7 +507,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     0
   end
 
-  def entry_timestamp_seconds(timestamp)
+  def timestamp_seconds(timestamp)
     timestamp['seconds']
   end
 

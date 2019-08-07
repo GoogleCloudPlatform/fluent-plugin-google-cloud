@@ -495,7 +495,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     nil
   end
 
-  def entry_timestamp_seconds(timestamp)
+  def timestamp_seconds(timestamp)
     Time.parse(timestamp).tv_sec
   end
 
