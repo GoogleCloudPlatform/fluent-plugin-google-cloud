@@ -36,6 +36,7 @@ module Google
     # Alias the has_key? method to have the same interface as a regular map.
     class Map
       alias key? has_key?
+      alias to_hash to_h
     end
   end
 end
@@ -2248,7 +2249,6 @@ module Fluent
     def construct_error_details_map_grpc(gax_error)
       return {} unless @partial_success
       error_details_map = Hash.new { |h, k| h[k] = [] }
-
       error_details = ensure_array(gax_error.status_details)
       raise JSON::ParserError, 'The error details are empty.' if
         error_details.empty?
@@ -2336,10 +2336,12 @@ module Fluent
       constructed_resource
     end
 
+    # Convert the value to a Ruby array.
     def ensure_array(value)
       Array.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
     end
 
+    # Convert the value to a Ruby hash.
     def ensure_hash(value)
       Hash.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
     end

@@ -845,16 +845,16 @@ module Constants
   ).freeze
 
   HTTP_REQUEST_MESSAGE = {
-    'cacheFillBytes' => 6653,
+    'cacheFillBytes' => '6653',
     'cacheHit' => true,
     'cacheLookup' => true,
     'cacheValidatedWithOriginServer' => true,
     'protocol' => 'HTTP/1.1',
     'referer' => 'http://referer/',
     'remoteIp' => '55.55.55.55',
-    'responseSize' => 65,
+    'responseSize' => '65',
     'requestMethod' => 'POST',
-    'requestSize' => 210,
+    'requestSize' => '210',
     'requestUrl' => 'http://example/',
     'serverIp' => '66.66.66.66',
     'status' => 200,
@@ -864,13 +864,13 @@ module Constants
   SOURCE_LOCATION_MESSAGE = {
     'file' => 'source/file',
     'function' => 'my_function',
-    'line' => 18
+    'line' => '18'
   }.freeze
 
   SOURCE_LOCATION_MESSAGE2 = {
     'file' => 'src/file',
     'function' => 'my_func',
-    'line' => 8
+    'line' => '8'
   }.freeze
 
   OPERATION_MESSAGE = {
