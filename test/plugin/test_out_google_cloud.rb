@@ -469,6 +469,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     OPERATION_MESSAGE2
   end
 
+  # Directly return the timestamp value, which should be a hash two keys:
+  # "seconds" and "nanos".
   def timestamp_parse(timestamp)
     timestamp
   end

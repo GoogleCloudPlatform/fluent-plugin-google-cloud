@@ -477,6 +477,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
   end
 
+  # Parse timestamp and convert it to a hash with two keys:
+  # "seconds" and "nanos".
   def timestamp_parse(timestamp)
     parsed = Time.parse(timestamp)
     {

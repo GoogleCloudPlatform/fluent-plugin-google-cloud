@@ -988,7 +988,8 @@ module BaseTest
             # due to rounding error in double-precision floating-point numbers
             # (to account for the missing 9 bits of precision ~ 512 ns).
             # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
-            assert_in_delta expected_ts.tv_nsec, actual_timestamp['nanos'], 600, entry
+            assert_in_delta expected_ts.tv_nsec, actual_timestamp['nanos'],
+                            600, entry
           end
         end
       end
@@ -1970,7 +1971,8 @@ module BaseTest
         verify_default_log_entry_text(entry['textPayload'], i, entry)
         # Timestamp in 'time' field from log entry should be set properly.
         actual_timestamp = timestamp_parse(entry['timestamp'])
-        assert_equal DOCKER_CONTAINER_SECONDS_EPOCH, actual_timestamp['seconds'], entry
+        assert_equal DOCKER_CONTAINER_SECONDS_EPOCH,
+                     actual_timestamp['seconds'], entry
         assert_equal DOCKER_CONTAINER_NANOS, actual_timestamp['nanos'], entry
       end
       assert_requested_metadata_agent_stub(
@@ -2722,6 +2724,9 @@ module BaseTest
     _undefined
   end
 
+  # Parse timestamp and convert it to a hash with the "seconds" and "nanos" keys
+  # if necessary.
+  # Defined in specific gRPC or REST files.
   def timestamp_parse(_timestamp)
     _undefined
   end
