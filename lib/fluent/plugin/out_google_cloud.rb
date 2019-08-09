@@ -461,6 +461,14 @@ module Fluent
       super
       # use the global logger
       @log = $log # rubocop:disable Style/GlobalVars
+
+      @failed_requests_count = nil
+      @successful_requests_count = nil
+      @dropped_entries_count = nil
+      @ingested_entries_count = nil
+      @retried_entries_count = nil
+
+      @ok_code = nil
     end
 
     def configure(conf)
