@@ -25,7 +25,7 @@ eos
   gem.add_runtime_dependency 'google-api-client', '0.28.4'
   gem.add_runtime_dependency 'google-cloud-logging', '1.6.0'
   gem.add_runtime_dependency 'google-protobuf', '3.9.0'
-  gem.add_runtime_dependency 'grpc', '1.18.0'
+  gem.add_runtime_dependency 'grpc', '1.22.0'
   gem.add_runtime_dependency 'json', '2.1.0'
 
   gem.add_development_dependency 'mocha', '~> 1.1'
