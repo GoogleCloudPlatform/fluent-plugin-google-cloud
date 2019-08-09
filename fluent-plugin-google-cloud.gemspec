@@ -20,7 +20,7 @@ eos
   gem.require_paths = ['lib']
 
   gem.add_runtime_dependency 'fluentd', '1.6.3'
-  gem.add_runtime_dependency 'googleapis-common-protos', '1.3.7'
+  gem.add_runtime_dependency 'googleapis-common-protos', '1.3.9'
   gem.add_runtime_dependency 'googleauth', '0.8.1'
   gem.add_runtime_dependency 'google-api-client', '0.28.4'
   gem.add_runtime_dependency 'google-cloud-logging', '1.6.0'
