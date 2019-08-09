@@ -29,7 +29,7 @@ eos
   gem.add_runtime_dependency 'json', '2.2.0'
 
   gem.add_development_dependency 'mocha', '1.9.0'
-  gem.add_development_dependency 'prometheus-client', '~> 0.8.0'
+  gem.add_development_dependency 'prometheus-client', '0.9.0'
   gem.add_development_dependency 'rake', '~> 10.3'
   gem.add_development_dependency 'rubocop', '~> 0.39.0'
   gem.add_development_dependency 'test-unit', '~> 3.0'
