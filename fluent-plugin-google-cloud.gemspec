@@ -28,10 +28,15 @@ eos
   gem.add_runtime_dependency 'grpc', '1.22.0'
   gem.add_runtime_dependency 'json', '2.2.0'
 
-  gem.add_development_dependency 'mocha', '~> 1.1'
-  gem.add_development_dependency 'prometheus-client', '~> 0.8.0'
-  gem.add_development_dependency 'rake', '~> 10.3'
-  gem.add_development_dependency 'rubocop', '~> 0.39.0'
-  gem.add_development_dependency 'test-unit', '~> 3.0'
+  gem.add_development_dependency 'mocha', '1.9.0'
+  gem.add_development_dependency 'prometheus-client', '0.9.0'
+  # TODO(qingling128): Upgrade rake to 11.0+ after the following issues are
+  # fixed because rake (11.0+) requires ALL variables to be explicitly
+  # initialized.
+  # https://github.com/googleapis/google-auth-library-ruby/issues/227
+  # https://github.com/farcaller/rly/issues/2
+  gem.add_development_dependency 'rake', '10.5.0'
+  gem.add_development_dependency 'rubocop', '0.39.0'
+  gem.add_development_dependency 'test-unit', '3.3.3'
   gem.add_development_dependency 'webmock', '3.6.2'
 end

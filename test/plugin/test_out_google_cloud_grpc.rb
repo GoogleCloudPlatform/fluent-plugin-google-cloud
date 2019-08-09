@@ -416,7 +416,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         raise @error
       rescue
         # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
-        raise Google::Gax::GaxError, @message
+        raise Google::Gax::GaxError, 'This test message does not matter.'
       end
     end
     # rubocop:enable Lint/UnusedMethodArgument
