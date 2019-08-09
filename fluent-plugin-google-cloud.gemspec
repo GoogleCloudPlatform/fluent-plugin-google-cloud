@@ -37,6 +37,6 @@ eos
   # https://github.com/farcaller/rly/issues/2
   gem.add_development_dependency 'rake', '10.5.0'
   gem.add_development_dependency 'rubocop', '0.39.0'
-  gem.add_development_dependency 'test-unit', '~> 3.0'
+  gem.add_development_dependency 'test-unit', '3.3.3'
   gem.add_development_dependency 'webmock', '3.6.2'
 end
