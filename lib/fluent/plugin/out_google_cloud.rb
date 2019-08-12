@@ -640,6 +640,10 @@ module Fluent
             # field.
             preserved_keys = [
               'time',
+              'timeNanos',
+              'timestamp',
+              'timestampNanos',
+              'timestampSeconds',
               'severity',
               @http_request_key,
               @insert_id_key,
