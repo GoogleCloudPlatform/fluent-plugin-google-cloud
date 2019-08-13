@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'fluent/test/startup_shutdown'
+require 'net/http'
+
 require_relative 'base_test'
 require_relative 'test_driver'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
   include BaseTest
+  extend Fluent::Test::StartupShutdown
 
   def test_configure_use_grpc
     setup_gce_metadata_stubs
@@ -330,6 +334,62 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_statusz_endpoint
+    setup_gce_metadata_stubs
+    WebMock.disable_net_connect!(allow_localhost: true)
+    # TODO(davidbtucker): Consider searching for an unused port
+    # instead of hardcoding a constant here.
+    d = create_driver(CONFIG_STATUSZ)
+    d.run do
+      resp = Net::HTTP.get('127.0.0.1', '/statusz', 5678)
+      must_match = [
+        '<h1>Status for .*</h1>.*',
+
+        '\badjust_invalid_timestamps\b.*\bfalse\b',
+        '\bautoformat_stackdriver_trace\b.*\bfalse\b',
+        '\bcoerce_to_utf8\b.*\bfalse\b',
+        '\bdetect_json\b.*\btrue\b',
+        '\bdetect_subservice\b.*\bfalse\b',
+        '\benable_metadata_agent\b.*\btrue\b',
+        '\benable_monitoring\b.*\btrue\b',
+        '\bhttp_request_key\b.*\btest_http_request_key\b',
+        '\binsert_id_key\b.*\btest_insert_id_key\b',
+        '\bk8s_cluster_location\b.*\btest-k8s-cluster-location\b',
+        '\bk8s_cluster_name\b.*\btest-k8s-cluster-name\b',
+        '\bkubernetes_tag_regexp\b.*\b.*test-regexp.*\b',
+        '\blabel_map\b.*{"label_map_key"=>"label_map_value"}',
+        '\blabels_key\b.*\btest_labels_key\b',
+        '\blabels\b.*{"labels_key"=>"labels_value"}',
+        '\blogging_api_url\b.*\bhttp://localhost:52000\b',
+        '\bmetadata_agent_url\b.*\bhttp://localhost:12345\b',
+        '\bmonitoring_type\b.*\bnot_prometheus\b',
+        '\bnon_utf8_replacement_string\b.*\bzzz\b',
+        '\boperation_key\b.*\btest_operation_key\b',
+        '\bpartial_success\b.*\bfalse\b',
+        '\bproject_id\b.*\btest-project-id-123\b',
+        '\brequire_valid_tags\b.*\btrue\b',
+        '\bsource_location_key\b.*\btest_source_location_key\b',
+        '\bspan_id_key\b.*\btest_span_id_key\b',
+        '\bsplit_logs_by_tag\b.*\btrue\b',
+        '\bstatusz_port\b.*\b5678\b',
+        '\bsubservice_name\b.*\btest_subservice_name\b',
+        '\btrace_key\b.*\btest_trace_key\b',
+        '\btrace_sampled_key\b.*\btest_trace_sampled_key\b',
+        '\buse_aws_availability_zone\b.*\bfalse\b',
+        '\buse_grpc\b.*\btrue\b',
+        '\buse_metadata_service\b.*\bfalse\b',
+        '\bvm_id\b.*\b12345\b',
+        '\bvm_name\b.*\btest.hostname.org\b',
+        '\bzone\b.*\basia-east2\b',
+
+        '^</html>$'
+      ]
+      must_match.each do |re|
+        assert_match Regexp.new(re), resp
+      end
+    end
+  end
+
   private
 
   WRITE_LOG_ENTRIES_URI =
@@ -348,6 +408,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     yield
   end
 
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '32 s' => { 'seconds' => 32 },
+      '32s' => { 'seconds' => 32 },
+      '0.32s' => { 'nanos' => 320_000_000 },
+      ' 123 s ' => { 'seconds' => 123 },
+      '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 },
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123.5\ts\t" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\rs\r" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\n123.5\ns\n" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\v123.5\vs\v" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\f123.5\fs\f" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\ts\f" => { 'seconds' => 123, 'nanos' => 500_000_000 }
+    }
+  end
+
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
                     tag = 'test',
@@ -364,8 +445,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
-    verify_json_log_entries(n, params, payload_type, &block)
+  def verify_log_entries(n, params, payload_type = 'textPayload',
+                         check_exact_entry_labels = true, &block)
+    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
+                            &block)
   end
 
   # For an optional field with default values, Protobuf omits the field when it
@@ -382,49 +465,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the payload.
-  def get_fields(payload)
-    payload
+  def expected_operation_message2
+    OPERATION_MESSAGE2
   end
 
-  # Get the value of a struct field.
-  def get_struct(field)
-    field
-  end
-
-  # Get the value of a string field.
-  def get_string(field)
-    field
-  end
-
-  # Get the value of a number field.
-  def get_number(field)
-    field
-  end
-
-  # The null value.
-  def null_value
-    nil
-  end
-
-  # 'responseSize' and 'requestSize' are Integers in the gRPC proto, yet Strings
-  # in REST API client.
-  # TODO(qingling128): Address this accordingly once the following question is
-  # answered: https://github.com/google/google-api-ruby-client/issues/619.
-  # If this discrepancy is legit, add some comments to explain the reason.
-  # Otherwise once the discrepancy is fixed, we need to upgrade to that version
-  # and change our tests accordingly.
-  def http_request_message
-    HTTP_REQUEST_MESSAGE.merge(
-      'responseSize' => HTTP_REQUEST_MESSAGE['responseSize'].to_s,
-      'requestSize' => HTTP_REQUEST_MESSAGE['requestSize'].to_s
-    )
-  end
-
-  # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
-  def source_location_message
-    SOURCE_LOCATION_MESSAGE.merge(
-      'line' => SOURCE_LOCATION_MESSAGE['line'].to_s
-    )
+  # Directly return the timestamp value, which should be a hash two keys:
+  # "seconds" and "nanos".
+  def timestamp_parse(timestamp)
+    timestamp
   end
 end

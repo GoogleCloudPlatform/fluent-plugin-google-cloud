@@ -260,6 +260,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  # TODO(qingling128): Verify if we need this on the REST side and add it if
+  # needed.
   def test_struct_payload_non_utf8_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -273,14 +275,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
+      fields = entry['jsonPayload']
       assert_equal 5, fields.size, entry
-      assert_equal 'test log entry 0', get_string(fields['msg']), entry
-      assert_equal 'test non utf8', get_string(fields['normal_key']), entry
-      assert_equal 5000, get_number(fields['non_utf8 key']), entry
-      assert_equal 'test non utf8', get_string(get_fields(get_struct(fields \
-                   ['nested_struct']))['non_utf8 key']), entry
-      assert_equal null_value, fields['null_field'], entry
+      assert_equal 'test log entry 0', fields['msg'], entry
+      assert_equal 'test non utf8', fields['normal_key'], entry
+      assert_equal 5000, fields['non_utf8 key'], entry
+      assert_equal 'test non utf8', fields['nested_struct']['non_utf8 key'],
+                   entry
+      assert_nil fields['null_field'], entry
     end
   end
 
@@ -292,9 +294,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       { 'seconds' => nil, 'nanos' => time.tv_nsec } => nil,
       { 'seconds' => 'seconds', 'nanos' => time.tv_nsec } => nil,
       { 'seconds' => time.tv_sec, 'nanos' => 'nanos' } => \
-        { 'seconds' => time.tv_sec },
+        time.utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
       { 'seconds' => time.tv_sec, 'nanos' => nil } => \
-        { 'seconds' => time.tv_sec }
+        time.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
     }.each do |input, expected|
       setup_logging_stubs do
         d = create_driver
@@ -317,6 +319,27 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   USE_GRPC_CONFIG = %(
     use_grpc true
   ).freeze
+
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '32 s' => '32s',
+      '32s' => '32s',
+      '0.32s' => '0.320000000s',
+      ' 123 s ' => '123s',
+      '1.3442 s' => '1.344200000s',
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123.5\ts\t" => '123.500000000s',
+      "\r123.5\rs\r" => '123.500000000s',
+      "\n123.5\ns\n" => '123.500000000s',
+      "\v123.5\vs\v" => '123.500000000s',
+      "\f123.5\fs\f" => '123.500000000s',
+      "\r123.5\ts\f" => '123.500000000s'
+    }
+  end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
@@ -377,9 +400,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   class GRPCLoggingMockFailingService <
       Google::Cloud::Logging::V2::LoggingServiceV2Client
     def initialize(error, failed_attempts)
+      super()
       @error = error
       @failed_attempts = failed_attempts
-      super()
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
@@ -393,7 +416,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         raise @error
       rescue
         # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
-        raise Google::Gax::GaxError, @message
+        raise Google::Gax::GaxError, 'This test message does not matter.'
       end
     end
     # rubocop:enable Lint/UnusedMethodArgument
@@ -413,7 +436,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
+  def verify_log_entries(n, params, payload_type = 'textPayload',
+                         check_exact_entry_labels = true, &block)
     @requests_sent.each do |request|
       @logs_sent << {
         'entries' => request.entries.map { |entry| JSON.parse(entry.to_json) },
@@ -422,7 +446,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         'logName' => request.log_name
       }
     end
-    verify_json_log_entries(n, params, payload_type, &block)
+    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
+                            &block)
   end
 
   # Use the right single quotation mark as the sample non-utf8 character.
@@ -446,28 +471,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the payload.
-  def get_fields(payload)
-    payload['fields']
+  def expected_operation_message2
+    # 'last' is a boolean field with false as default value. Protobuf omit
+    # fields with default values during deserialization.
+    OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
   end
 
-  # Get the value of a struct field.
-  def get_struct(field)
-    field['structValue']
-  end
-
-  # Get the value of a string field.
-  def get_string(field)
-    field['stringValue']
-  end
-
-  # Get the value of a number field.
-  def get_number(field)
-    field['numberValue']
-  end
-
-  # The null value.
-  def null_value
-    { 'nullValue' => 'NULL_VALUE' }
+  # Parse timestamp and convert it to a hash with two keys:
+  # "seconds" and "nanos".
+  def timestamp_parse(timestamp)
+    parsed = Time.parse(timestamp)
+    {
+      'seconds' => parsed.tv_sec,
+      'nanos' => parsed.tv_nsec
+    }
   end
 end

@@ -16,7 +16,7 @@ module Monitoring
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
     def counter(_name, _desc)
-      _undefined
+      nil
     end
   end
 
@@ -47,6 +47,10 @@ module Monitoring
       PrometheusMonitoringRegistry.name =>
         PrometheusMonitoringRegistry
     }
+
+    def self.supports_monitoring_type(name)
+      @known_registry_types.key?(name)
+    end
 
     def self.create(name)
       (@known_registry_types[name] || BaseMonitoringRegistry).new
