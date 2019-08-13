@@ -712,22 +712,26 @@ module BaseTest
     setup_gce_metadata_stubs
     json_string = '{"msg": "test log entry 0", "tag2": "test", ' \
                   '"data": 5000, "some_null_field": null}'
-    setup_logging_stubs do
-      d = create_driver(DETECT_JSON_CONFIG)
-      %w(message log msg).each do |field|
-        d.emit(PRESERVED_KEYS_MAP.merge(field => json_string))
+    PRESERVED_KEYS_TIMESTAMP_FIELDS.each do |timestamp_fields|
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(DETECT_JSON_CONFIG)
+        %w(message log msg).each do |field|
+          d.emit(PRESERVED_KEYS_MAP.merge(
+            field => json_string).merge(timestamp_fields))
+        end
+        d.run
       end
-      d.run
-    end
-    expected_params = COMPUTE_PARAMS.merge(
-      labels: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE))
-    verify_log_entries(3, expected_params, 'jsonPayload') do |entry|
-      fields = entry['jsonPayload']
-      assert_equal 4, fields.size, entry
-      assert_equal 'test log entry 0', fields['msg'], entry
-      assert_equal 'test', fields['tag2'], entry
-      assert_equal 5000, fields['data'], entry
-      assert_nil fields['some_null_field'], entry
+      expected_params = COMPUTE_PARAMS.merge(
+        labels: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE))
+      verify_log_entries(3, expected_params, 'jsonPayload') do |entry|
+        fields = entry['jsonPayload']
+        assert_equal 4, fields.size, entry
+        assert_equal 'test log entry 0', fields['msg'], entry
+        assert_equal 'test', fields['tag2'], entry
+        assert_equal 5000, fields['data'], entry
+        assert_nil fields['some_null_field'], entry
+      end
     end
   end
 

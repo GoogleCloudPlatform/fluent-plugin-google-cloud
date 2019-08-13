@@ -1103,8 +1103,26 @@ module Constants
     }.freeze
   end
 
+  PRESERVED_KEYS_TIMESTAMP_FIELDS = [
+    {
+      'time' => K8S_TIMESTAMP
+    },
+    {
+      'timeNanos' => K8S_NANOS
+    },
+    {
+      'timestamp' => {
+        'nanos' => K8S_NANOS,
+        'seconds' => K8S_SECONDS_EPOCH
+      }
+    },
+    {
+      'timestampNanos' => K8S_NANOS,
+      'timestampSeconds' => K8S_SECONDS_EPOCH
+    }
+  ].freeze
+
   PRESERVED_KEYS_MAP = {
-    'time' => K8S_TIMESTAMP,
     'severity' => CONTAINER_SEVERITY,
     DEFAULT_HTTP_REQUEST_KEY => HTTP_REQUEST_MESSAGE,
     DEFAULT_INSERT_ID_KEY => INSERT_ID,
