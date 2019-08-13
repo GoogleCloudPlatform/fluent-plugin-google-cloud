@@ -638,6 +638,8 @@ module Fluent
             # Save the following fields if available, then clear them out to
             # allow for determining whether we should parse the log or message
             # field.
+            # This list should be in sync with
+            # https://cloud.google.com/logging/docs/agent/configuration#special-fields.
             preserved_keys = [
               'time',
               'timeNanos',
