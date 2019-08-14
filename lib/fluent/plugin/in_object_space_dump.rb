@@ -36,6 +36,8 @@ module Fluent
     def start
       super
 
+      # Dump during startup. The timer only fires after @emit_interval.
+      on_timer
       timer_execute(:object_space_dump_input, @emit_interval,
                     &method(:on_timer))
     end
