@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 require 'fluent/plugin/input'
+require 'objspace'
 
 module Fluent
   # Dump out all live objects to a json file.
