@@ -28,7 +28,6 @@ module Fluent
     end
 
     config_param :emit_interval, :time, default: 60
-    config_param :tag, :string
 
     def multi_workers_ready?
       true
@@ -45,7 +44,7 @@ module Fluent
       GC.start
       file = Tempfile.new(['heap', '.json'])
       begin
-        log.info 'dumping object space to', filepath: file.path, tag: @tag
+        log.info 'dumping object space to', filepath: file.path
         ObjectSpace.dump_all(output: file)
       ensure
         file.close
