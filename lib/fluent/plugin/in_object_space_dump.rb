@@ -44,7 +44,8 @@ module Fluent
 
     def on_timer
       GC.start
-      file = Tempfile.new(['heap', '.json'])
+      # The create method doesn't delete the file.
+      file = Tempfile.create(['heap', '.json'])
       begin
         log.info 'dumping object space to', filepath: file.path
         ObjectSpace.dump_all(output: file)
