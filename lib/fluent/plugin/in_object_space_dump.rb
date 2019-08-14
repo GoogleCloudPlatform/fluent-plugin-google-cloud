@@ -22,6 +22,8 @@ module Fluent
 
     def initialize
       super
+
+      ObjectSpace.trace_object_allocations_start
     end
 
     config_param :emit_interval, :time, default: 60
