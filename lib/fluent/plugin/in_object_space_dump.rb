@@ -27,7 +27,9 @@ module Fluent
       ObjectSpace.trace_object_allocations_start
     end
 
-    config_param :emit_interval, :time, default: 60
+    # These files are large. If you increase this interval, make sure you have
+    # enough disk space.
+    config_param :emit_interval, :time, default: 3600
 
     def multi_workers_ready?
       true
