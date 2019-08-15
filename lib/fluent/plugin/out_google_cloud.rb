@@ -1264,7 +1264,7 @@ module Fluent
     rescue StandardError => e
       if [Platform::GCE, Platform::EC2].include?(@platform)
         log.error "Failed to set monitored resource labels for #{type}: ",
-                   error: e
+                  error: e
       end
       {}
     end
