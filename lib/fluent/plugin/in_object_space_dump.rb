@@ -49,7 +49,9 @@ module Fluent
       # Use Tempfile.create to open the file, in order to preserve the file.
       file = Tempfile.create(['heap-' + fluentd_worker_id.to_s + '-', '.json'])
       begin
-        log.info 'dumping object space to', filepath: file.path, worker: fluentd_worker_id
+        log.info 'dumping object space to',
+                 filepath: file.path,
+                 worker: fluentd_worker_id
         ObjectSpace.dump_all(output: file)
       ensure
         file.close
