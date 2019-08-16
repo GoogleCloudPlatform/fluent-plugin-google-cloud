@@ -42,6 +42,8 @@ module Fluent
       on_timer
       timer_execute(:object_space_dump_input, @emit_interval,
                     &method(:on_timer))
+      timer_execute(:object_space_dump_threads, 300,
+                    &method(:dump_threads))
     end
 
     def on_timer
@@ -55,6 +57,15 @@ module Fluent
         ObjectSpace.dump_all(output: file)
       ensure
         file.close
+      end
+    end
+
+    def dump_threads
+      # Extract the title that FluentD sets in the thread context.
+      Thread.list.select do |t|
+        log.info 'threads',
+                 thread: t,
+                 fluentd_title: t[:_fluentd_plugin_helper_thread_title]
       end
     end
   end
