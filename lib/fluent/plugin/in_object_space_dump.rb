@@ -15,7 +15,8 @@ require 'fluent/plugin/input'
 require 'objspace'
 
 module Fluent
-  # Dump out all live objects to a json file.
+  # Dump out all live objects to json files. Each file is a snapshot of the Ruby
+  # heap at that time. See http://tmm1.net/ruby21-objspace/ for more details.
   class ObjectSpaceDumpInput < Fluent::Plugin::Input
     Fluent::Plugin.register_input('object_space_dump', self)
 
@@ -27,8 +28,8 @@ module Fluent
       ObjectSpace.trace_object_allocations_start
     end
 
-    # These files are large. If you increase this interval, make sure you have
-    # enough disk space.
+    # Make sure you have enough disk space, because these files are large
+    # (roughly 50MB).
     config_param :emit_interval, :time, default: 3600
 
     def multi_workers_ready?
