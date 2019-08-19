@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 require 'fluent/plugin/input'
+require 'malloc_trim'
 require 'objspace'
 
 module Fluent
@@ -38,10 +39,15 @@ module Fluent
     def start
       super
 
+      MallocTrim.enable_trimming
+
       # Dump during startup. The timer only fires after @emit_interval.
       on_timer
       timer_execute(:object_space_dump_input, @emit_interval,
                     &method(:on_timer))
+      # malloc_trim
+      # timer_execute(:object_space_dump_input_malloc_trim, 300,
+      #               &method(:malloc_trim))
     end
 
     def on_timer
@@ -56,6 +62,11 @@ module Fluent
       ensure
         file.close
       end
+    end
+
+    def malloc_trim
+      GC.start
+      MallocTrim.trim
     end
   end
 end
