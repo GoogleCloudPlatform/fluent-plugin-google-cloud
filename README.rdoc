@@ -1,9 +1,9 @@
 = Google Cloud Logging plugin for {fluentd}[http://github.com/fluent/fluentd]
 
 fluent-plugin-google-cloud gem includes two plugins:
-1. A {filter plugin for fluentd}[http://docs.fluentd.org/articles/filter-plugin-overview]
+1. A {filter plugin for fluentd}[https://docs.fluentd.org/filter]
 that embeds insertIds into log entries to guarantee order and uniqueness.
-2. An {output plugin for fluentd}[http://docs.fluentd.org/articles/output-plugin-overview]
+2. An {output plugin for fluentd}[https://docs.fluentd.org/output]
 which sends logs to the {Stackdriver Logging API}[https://cloud.google.com/logging/docs/api/].
 
 This is an official Google Ruby gem.
@@ -24,7 +24,7 @@ will also install and configure the gem.
 == Configuration
 
 To embed insertIds into log entries, specify <code>@type add_insert_ids</code>
-in a {filter clause}[https://docs.fluentd.org/v1.0/articles/config-file#(3)-%E2%80%9Cfilter%E2%80%9D:-event-processing-pipeline]
+in a {filter clause}[https://docs.fluentd.org/configuration/config-file#3-filter-event-processing-pipeline]
 of your Fluentd configuration file, for example:
 
     <filter **>
@@ -35,7 +35,7 @@ of your Fluentd configuration file, for example:
 insert_id_key can be used to customize the insertId field name.
 
 To send logs to Google Cloud Logging, specify <code>@type google_cloud</code>
-in a {match clause}[http://docs.fluentd.org/articles/config-file#2-ldquomatchrdquo-tell-fluentd-what-to-do]
+in a {match clause}[https://docs.fluentd.org/configuration/config-file#2-match-tell-fluentd-what-to-do]
 of your Fluentd configuration file, for example:
 
     <match **>
