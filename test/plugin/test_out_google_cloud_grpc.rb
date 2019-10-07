@@ -112,8 +112,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
-      assert_prometheus_metric_value(
-        :stackdriver_retried_entries_count, 0, grpc: true)
     end
   end
 
@@ -140,8 +138,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
-      assert_prometheus_metric_value(
-        :stackdriver_retried_entries_count, 0, grpc: true)
     end
   end
 

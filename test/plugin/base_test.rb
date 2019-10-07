@@ -2718,7 +2718,7 @@ module BaseTest
                      # Sum up all metric values regardless of the labels.
                      metric.values.values.reduce(0.0, :+)
                    else
-                     metric.get(labels)
+                     metric.get(labels: labels)
                    end
     assert_equal(expected_value, metric_value)
   end
