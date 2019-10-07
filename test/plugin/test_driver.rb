@@ -21,7 +21,7 @@ module Fluent
     class BufferedOutputTestDriver < InputTestDriver
       @@run_method = BufferedOutputTestDriver.instance_method(:run)
       def run(num_waits = 0)
-        return @@run_method.bind(self).call(num_waits)
+        @@run_method.bind(self).call(num_waits)
       end
     end
   end
