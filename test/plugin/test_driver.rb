@@ -18,12 +18,14 @@ require 'fluent/test/input_test'
 
 module Fluent
   module Test
+    # rubocop:disable Style/ClassVars
     class BufferedOutputTestDriver < InputTestDriver
       @@run_method = BufferedOutputTestDriver.instance_method(:run)
       def run(num_waits = 0)
         @@run_method.bind(self).call(num_waits)
       end
     end
+    # rubocop:enable Style/ClassVars
   end
 end
 
