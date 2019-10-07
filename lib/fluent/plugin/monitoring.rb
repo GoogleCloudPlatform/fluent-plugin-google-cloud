@@ -13,6 +13,24 @@
 # limitations under the License.
 
 module Monitoring
+  # Base class for the counter.
+  class BaseCounter
+    def increment(_labels, _count)
+      nil
+    end
+  end
+
+  # Prometheus implementation of counters.
+  class PrometheusCounter < BaseCounter
+    def initialize(prometheus_counter)
+      @counter = prometheus_counter
+    end
+
+    def increment(by: 1, labels: {})
+      @counter.increment(by: by, labels: labels)
+    end
+  end
+
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
     def counter(_name, _desc)
@@ -34,7 +52,7 @@ module Monitoring
 
     # Exception-driven behavior to avoid synchronization errors.
     def counter(name, desc)
-      return @registry.counter(name, desc)
+      return PrometheusCounter.new(@registry.counter(name, desc))
     rescue Prometheus::Client::Registry::AlreadyRegisteredError
       return @registry.get(name)
     end
