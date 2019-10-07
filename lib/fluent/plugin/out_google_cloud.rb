@@ -508,22 +508,29 @@ module Fluent
         registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
         @successful_requests_count = registry.counter(
           :stackdriver_successful_requests_count,
-          'A number of successful requests to the Stackdriver Logging API')
+          labels: [:grpc, :code],
+          docstring: 'A number of successful requests to the Stackdriver '\
+                     'Logging API')
         @failed_requests_count = registry.counter(
           :stackdriver_failed_requests_count,
-          'A number of failed requests to the Stackdriver Logging API,'\
-            ' broken down by the error code')
+          labels: [:grpc, :code],
+          docstring: 'A number of failed requests to the Stackdriver Logging '\
+            'API, broken down by the error code')
         @ingested_entries_count = registry.counter(
           :stackdriver_ingested_entries_count,
-          'A number of log entries ingested by Stackdriver Logging')
+          labels: [:grpc, :code],
+          docstring: 'A number of log entries ingested by Stackdriver Logging')
         @dropped_entries_count = registry.counter(
           :stackdriver_dropped_entries_count,
-          'A number of log entries dropped by the Stackdriver output plugin')
+          labels: [:grpc, :code],
+          docstring: 'A number of log entries dropped by the Stackdriver '\
+                     'output plugin')
         @retried_entries_count = registry.counter(
           :stackdriver_retried_entries_count,
-          'The number of log entries that failed to be ingested by the'\
-            ' Stackdriver output plugin due to a transient error and were'\
-            ' retried')
+          labels: [:grpc, :code],
+          docstring: 'The number of log entries that failed to be ingested by '\
+                     'the Stackdriver output plugin due to a transient error '\
+                     'and were retried')
         @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
       end
 
@@ -2363,36 +2370,40 @@ module Fluent
     # Increment the metric for the number of successful requests.
     def increment_successful_requests_count
       return unless @successful_requests_count
-      @successful_requests_count.increment(grpc: @use_grpc, code: @ok_code)
+      @successful_requests_count.increment(
+        labels: { grpc: @use_grpc, code: @ok_code })
     end
 
     # Increment the metric for the number of failed requests, labeled by
     # the provided status code.
     def increment_failed_requests_count(code)
       return unless @failed_requests_count
-      @failed_requests_count.increment(grpc: @use_grpc, code: code)
+      @failed_requests_count.increment(
+        labels: { grpc: @use_grpc, code: code })
     end
 
     # Increment the metric for the number of log entries, successfully
     # ingested by the Stackdriver Logging API.
     def increment_ingested_entries_count(count)
       return unless @ingested_entries_count
-      @ingested_entries_count.increment({ grpc: @use_grpc, code: @ok_code },
-                                        count)
+      @ingested_entries_count.increment(
+        labels: { grpc: @use_grpc, code: @ok_code }, by: count)
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
     def increment_dropped_entries_count(count, code)
       return unless @dropped_entries_count
-      @dropped_entries_count.increment({ grpc: @use_grpc, code: code }, count)
+      @dropped_entries_count.increment(
+        labels: { grpc: @use_grpc, code: code }, by: count)
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
     def increment_retried_entries_count(count, code)
       return unless @retried_entries_count
-      @retried_entries_count.increment({ grpc: @use_grpc, code: code }, count)
+      @retried_entries_count.increment(
+        labels: { grpc: @use_grpc, code: code }, by: count)
     end
   end
 end
