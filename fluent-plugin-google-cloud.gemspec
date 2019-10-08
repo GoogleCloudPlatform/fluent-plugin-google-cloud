@@ -27,9 +27,10 @@ eos
   gem.add_runtime_dependency 'google-protobuf', '3.9.0'
   gem.add_runtime_dependency 'grpc', '1.22.0'
   gem.add_runtime_dependency 'json', '2.2.0'
+  gem.add_runtime_dependency 'opencensus'
+  gem.add_runtime_dependency 'prometheus-client', '0.10.0'
 
   gem.add_development_dependency 'mocha', '1.9.0'
-  gem.add_development_dependency 'prometheus-client', '0.10.0'
   # TODO(qingling128): Upgrade rake to 11.0+ after the following issues are
   # fixed because rake (11.0+) requires ALL variables to be explicitly
   # initialized.

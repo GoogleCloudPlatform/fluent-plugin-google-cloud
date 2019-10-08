@@ -73,7 +73,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_partial_success
     setup_gce_metadata_stubs
-    setup_prometheus
+    clear_metrics
     # The API Client should not retry this and the plugin should consume
     # the exception.
     root_error_code = PARTIAL_SUCCESS_RESPONSE_BODY['error']['code']
@@ -98,7 +98,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_non_api_error
     setup_gce_metadata_stubs
-    setup_prometheus
+    clear_metrics
     # The API Client should not retry this and the plugin should consume
     # the exception.
     root_error_code = PARSE_ERROR_RESPONSE_BODY['error']['code']
@@ -141,56 +141,61 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
   # Refactor and remove duplication.
   # TODO: Use status codes instead of int literals.
-  def test_prometheus_metrics
+  def test_metrics
     setup_gce_metadata_stubs
     [
-      # Single successful request.
-      [200, 1, 1, [1, 0, 1, 0, 0]],
-      # Several successful requests.
-      [200, 2, 1, [2, 0, 2, 0, 0]],
-      # Single successful request with several entries.
-      [200, 1, 2, [1, 0, 2, 0, 0]],
-      # Single failed request that causes logs to be dropped.
-      [401, 1, 1, [0, 1, 0, 1, 0]],
-      # Single failed request that escalates without logs being dropped with
-      # several entries.
-      [500, 1, 2, [0, 0, 0, 0, 2]]
-    ].each do |code, request_count, entry_count, metric_values|
-      setup_prometheus
-      # TODO: Do this as part of setup_logging_stubs.
-      stub_request(:post, WRITE_LOG_ENTRIES_URI)
-        .to_return(status: code, body: 'Some Message')
-      (1..request_count).each do
-        d = create_driver(ENABLE_PROMETHEUS_CONFIG)
-        (1..entry_count).each do |i|
-          d.emit('message' => log_entry(i.to_s))
+      [ENABLE_PROMETHEUS_CONFIG, method(:assert_prometheus_metric_value)],
+      [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
+    ].each do |config, assert_metric_value|
+      [
+        # Single successful request.
+        [200, 1, 1, [1, 0, 1, 0, 0]],
+        # Several successful requests.
+        [200, 2, 1, [2, 0, 2, 0, 0]],
+        # Single successful request with several entries.
+        [200, 1, 2, [1, 0, 2, 0, 0]],
+        # Single failed request that causes logs to be dropped.
+        [401, 1, 1, [0, 1, 0, 1, 0]],
+        # Single failed request that escalates without logs being dropped with
+        # several entries.
+        [500, 1, 2, [0, 0, 0, 0, 2]]
+      ].each do |code, request_count, entry_count, metric_values|
+        clear_metrics
+        # TODO: Do this as part of setup_logging_stubs.
+        stub_request(:post, WRITE_LOG_ENTRIES_URI)
+          .to_return(status: code, body: 'Some Message')
+        (1..request_count).each do
+          d = create_driver(config)
+          (1..entry_count).each do |i|
+            d.emit('message' => log_entry(i.to_s))
+          end
+          # rubocop:disable Lint/HandleExceptions
+          begin
+            d.run
+          rescue Google::Apis::AuthorizationError
+          rescue Google::Apis::ServerError
+          end
+          # rubocop:enable Lint/HandleExceptions
         end
-        # rubocop:disable Lint/HandleExceptions
-        begin
-          d.run
-        rescue Google::Apis::AuthorizationError
-        rescue Google::Apis::ServerError
-        end
-        # rubocop:enable Lint/HandleExceptions
-      end
-      successful_requests_count, failed_requests_count,
+        successful_requests_count, failed_requests_count,
         ingested_entries_count, dropped_entries_count,
         retried_entries_count = metric_values
-      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     successful_requests_count,
-                                     grpc: false, code: 200)
-      assert_prometheus_metric_value(:stackdriver_failed_requests_count,
-                                     failed_requests_count,
-                                     grpc: false, code: code)
-      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     ingested_entries_count,
-                                     grpc: false, code: 200)
-      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
-                                     dropped_entries_count,
-                                     grpc: false, code: code)
-      assert_prometheus_metric_value(:stackdriver_retried_entries_count,
-                                     retried_entries_count,
-                                     grpc: false, code: code)
+        assert_metric_value.call(:stackdriver_successful_requests_count,
+                                 successful_requests_count,
+                                 grpc: false, code: 200)
+        assert_metric_value.call(:stackdriver_failed_requests_count,
+                                 failed_requests_count,
+                                 grpc: false, code: code)
+        assert_metric_value.call(:stackdriver_ingested_entries_count,
+                                 ingested_entries_count,
+                                 grpc: false, code: 200)
+        assert_metric_value.call(:stackdriver_dropped_entries_count,
+                                 dropped_entries_count,
+                                 grpc: false, code: code)
+        assert_metric_value.call(:stackdriver_retried_entries_count,
+                                 retried_entries_count,
+                                 grpc: false, code: code)
+      end
     end
   end
 

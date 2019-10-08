@@ -31,9 +31,26 @@ module Monitoring
     end
   end
 
+  # OpenCensus implementation of counters.
+  class OpenCensusCounter < BaseCounter
+    def initialize(measure)
+      raise ArgumentError, 'measure must not be nil' if measure.nil?
+      @measure = measure
+    end
+
+    def increment(by: 1, labels: {})
+      # TODO(jkohen): where are the context tags?
+      tag_map = OpenCensus::Tags::TagMap.new(
+        labels.transform_keys(&:to_s).transform_values(&:to_s))
+      stats_recorder = OpenCensus::Stats.ensure_recorder
+      stats_recorder.record(@measure.create_measurement(value: by,
+                                                        tags: tag_map))
+    end
+  end
+
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
-    def counter(_name, _desc)
+    def counter(_name, _labels, _docstring)
       nil
     end
   end
@@ -51,10 +68,43 @@ module Monitoring
     end
 
     # Exception-driven behavior to avoid synchronization errors.
-    def counter(name, desc)
-      return PrometheusCounter.new(@registry.counter(name, desc))
+    def counter(name, labels, docstring)
+      return PrometheusCounter.new(@registry.counter(
+                                     name,
+                                     labels: labels,
+                                     docstring: docstring))
     rescue Prometheus::Client::Registry::AlreadyRegisteredError
       return @registry.get(name)
+    end
+  end
+
+  # OpenCensus implementation of the monitoring registry.
+  class OpenCensusMonitoringRegistry < BaseMonitoringRegistry
+    def self.name
+      'opencensus'
+    end
+
+    def initialize
+      require 'opencensus'
+    end
+
+    def counter(name, labels, docstring)
+      measure = OpenCensus::Stats::MeasureRegistry.get(name)
+      if measure.nil?
+        measure = OpenCensus::Stats.create_measure_int(
+          name: name,
+          unit: OpenCensus::Stats::Measure::UNIT_NONE,
+          description: docstring
+        )
+      end
+      OpenCensus::Stats.create_and_register_view(
+        name: name,
+        measure: measure,
+        aggregation: OpenCensus::Stats.create_sum_aggregation,
+        description: docstring,
+        columns: labels.map(&:to_s)
+      )
+      OpenCensusCounter.new(measure)
     end
   end
 
@@ -63,7 +113,9 @@ module Monitoring
   class MonitoringRegistryFactory
     @known_registry_types = {
       PrometheusMonitoringRegistry.name =>
-        PrometheusMonitoringRegistry
+        PrometheusMonitoringRegistry,
+      OpenCensusMonitoringRegistry.name =>
+        OpenCensusMonitoringRegistry
     }
 
     def self.supports_monitoring_type(name)

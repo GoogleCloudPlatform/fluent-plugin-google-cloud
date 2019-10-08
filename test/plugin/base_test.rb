@@ -903,7 +903,7 @@ module BaseTest
       # [] returns nil for any index.
       [ENABLE_SPLIT_LOGS_BY_TAG_CONFIG, log_entry_count, dynamic_log_names, []]
     ].each do |(config, request_count, request_log_names, entry_log_names)|
-      setup_prometheus
+      clear_metrics
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(config + ENABLE_PROMETHEUS_CONFIG, 'test', true)
@@ -2144,8 +2144,9 @@ module BaseTest
                           DATAPROC_REGION)
   end
 
-  def setup_prometheus
+  def clear_metrics
     Prometheus::Client.registry.instance_variable_set('@metrics', {})
+    OpenCensus::Stats.ensure_recorder.clear_stats
   end
 
   # Metadata Agent.
@@ -2720,6 +2721,23 @@ module BaseTest
                    else
                      metric.get(labels: labels)
                    end
+    assert_equal(expected_value, metric_value)
+  end
+
+  def assert_opencensus_metric_value(metric_name, expected_value, labels = {})
+    labels = labels.transform_keys(&:to_s).transform_values(&:to_s)
+    stats_recorder = OpenCensus::Stats.ensure_recorder
+    view_data = stats_recorder.view_data metric_name
+    assert_not_nil(view_data)
+    # For now assume all metrics are counters.
+    assert_kind_of(OpenCensus::Stats::Aggregation::Sum,
+                   view_data.view.aggregation)
+    assert_true(view_data.view.measure.int64?)
+    tag_values = view_data.view.columns.map { |column| labels[column] }
+    metric_value = 0
+    if view_data.data.key? tag_values
+      metric_value = view_data.data[tag_values].value
+    end
     assert_equal(expected_value, metric_value)
   end
 
