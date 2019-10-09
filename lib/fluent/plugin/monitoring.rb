@@ -92,10 +92,12 @@ module Monitoring
       require 'opencensus'
       require 'opencensus-stackdriver'
       OpenCensus.configure do |c|
-        # TODO(jkohen) configure the monitored resource (and type)
+        # TODO(jkohen): prevent the exporter from sending network requests in
+        # tests.
         c.stats.exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
           metric_prefix: 'agent-logging.googleapis.com/agent',
-          resource_type: monitored_resource.type)
+          resource_type: monitored_resource.type,
+          resource_labels: monitored_resource.labels)
       end
     end
 
