@@ -49,6 +49,9 @@ module Monitoring
 
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
+    def initialize(_monitored_resource)
+    end
+
     def counter(_name, _labels, _docstring)
       nil
     end
@@ -61,7 +64,8 @@ module Monitoring
       'prometheus'
     end
 
-    def initialize
+    def initialize(_monitored_resource)
+      super
       require 'prometheus/client'
       @registry = Prometheus::Client.registry
     end
@@ -83,13 +87,15 @@ module Monitoring
       'opencensus'
     end
 
-    def initialize
+    def initialize(monitored_resource)
+      super
       require 'opencensus'
       require 'opencensus-stackdriver'
       OpenCensus.configure do |c|
         # TODO(jkohen) configure the monitored resource (and type)
         c.stats.exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
-          metric_prefix: 'agent-logging.googleapis.com/agent')
+          metric_prefix: 'agent-logging.googleapis.com/agent',
+          resource_type: monitored_resource.type)
       end
     end
 
@@ -148,8 +154,9 @@ module Monitoring
       @known_registry_types.key?(name)
     end
 
-    def self.create(name)
-      (@known_registry_types[name] || BaseMonitoringRegistry).new
+    def self.create(name, monitored_resource)
+      registry = @known_registry_types[name] || BaseMonitoringRegistry
+      registry.new(monitored_resource)
     end
   end
 end
