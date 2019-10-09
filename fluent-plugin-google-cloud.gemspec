@@ -28,6 +28,7 @@ eos
   gem.add_runtime_dependency 'grpc', '1.22.0'
   gem.add_runtime_dependency 'json', '2.2.0'
   gem.add_runtime_dependency 'opencensus'
+  gem.add_runtime_dependency 'opencensus-stackdriver'
   gem.add_runtime_dependency 'prometheus-client', '0.10.0'
 
   gem.add_development_dependency 'mocha', '1.9.0'

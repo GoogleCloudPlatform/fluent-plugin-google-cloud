@@ -39,7 +39,6 @@ module Monitoring
     end
 
     def increment(by: 1, labels: {})
-      # TODO(jkohen): where are the context tags?
       tag_map = OpenCensus::Tags::TagMap.new(
         labels.transform_keys(&:to_s).transform_values(&:to_s))
       stats_recorder = OpenCensus::Stats.ensure_recorder
@@ -86,6 +85,12 @@ module Monitoring
 
     def initialize
       require 'opencensus'
+      require 'opencensus-stackdriver'
+      OpenCensus.configure do |c|
+        # TODO(jkohen) configure the monitored resource (and type)
+        c.stats.exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
+          metric_prefix: 'agent-logging.googleapis.com/agent')
+      end
     end
 
     def counter(name, labels, docstring)
