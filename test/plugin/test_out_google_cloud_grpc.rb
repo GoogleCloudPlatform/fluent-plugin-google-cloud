@@ -214,17 +214,21 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         assert_metric_value.call(:stackdriver_successful_requests_count,
                                  successful_requests_count,
                                  grpc: true, code: 0)
-        assert_metric_value.call(:stackdriver_failed_requests_count,
-                                 failed_requests_count,
-                                 grpc: true, code: code)
         assert_metric_value.call(:stackdriver_ingested_entries_count,
                                  ingested_entries_count,
                                  grpc: true, code: 0)
-        assert_metric_value.call(:stackdriver_dropped_entries_count,
-                                 dropped_entries_count,
-                                 grpc: true, code: code)
         assert_metric_value.call(:stackdriver_retried_entries_count,
                                  retried_entries_count,
+                                 grpc: true, code: code)
+        # Skip failure assertions when code indicates success, because the
+        # assertion will fail in the case when a single metric contains time
+        # series with success and failure events.
+        next if code == 0
+        assert_metric_value.call(:stackdriver_failed_requests_count,
+                                 failed_requests_count,
+                                 grpc: true, code: code)
+        assert_metric_value.call(:stackdriver_dropped_entries_count,
+                                 dropped_entries_count,
                                  grpc: true, code: code)
       end
     end

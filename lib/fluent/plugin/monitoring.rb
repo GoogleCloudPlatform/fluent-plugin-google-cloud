@@ -89,6 +89,7 @@ module Monitoring
     end
 
     def counter(name, labels, docstring)
+      name = OpenCensusMonitoringRegistry.translate_metric_name(name)
       measure = OpenCensus::Stats::MeasureRegistry.get(name)
       if measure.nil?
         measure = OpenCensus::Stats.create_measure_int(
@@ -105,6 +106,26 @@ module Monitoring
         columns: labels.map(&:to_s)
       )
       OpenCensusCounter.new(measure)
+    end
+
+    class << self
+      # Translate the internal metrics to the curated metrics in Stackdriver.
+      # The Prometheus metrics are collected by Google Kubernetes Engine's
+      # monitoring, so we can't redefine them.
+      def translate_metric_name(name)
+        case name
+        when :stackdriver_successful_requests_count,
+             :stackdriver_failed_requests_count
+          :request_count
+        when :stackdriver_ingested_entries_count,
+             :stackdriver_dropped_entries_count
+          :log_entry_count
+        when :stackdriver_retried_entries_count
+          :log_entry_retry_count
+        else
+          name
+        end
+      end
     end
   end
 
