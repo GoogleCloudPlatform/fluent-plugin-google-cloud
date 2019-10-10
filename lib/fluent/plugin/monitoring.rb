@@ -41,7 +41,7 @@ module Monitoring
 
     def increment(by: 1, labels: {})
       tag_map = OpenCensus::Tags::TagMap.new(
-        labels.transform_keys(&:to_s).transform_values(&:to_s))
+        labels.map { |k, v| [k.to_s, v.to_s] }.to_h)
       @recorder.record(@measure.create_measurement(value: by, tags: tag_map))
     end
   end
