@@ -27,7 +27,7 @@ module Monitoring
     end
 
     def increment(by: 1, labels: {})
-      @counter.increment(by: by, labels: labels)
+      @counter.increment(labels, by)
     end
   end
 
@@ -72,12 +72,9 @@ module Monitoring
 
     # Exception-driven behavior to avoid synchronization errors.
     def counter(name, labels, docstring)
-      return PrometheusCounter.new(@registry.counter(
-                                     name,
-                                     labels: labels,
-                                     docstring: docstring))
+      return PrometheusCounter.new(@registry.counter(name, docstring, labels))
     rescue Prometheus::Client::Registry::AlreadyRegisteredError
-      return @registry.get(name)
+      return PrometheusCounter.new(@registry.get(name))
     end
   end
 
