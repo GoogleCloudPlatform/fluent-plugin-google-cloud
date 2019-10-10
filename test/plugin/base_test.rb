@@ -20,6 +20,15 @@ require 'prometheus/client'
 
 require_relative 'constants'
 
+module Monitoring
+  # Prevent OpenCensus from writing to the network.
+  class OpenCensusMonitoringRegistry
+    def export
+      nil
+    end
+  end
+end
+
 # Unit tests for Google Cloud Logging plugin
 module BaseTest
   include Constants

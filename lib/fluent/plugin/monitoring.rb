@@ -93,8 +93,6 @@ module Monitoring
       require 'opencensus-stackdriver'
       @log = $log # rubocop:disable Style/GlobalVars
       @recorder = OpenCensus::Stats.ensure_recorder
-      # TODO(jkohen): prevent the exporter from sending network requests in
-      # tests.
       @exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
         project_id: project_id,
         metric_prefix: 'agent.googleapis.com/agent',
