@@ -33,26 +33,29 @@ module Monitoring
 
   # OpenCensus implementation of counters.
   class OpenCensusCounter < BaseCounter
-    def initialize(measure)
+    def initialize(recorder, measure)
       raise ArgumentError, 'measure must not be nil' if measure.nil?
+      @recorder = recorder
       @measure = measure
     end
 
     def increment(by: 1, labels: {})
       tag_map = OpenCensus::Tags::TagMap.new(
         labels.transform_keys(&:to_s).transform_values(&:to_s))
-      stats_recorder = OpenCensus::Stats.ensure_recorder
-      stats_recorder.record(@measure.create_measurement(value: by,
-                                                        tags: tag_map))
+      @recorder.record(@measure.create_measurement(value: by, tags: tag_map))
     end
   end
 
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
-    def initialize(_monitored_resource)
+    def initialize(_project_id, _monitored_resource)
     end
 
     def counter(_name, _labels, _docstring)
+      nil
+    end
+
+    def export
       nil
     end
   end
@@ -64,7 +67,7 @@ module Monitoring
       'prometheus'
     end
 
-    def initialize(_monitored_resource)
+    def initialize(_project_id, _monitored_resource)
       super
       require 'prometheus/client'
       @registry = Prometheus::Client.registry
@@ -84,18 +87,23 @@ module Monitoring
       'opencensus'
     end
 
-    def initialize(monitored_resource)
+    def initialize(project_id, monitored_resource)
       super
       require 'opencensus'
       require 'opencensus-stackdriver'
+      @log = $log # rubocop:disable Style/GlobalVars
+      @recorder = OpenCensus::Stats.ensure_recorder
+      # TODO(jkohen): prevent the exporter from sending network requests in
+      # tests.
+      @exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
+        project_id: project_id,
+        metric_prefix: 'agent.googleapis.com/agent',
+        resource_type: monitored_resource.type,
+        resource_labels: monitored_resource.labels)
       OpenCensus.configure do |c|
-        # TODO(jkohen): prevent the exporter from sending network requests in
-        # tests.
-        c.stats.exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
-          metric_prefix: 'agent-logging.googleapis.com/agent',
-          resource_type: monitored_resource.type,
-          resource_labels: monitored_resource.labels)
+        c.stats.exporter = @exporter
       end
+      @log.debug "OpenCensus config=#{OpenCensus.config}"
     end
 
     def counter(name, labels, docstring)
@@ -115,7 +123,11 @@ module Monitoring
         description: docstring,
         columns: labels.map(&:to_s)
       )
-      OpenCensusCounter.new(measure)
+      OpenCensusCounter.new(@recorder, measure)
+    end
+
+    def export
+      @exporter.export @recorder.views_data
     end
 
     class << self
@@ -153,9 +165,9 @@ module Monitoring
       @known_registry_types.key?(name)
     end
 
-    def self.create(name, monitored_resource)
+    def self.create(name, project_id, monitored_resource)
       registry = @known_registry_types[name] || BaseMonitoringRegistry
-      registry.new(monitored_resource)
+      registry.new(project_id, monitored_resource)
     end
   end
 end

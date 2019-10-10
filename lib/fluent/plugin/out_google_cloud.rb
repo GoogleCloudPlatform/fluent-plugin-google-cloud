@@ -64,6 +64,18 @@ module Google
   end
 end
 
+# FluentLogger exposes the Fluent logger to the gRPC library.
+module FluentLogger
+  def logger
+    $log # rubocop:disable Style/GlobalVars
+  end
+end
+
+# Define a gRPC module-level logger method before grpc/logconfig.rb loads.
+module GRPC
+  extend FluentLogger
+end
+
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
@@ -238,7 +250,7 @@ module Fluent
 
     Fluent::Plugin.register_output('google_cloud', self)
 
-    helpers :server
+    helpers :server, :timer
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
 
@@ -538,7 +550,9 @@ module Fluent
                     'there will be no metrics'
         end
         registry = Monitoring::MonitoringRegistryFactory
-                   .create(@monitoring_type, @resource)
+                   .create(@monitoring_type, @project_id, @resource)
+        # Export metrics every 60 seconds.
+        timer_execute(:export_metrics, 60) { registry.export }
         @successful_requests_count = registry.counter(
           :stackdriver_successful_requests_count,
           [:grpc, :code],
@@ -2048,6 +2062,8 @@ module Fluent
     end
 
     def init_api_client
+      # Set up the logger for the auto-generated Google Cloud APIs.
+      Google::Apis.logger = @log
       if @use_grpc
         uri = URI.parse(@logging_api_url)
         host = uri.host
