@@ -549,28 +549,28 @@ module Fluent
           @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
                     'there will be no metrics'
         end
-        registry = Monitoring::MonitoringRegistryFactory
-                   .create(@monitoring_type, @project_id, @resource)
+        @registry = Monitoring::MonitoringRegistryFactory
+                    .create(@monitoring_type, @project_id, @resource)
         # Export metrics every 60 seconds.
-        timer_execute(:export_metrics, 60) { registry.export }
-        @successful_requests_count = registry.counter(
+        timer_execute(:export_metrics, 60) { @registry.export }
+        @successful_requests_count = @registry.counter(
           :stackdriver_successful_requests_count,
           [:grpc, :code],
           'A number of successful requests to the Stackdriver Logging API')
-        @failed_requests_count = registry.counter(
+        @failed_requests_count = @registry.counter(
           :stackdriver_failed_requests_count,
           [:grpc, :code],
           'A number of failed requests to the Stackdriver Logging '\
           'API, broken down by the error code')
-        @ingested_entries_count = registry.counter(
+        @ingested_entries_count = @registry.counter(
           :stackdriver_ingested_entries_count,
           [:grpc, :code],
           'A number of log entries ingested by Stackdriver Logging')
-        @dropped_entries_count = registry.counter(
+        @dropped_entries_count = @registry.counter(
           :stackdriver_dropped_entries_count,
           [:grpc, :code],
           'A number of log entries dropped by the Stackdriver output plugin')
-        @retried_entries_count = registry.counter(
+        @retried_entries_count = @registry.counter(
           :stackdriver_retried_entries_count,
           [:grpc, :code],
           'The number of log entries that failed to be ingested by '\
@@ -636,6 +636,9 @@ module Fluent
 
     def shutdown
       super
+      # Export metrics on shutdown. This is a best-effort attempt, and it might
+      # fail, for instance if there was a recent write to the same time series.
+      @registry.export unless @registry.nil?
     end
 
     def write(chunk)
