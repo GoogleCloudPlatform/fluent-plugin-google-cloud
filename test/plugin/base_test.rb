@@ -2736,7 +2736,7 @@ module BaseTest
   def assert_opencensus_metric_value(metric_name, expected_value, labels = {})
     metric_name = Monitoring::OpenCensusMonitoringRegistry
                   .translate_metric_name(metric_name)
-    labels = labels.transform_keys(&:to_s).transform_values(&:to_s)
+    labels = labels.map { |k, v| [k.to_s, v.to_s] }.to_h
     stats_recorder = OpenCensus::Stats.ensure_recorder
     view_data = stats_recorder.view_data metric_name
     assert_not_nil(view_data)
