@@ -508,29 +508,27 @@ module Fluent
         registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
         @successful_requests_count = registry.counter(
           :stackdriver_successful_requests_count,
-          labels: [:grpc, :code],
-          docstring: 'A number of successful requests to the Stackdriver '\
-                     'Logging API')
+          [:grpc, :code],
+          'A number of successful requests to the Stackdriver Logging API')
         @failed_requests_count = registry.counter(
           :stackdriver_failed_requests_count,
-          labels: [:grpc, :code],
-          docstring: 'A number of failed requests to the Stackdriver Logging '\
-            'API, broken down by the error code')
+          [:grpc, :code],
+          'A number of failed requests to the Stackdriver Logging '\
+          'API, broken down by the error code')
         @ingested_entries_count = registry.counter(
           :stackdriver_ingested_entries_count,
-          labels: [:grpc, :code],
-          docstring: 'A number of log entries ingested by Stackdriver Logging')
+          [:grpc, :code],
+          'A number of log entries ingested by Stackdriver Logging')
         @dropped_entries_count = registry.counter(
           :stackdriver_dropped_entries_count,
-          labels: [:grpc, :code],
-          docstring: 'A number of log entries dropped by the Stackdriver '\
-                     'output plugin')
+          [:grpc, :code],
+          'A number of log entries dropped by the Stackdriver output plugin')
         @retried_entries_count = registry.counter(
           :stackdriver_retried_entries_count,
-          labels: [:grpc, :code],
-          docstring: 'The number of log entries that failed to be ingested by '\
-                     'the Stackdriver output plugin due to a transient error '\
-                     'and were retried')
+          [:grpc, :code],
+          'The number of log entries that failed to be ingested by '\
+          'the Stackdriver output plugin due to a transient error '\
+          'and were retried')
         @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
       end
 
