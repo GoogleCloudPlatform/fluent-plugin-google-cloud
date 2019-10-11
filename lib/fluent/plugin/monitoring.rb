@@ -15,7 +15,7 @@
 module Monitoring
   # Base class for the counter.
   class BaseCounter
-    def increment(_labels, _count)
+    def increment(_by: 1, _labels: {})
       nil
     end
   end
