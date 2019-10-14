@@ -29,8 +29,8 @@ eos
   gem.add_runtime_dependency 'json', '2.2.0'
 
   gem.add_development_dependency 'mocha', '1.9.0'
-  gem.add_development_dependency 'opencensus'
-  gem.add_development_dependency 'opencensus-stackdriver'
+  gem.add_development_dependency 'opencensus', '0.5.0'
+  gem.add_development_dependency 'opencensus-stackdriver', '0.3.0'
   # Keep this the same as in
   # https://github.com/fluent/fluent-plugin-prometheus/blob/master/fluent-plugin-prometheus.gemspec
   gem.add_development_dependency 'prometheus-client', '< 0.10'
