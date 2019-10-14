@@ -283,6 +283,11 @@ module Constants
     monitoring_type prometheus
   ).freeze
 
+  ENABLE_OPENCENSUS_CONFIG = %(
+    enable_monitoring true
+    monitoring_type opencensus
+  ).freeze
+
   ENABLE_METADATA_AGENT_CONFIG = %(
     enable_metadata_agent true
   ).freeze

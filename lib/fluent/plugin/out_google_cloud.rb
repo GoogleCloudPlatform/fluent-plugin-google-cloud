@@ -64,6 +64,18 @@ module Google
   end
 end
 
+# FluentLogger exposes the Fluent logger to the gRPC library.
+module FluentLogger
+  def logger
+    $log # rubocop:disable Style/GlobalVars
+  end
+end
+
+# Define a gRPC module-level logger method before grpc/logconfig.rb loads.
+module GRPC
+  extend FluentLogger
+end
+
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
@@ -238,7 +250,7 @@ module Fluent
 
     Fluent::Plugin.register_output('google_cloud', self)
 
-    helpers :server
+    helpers :server, :timer
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
 
@@ -497,41 +509,6 @@ module Fluent
           end
       end
 
-      # If monitoring is enabled, register metrics in the default registry
-      # and store metric objects for future use.
-      if @enable_monitoring
-        unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
-          @monitoring_type)
-          @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
-                    'there will be no metrics'
-        end
-        registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
-        @successful_requests_count = registry.counter(
-          :stackdriver_successful_requests_count,
-          [:grpc, :code],
-          'A number of successful requests to the Stackdriver Logging API')
-        @failed_requests_count = registry.counter(
-          :stackdriver_failed_requests_count,
-          [:grpc, :code],
-          'A number of failed requests to the Stackdriver Logging '\
-          'API, broken down by the error code')
-        @ingested_entries_count = registry.counter(
-          :stackdriver_ingested_entries_count,
-          [:grpc, :code],
-          'A number of log entries ingested by Stackdriver Logging')
-        @dropped_entries_count = registry.counter(
-          :stackdriver_dropped_entries_count,
-          [:grpc, :code],
-          'A number of log entries dropped by the Stackdriver output plugin')
-        @retried_entries_count = registry.counter(
-          :stackdriver_retried_entries_count,
-          [:grpc, :code],
-          'The number of log entries that failed to be ingested by '\
-          'the Stackdriver output plugin due to a transient error '\
-          'and were retried')
-        @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
-      end
-
       # Alert on old authentication configuration.
       unless @auth_method.nil? && @private_key_email.nil? &&
              @private_key_path.nil? && @private_key_passphrase.nil?
@@ -563,6 +540,44 @@ module Fluent
       # Fail over to retrieve monitored resource via the legacy path if we fail
       # to get it from Metadata Agent.
       @resource ||= determine_agent_level_monitored_resource_via_legacy
+
+      # If monitoring is enabled, register metrics in the default registry
+      # and store metric objects for future use.
+      if @enable_monitoring
+        unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
+          @monitoring_type)
+          @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
+                    'there will be no metrics'
+        end
+        @registry = Monitoring::MonitoringRegistryFactory
+                    .create(@monitoring_type, @project_id, @resource)
+        # Export metrics every 60 seconds.
+        timer_execute(:export_metrics, 60) { @registry.export }
+        @successful_requests_count = @registry.counter(
+          :stackdriver_successful_requests_count,
+          [:grpc, :code],
+          'A number of successful requests to the Stackdriver Logging API')
+        @failed_requests_count = @registry.counter(
+          :stackdriver_failed_requests_count,
+          [:grpc, :code],
+          'A number of failed requests to the Stackdriver Logging '\
+          'API, broken down by the error code')
+        @ingested_entries_count = @registry.counter(
+          :stackdriver_ingested_entries_count,
+          [:grpc, :code],
+          'A number of log entries ingested by Stackdriver Logging')
+        @dropped_entries_count = @registry.counter(
+          :stackdriver_dropped_entries_count,
+          [:grpc, :code],
+          'A number of log entries dropped by the Stackdriver output plugin')
+        @retried_entries_count = @registry.counter(
+          :stackdriver_retried_entries_count,
+          [:grpc, :code],
+          'The number of log entries that failed to be ingested by '\
+          'the Stackdriver output plugin due to a transient error '\
+          'and were retried')
+        @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
+      end
 
       # Set regexp that we should match tags against later on. Using a list
       # instead of a map to ensure order.
@@ -621,6 +636,9 @@ module Fluent
 
     def shutdown
       super
+      # Export metrics on shutdown. This is a best-effort attempt, and it might
+      # fail, for instance if there was a recent write to the same time series.
+      @registry.export unless @registry.nil?
     end
 
     def write(chunk)
@@ -2047,6 +2065,8 @@ module Fluent
     end
 
     def init_api_client
+      # Set up the logger for the auto-generated Google Cloud APIs.
+      Google::Apis.logger = @log
       if @use_grpc
         uri = URI.parse(@logging_api_url)
         host = uri.host
