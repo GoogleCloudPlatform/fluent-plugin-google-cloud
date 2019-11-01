@@ -33,13 +33,15 @@ module Monitoring
 
   # OpenCensus implementation of counters.
   class OpenCensusCounter < BaseCounter
-    def initialize(recorder, measure)
+    def initialize(recorder, measure, translator)
       raise ArgumentError, 'measure must not be nil' if measure.nil?
       @recorder = recorder
       @measure = measure
+      @translator = translator
     end
 
     def increment(by: 1, labels: {})
+      labels = @translator.translate_labels(labels)
       tag_map = OpenCensus::Tags::TagMap.new(
         labels.map { |k, v| [k.to_s, v.to_s] }.to_h)
       @recorder.record(@measure.create_measurement(value: by, tags: tag_map))
@@ -105,47 +107,27 @@ module Monitoring
     end
 
     def counter(name, labels, docstring)
-      name = OpenCensusMonitoringRegistry.translate_metric_name(name)
-      measure = OpenCensus::Stats::MeasureRegistry.get(name)
+      translator = MetricTranslator.new(name, labels)
+      measure = OpenCensus::Stats::MeasureRegistry.get(translator.name)
       if measure.nil?
         measure = OpenCensus::Stats.create_measure_int(
-          name: name,
+          name: translator.name,
           unit: OpenCensus::Stats::Measure::UNIT_NONE,
           description: docstring
         )
       end
       OpenCensus::Stats.create_and_register_view(
-        name: name,
+        name: translator.name,
         measure: measure,
         aggregation: OpenCensus::Stats.create_sum_aggregation,
         description: docstring,
-        columns: labels.map(&:to_s)
+        columns: translator.view_labels.map(&:to_s)
       )
-      OpenCensusCounter.new(@recorder, measure)
+      OpenCensusCounter.new(@recorder, measure, translator)
     end
 
     def export
       @exporter.export @recorder.views_data
-    end
-
-    class << self
-      # Translate the internal metrics to the curated metrics in Stackdriver.
-      # The Prometheus metrics are collected by Google Kubernetes Engine's
-      # monitoring, so we can't redefine them.
-      def translate_metric_name(name)
-        case name
-        when :stackdriver_successful_requests_count,
-             :stackdriver_failed_requests_count
-          :request_count
-        when :stackdriver_ingested_entries_count,
-             :stackdriver_dropped_entries_count
-          :log_entry_count
-        when :stackdriver_retried_entries_count
-          :log_entry_retry_count
-        else
-          name
-        end
-      end
     end
   end
 
@@ -166,6 +148,41 @@ module Monitoring
     def self.create(name, project_id, monitored_resource)
       registry = @known_registry_types[name] || BaseMonitoringRegistry
       registry.new(project_id, monitored_resource)
+    end
+  end
+
+  # Translate the internal metrics to the curated metrics in Stackdriver.  The
+  # Prometheus metrics are collected by Google Kubernetes Engine's monitoring,
+  # so we can't redefine them.
+  # Avoid this mechanism for new metrics by defining them in their final form,
+  # so they don't need translation.
+  class MetricTranslator
+    attr_reader :name
+    attr_reader :view_labels
+
+    def initialize(name, metric_labels)
+      @legacy = true
+      case name
+      when :stackdriver_successful_requests_count,
+           :stackdriver_failed_requests_count
+        @name = :request_count
+      when :stackdriver_ingested_entries_count,
+           :stackdriver_dropped_entries_count
+        @name = :log_entry_count
+      when :stackdriver_retried_entries_count
+        @name = :log_entry_retry_count
+      else
+        @name = name
+        @legacy = false
+      end
+      # Collapsed from [:response_code, :grpc]
+      @view_labels = @legacy ? [:response_code] : metric_labels
+    end
+
+    def translate_labels(labels)
+      return labels unless @legacy
+      translation = { code: :response_code, grpc: :grpc }
+      labels.map { |k, v| [translation[k], v] }.to_h
     end
   end
 end

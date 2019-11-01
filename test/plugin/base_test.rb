@@ -2734,8 +2734,15 @@ module BaseTest
   end
 
   def assert_opencensus_metric_value(metric_name, expected_value, labels = {})
-    metric_name = Monitoring::OpenCensusMonitoringRegistry
-                  .translate_metric_name(metric_name)
+    translator = Monitoring::MetricTranslator.new(metric_name, labels)
+    metric_name = translator.name
+    labels = translator.translate_labels(labels)
+    # The next line collapses the labels to assert against the aggregated data,
+    # which can have some labels removed. Without this, it would test against
+    # the raw data. The view is more representative of the user experience, even
+    # though both tests should work because currently we only aggregate away one
+    # label that never changes during runtime.
+    labels.select! { |k, _| translator.view_labels.include? k }
     labels = labels.map { |k, v| [k.to_s, v.to_s] }.to_h
     stats_recorder = OpenCensus::Stats.ensure_recorder
     view_data = stats_recorder.view_data metric_name
