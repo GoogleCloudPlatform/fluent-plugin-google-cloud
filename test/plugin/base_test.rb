@@ -2055,7 +2055,6 @@ module BaseTest
       clear_metrics
       d = create_driver(config)
       d.run
-      exception_count = 0
       begin
         # Retry to avoid time races.
         retries ||= 0
