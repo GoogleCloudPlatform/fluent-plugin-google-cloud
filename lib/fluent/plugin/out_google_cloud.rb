@@ -254,6 +254,7 @@ module Fluent
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
 
+    # Follows semver format.
     PLUGIN_VERSION = begin
       # Extract plugin version from file path.
       match_data = __FILE__.match(
@@ -268,7 +269,12 @@ module Fluent
           proc { |spec,| __FILE__.include?(spec.full_gem_path) }) do |spec,|
             spec.version.to_s
           end
-        matching_version
+        if matching_version
+          matching_version
+        else
+          # Return a valid but obviously wrong value.
+          '0.0.0-unknown'
+        end
       end
     end.freeze
 
@@ -481,6 +487,7 @@ module Fluent
       @retried_entries_count = nil
 
       @ok_code = nil
+      @uptime_time = 0
     end
 
     def configure(conf)
@@ -553,6 +560,10 @@ module Fluent
                     .create(@monitoring_type, @project_id, @resource)
         # Export metrics every 60 seconds.
         timer_execute(:export_metrics, 60) { @registry.export }
+        @uptime_metric = @registry.counter(
+          :uptime, [:version], 'Uptime of Monitoring agent')
+        update_uptime
+        timer_execute(:update_uptime, 1) { update_uptime }
         @successful_requests_count = @registry.counter(
           :stackdriver_successful_requests_count,
           [:grpc, :code],
@@ -771,6 +782,18 @@ module Fluent
 
     def multi_workers_ready?
       true
+    end
+
+    def self.version_string
+      @version_string || "google-fluentd/#{PLUGIN_VERSION}"
+    end
+
+    def update_uptime
+      now = Time.now.to_i
+      @uptime_metric.increment(
+        by: now - @uptime_time,
+        labels: { version: Fluent::GoogleCloudOutput.version_string })
+      @uptime_time = now
     end
 
     private

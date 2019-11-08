@@ -2046,6 +2046,21 @@ module BaseTest
     end
   end
 
+  def test_uptime_metric
+    setup_gce_metadata_stubs
+    [
+      [ENABLE_PROMETHEUS_CONFIG, method(:assert_prometheus_metric_value)],
+      [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
+    ].each do |config, assert_metric_value|
+      clear_metrics
+      d = create_driver(config)
+      now = Time.now.to_i # Racey. Apologies for flakes.
+      d.run
+      assert_metric_value.call(
+        :uptime, now, version: Fluent::GoogleCloudOutput.version_string)
+    end
+  end
+
   private
 
   def stub_metadata_request(metadata_path, response_body)
