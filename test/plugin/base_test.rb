@@ -2054,10 +2054,19 @@ module BaseTest
     ].each do |config, assert_metric_value|
       clear_metrics
       d = create_driver(config)
-      now = Time.now.to_i # Racey. Apologies for flakes.
       d.run
-      assert_metric_value.call(
-        :uptime, now, version: Fluent::GoogleCloudOutput.version_string)
+      exception_count = 0
+      begin
+        # Retry to avoid time races.
+        retries ||= 0
+        now = Time.now.to_i
+        d.instance.update_uptime
+        assert_metric_value.call(
+          :uptime, now, version: Fluent::GoogleCloudOutput.version_string)
+      rescue Test::Unit::AssertionFailedError
+        retry if (retries += 1) < 3
+      end
+      assert_not_equal 3, retries
     end
   end
 
