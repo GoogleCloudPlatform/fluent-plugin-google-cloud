@@ -254,7 +254,7 @@ module Fluent
 
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
 
-    # Follows semver format.
+    # Follows semver.org format.
     PLUGIN_VERSION = begin
       # Extract plugin version from file path.
       match_data = __FILE__.match(
@@ -487,7 +487,7 @@ module Fluent
       @retried_entries_count = nil
 
       @ok_code = nil
-      @uptime_time = 0
+      @uptime_time = Time.now.to_i
     end
 
     def configure(conf)
@@ -560,8 +560,10 @@ module Fluent
                     .create(@monitoring_type, @project_id, @resource)
         # Export metrics every 60 seconds.
         timer_execute(:export_metrics, 60) { @registry.export }
+        # Uptime should be a gauge, but the metric definition is a counter and
+        # we can't change it.
         @uptime_metric = @registry.counter(
-          :uptime, [:version], 'Uptime of Monitoring agent')
+          :uptime, [:version], 'Uptime of Logging agent')
         update_uptime
         timer_execute(:update_uptime, 1) { update_uptime }
         @successful_requests_count = @registry.counter(

@@ -2053,15 +2053,16 @@ module BaseTest
       [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
     ].each do |config, assert_metric_value|
       clear_metrics
+      start_time = Time.now.to_i
       d = create_driver(config)
       d.run
       begin
-        # Retry to avoid time races.
+        # Retry to protect from time races.
         retries ||= 0
-        now = Time.now.to_i
+        expected = Time.now.to_i - start_time
         d.instance.update_uptime
         assert_metric_value.call(
-          :uptime, now, version: Fluent::GoogleCloudOutput.version_string)
+          :uptime, expected, version: Fluent::GoogleCloudOutput.version_string)
       rescue Test::Unit::AssertionFailedError
         retry if (retries += 1) < 3
       end
