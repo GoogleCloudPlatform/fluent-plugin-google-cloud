@@ -484,7 +484,7 @@ module Fluent
       @retried_entries_count = nil
 
       @ok_code = nil
-      @uptime_time = Time.now.to_i
+      @uptime_update_time = Time.now.to_i
     end
 
     def configure(conf)
@@ -790,9 +790,9 @@ module Fluent
     def update_uptime
       now = Time.now.to_i
       @uptime_metric.increment(
-        by: now - @uptime_time,
+        by: now - @uptime_update_time,
         labels: { version: Fluent::GoogleCloudOutput.version_string })
-      @uptime_time = now
+      @uptime_update_time = now
     end
 
     private
