@@ -269,12 +269,9 @@ module Fluent
           proc { |spec,| __FILE__.include?(spec.full_gem_path) }) do |spec,|
             spec.version.to_s
           end
-        if matching_version
-          matching_version
-        else
-          # Return a valid but obviously wrong value.
-          '0.0.0-unknown'
-        end
+        # If no matching version was found, return a valid but obviously wrong
+        # value.
+        matching_version || '0.0.0-unknown'
       end
     end.freeze
 
@@ -787,7 +784,7 @@ module Fluent
     end
 
     def self.version_string
-      @version_string || "google-fluentd/#{PLUGIN_VERSION}"
+      @version_string ||= "google-fluentd/#{PLUGIN_VERSION}"
     end
 
     def update_uptime
