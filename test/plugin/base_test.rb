@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Enable coveralls for plugin test coverage analysis
+# Enable coveralls for plugin test coverage analysis.
 require 'coveralls'
 Coveralls.wear!
 
