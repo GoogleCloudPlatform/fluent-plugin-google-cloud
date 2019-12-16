@@ -43,4 +43,5 @@ eos
   gem.add_development_dependency 'rubocop', '0.39.0'
   gem.add_development_dependency 'test-unit', '3.3.3'
   gem.add_development_dependency 'webmock', '3.6.2'
+  gem.add_development_dependency 'coveralls', '0.8.23'
 end
