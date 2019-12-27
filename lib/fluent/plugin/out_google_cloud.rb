@@ -643,8 +643,10 @@ module Fluent
           end
         end
       end
-      RubyProf.measure_mode = RubyProf::PROCESS_TIME
-      RubyProf.start
+      if !RubyProf.running?
+        RubyProf.measure_mode = RubyProf::PROCESS_TIME
+        RubyProf.start
+      end
     end
 
     def shutdown
