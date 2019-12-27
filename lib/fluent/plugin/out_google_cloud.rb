@@ -646,6 +646,19 @@ module Fluent
       if !RubyProf.running?
         RubyProf.measure_mode = RubyProf::PROCESS_TIME
         RubyProf.start
+        timer_execute(:google_cloud_ruby_prof_dump, 300,
+                      &method(:on_profiler_dump))
+      end
+    end
+
+    def on_profiler_dump
+      result = RubyProf.stop
+      file = Tempfile.create(['cpu-', '.ruby-prof'])
+      begin
+        log.info 'dumping profile to', filepath: file.path
+        file.write(Marshal.dump(result))
+      ensure
+        file.close
       end
     end
 
@@ -654,17 +667,6 @@ module Fluent
       # Export metrics on shutdown. This is a best-effort attempt, and it might
       # fail, for instance if there was a recent write to the same time series.
       @registry.export unless @registry.nil?
-      result = RubyProf.stop
-      file = Tempfile.create(
-        ['cpu-' + fluentd_worker_id.to_s + '-', '.ruby-prof'])
-      begin
-        log.info 'dumping profile to',
-                 filepath: file.path,
-                 worker: fluentd_worker_id
-        file.write(Marshal.dump(result))
-      ensure
-        file.close
-      end
     end
 
     def write(chunk)
