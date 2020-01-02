@@ -946,26 +946,42 @@ module BaseTest
   def test_timestamps
     setup_gce_metadata_stubs
     current_time = Time.now
+    one_day_later = current_time.to_datetime.next_day.to_time
+    just_under_one_day_later = one_day_later - 1
     next_year = Time.mktime(current_time.year + 1)
     one_second_before_next_year = next_year - 1
-    adjusted_to_last_year =
-      one_second_before_next_year.to_datetime.prev_year.to_time
     one_second_into_next_year = next_year + 1
-    one_day_into_next_year = next_year.to_date.next_day.to_time
+    one_day_into_next_year = next_year.to_datetime.next_day.to_time
+    # Note: these tests behave differently on December 31.
+    # TODO: use patched Time.now instead of messing with the current time.
+    adjust_unless_within_a_day = lambda do |original_ts, new_ts|
+      return new_ts unless original_ts < one_day_later
+      # Timestamps less than one day away should be left alone.
+      original_ts
+    end
+    adjusted_to_last_year =
+      adjust_unless_within_a_day[
+        one_second_before_next_year,
+        one_second_before_next_year.to_datetime.prev_year.to_time]
+    zero_for_next_year = adjust_unless_within_a_day[next_year, Time.at(0)]
+    zero_for_next_year_plus_one =
+      adjust_unless_within_a_day[one_second_into_next_year, Time.at(0)]
     {
       APPLICATION_DEFAULT_CONFIG => {
         Time.at(123_456.789) => Time.at(123_456.789),
         Time.at(0) => Time.at(0),
         current_time => current_time,
+        just_under_one_day_later => just_under_one_day_later,
         one_second_before_next_year => adjusted_to_last_year,
-        next_year => Time.at(0),
-        one_second_into_next_year => Time.at(0),
+        next_year => zero_for_next_year,
+        one_second_into_next_year => zero_for_next_year_plus_one,
         one_day_into_next_year => Time.at(0)
       },
       NO_ADJUST_TIMESTAMPS_CONFIG => {
         Time.at(123_456.789) => Time.at(123_456.789),
         Time.at(0) => Time.at(0),
         current_time => current_time,
+        just_under_one_day_later => just_under_one_day_later,
         one_second_before_next_year => one_second_before_next_year,
         next_year => next_year,
         one_second_into_next_year => one_second_into_next_year,
@@ -999,7 +1015,7 @@ module BaseTest
           verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
             verify_default_log_entry_text(entry['textPayload'], i, entry)
             actual_timestamp = timestamp_parse(entry['timestamp'])
-            assert_equal actual_timestamp['seconds'], expected_ts.tv_sec, entry
+            assert_equal expected_ts.tv_sec, actual_timestamp['seconds'], entry
             # Fluentd v0.14 onwards supports nanosecond timestamp values.
             # Added in 600 ns delta to avoid flaky tests introduced
             # due to rounding error in double-precision floating-point numbers

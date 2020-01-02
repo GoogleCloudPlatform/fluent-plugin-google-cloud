@@ -1706,7 +1706,11 @@ module Fluent
 
       if @adjust_invalid_timestamps && timestamp
         # Adjust timestamps from the future.
-        # There are two cases:
+        # The base case is:
+        # 0. The parsed timestamp is less than one day into the future.
+        # This is allowed by the API, and should be left unchanged.
+        #
+        # Beyond that, there are two cases:
         # 1. The parsed timestamp is later in the current year:
         # This can happen when system log lines from previous years are missing
         # the year, so the date parser assumes the current year.
@@ -1722,10 +1726,12 @@ module Fluent
         # downstream API handle it.
         next_year = Time.mktime(current_time.year + 1)
         one_day_later = current_time.to_datetime.next_day.to_time
-        if timestamp >= next_year # Case 2.
+        if timestamp < one_day_later # Case 0.
+          # Leave the timestamp as-is.
+        elsif timestamp >= next_year # Case 2.
           ts_secs = 0
           ts_nanos = 0
-        elsif timestamp >= one_day_later # Case 1.
+        else # Case 1.
           adjusted_timestamp = timestamp.to_datetime.prev_year.to_time
           ts_secs = adjusted_timestamp.tv_sec
           # The value of ts_nanos should not change when subtracting a year.
