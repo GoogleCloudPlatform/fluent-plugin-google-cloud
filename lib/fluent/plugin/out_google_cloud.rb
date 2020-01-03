@@ -76,14 +76,14 @@ module GRPC
   extend FluentLogger
 end
 
-require 'strptime'
-# Cripple the nurse/strptime gem used by FluentD's TimeParser class in
+# Disable the nurse/strptime gem used by FluentD's TimeParser class in
 # lib/fluent/time.rb. We found this gem to be slower than the builtin Ruby
 # parser in recent versions of Ruby. Fortunately FluentD will fall back to the
 # builtin parser.
+require 'strptime'
+# Dummy Strptime class.
 class Strptime
   def self.new(_)
-    nil
   end
 end
 
