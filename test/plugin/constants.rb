@@ -274,10 +274,6 @@ module Constants
     split_logs_by_tag true
   ).freeze
 
-  NO_ADJUST_TIMESTAMPS_CONFIG = %(
-    adjust_invalid_timestamps false
-  ).freeze
-
   ENABLE_PROMETHEUS_CONFIG = %(
     enable_monitoring true
     monitoring_type prometheus
