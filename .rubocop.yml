@@ -1,7 +1,11 @@
 inherit_from: .rubocop_todo.yml
 
 AllCops:
-  TargetRubyVersion: 2.2
+  TargetRubyVersion: 2.3
   Exclude:
     # Generated files.
     - 'lib/google/**/*'
+
+# TODO: Re-enable this and fix frozen strings.
+Style/FrozenStringLiteralComment:
+  Enabled: false

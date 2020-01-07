@@ -86,7 +86,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   def test_partial_success
     setup_gce_metadata_stubs
-    setup_prometheus
+    clear_metrics
     setup_logging_stubs(
       GRPC::PermissionDenied.new('User not authorized.',
                                  PARTIAL_SUCCESS_GRPC_METADATA)) do
@@ -112,14 +112,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
-      assert_prometheus_metric_value(
-        :stackdriver_retried_entries_count, 0, grpc: true)
     end
   end
 
   def test_non_api_error
     setup_gce_metadata_stubs
-    setup_prometheus
+    clear_metrics
     setup_logging_stubs(
       GRPC::InvalidArgument.new('internal client error',
                                 PARSE_ERROR_GRPC_METADATA)) do
@@ -140,8 +138,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
-      assert_prometheus_metric_value(
-        :stackdriver_retried_entries_count, 0, grpc: true)
     end
   end
 
@@ -175,57 +171,66 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
   # Refactor and remove duplication.
   # TODO: Use status codes instead of int literals.
-  def test_prometheus_metrics
+  def test_metrics
     setup_gce_metadata_stubs
     [
-      # Single successful request.
-      [false, 0, 1, 1, [1, 0, 1, 0, 0]],
-      # Several successful requests.
-      [false, 0, 2, 1, [2, 0, 2, 0, 0]],
-      # Single successful request with several entries.
-      [false, 0, 1, 2, [1, 0, 2, 0, 0]],
-      # Single failed request that causes logs to be dropped.
-      [true, 16, 1, 1, [0, 1, 0, 1, 0]],
-      # Single failed request that escalates without logs being dropped with
-      # several entries.
-      [true, 13, 1, 2, [0, 0, 0, 0, 2]]
-    ].each do |should_fail, code, request_count, entry_count, metric_values|
-      setup_prometheus
-      (1..request_count).each do
-        setup_logging_stubs(
-          if should_fail
-            GRPC::BadStatus.new_status_exception(code, 'SomeMessage')
-          end) do
-          d = create_driver(USE_GRPC_CONFIG + ENABLE_PROMETHEUS_CONFIG, 'test')
-          (1..entry_count).each do |i|
-            d.emit('message' => log_entry(i.to_s))
+      [ENABLE_PROMETHEUS_CONFIG, method(:assert_prometheus_metric_value)],
+      [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
+    ].each do |config, assert_metric_value|
+      [
+        # Single successful request.
+        [false, 0, 1, 1, [1, 0, 1, 0, 0]],
+        # Several successful requests.
+        [false, 0, 2, 1, [2, 0, 2, 0, 0]],
+        # Single successful request with several entries.
+        [false, 0, 1, 2, [1, 0, 2, 0, 0]],
+        # Single failed request that causes logs to be dropped.
+        [true, 16, 1, 1, [0, 1, 0, 1, 0]],
+        # Single failed request that escalates without logs being dropped with
+        # several entries.
+        [true, 13, 1, 2, [0, 0, 0, 0, 2]]
+      ].each do |should_fail, code, request_count, entry_count, metric_values|
+        clear_metrics
+        (1..request_count).each do
+          setup_logging_stubs(
+            if should_fail
+              GRPC::BadStatus.new_status_exception(code, 'SomeMessage')
+            end) do
+            d = create_driver(USE_GRPC_CONFIG + config, 'test')
+            (1..entry_count).each do |i|
+              d.emit('message' => log_entry(i.to_s))
+            end
+            # rubocop:disable Lint/HandleExceptions
+            begin
+              d.run
+            rescue GRPC::BadStatus
+            end
+            # rubocop:enable Lint/HandleExceptions
           end
-          # rubocop:disable Lint/HandleExceptions
-          begin
-            d.run
-          rescue GRPC::BadStatus
-          end
-          # rubocop:enable Lint/HandleExceptions
         end
-      end
-      successful_requests_count, failed_requests_count,
+        successful_requests_count, failed_requests_count,
         ingested_entries_count, dropped_entries_count,
         retried_entries_count = metric_values
-      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     successful_requests_count,
-                                     grpc: true, code: 0)
-      assert_prometheus_metric_value(:stackdriver_failed_requests_count,
-                                     failed_requests_count,
-                                     grpc: true, code: code)
-      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     ingested_entries_count,
-                                     grpc: true, code: 0)
-      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
-                                     dropped_entries_count,
-                                     grpc: true, code: code)
-      assert_prometheus_metric_value(:stackdriver_retried_entries_count,
-                                     retried_entries_count,
-                                     grpc: true, code: code)
+        assert_metric_value.call(:stackdriver_successful_requests_count,
+                                 successful_requests_count,
+                                 grpc: true, code: 0)
+        assert_metric_value.call(:stackdriver_ingested_entries_count,
+                                 ingested_entries_count,
+                                 grpc: true, code: 0)
+        assert_metric_value.call(:stackdriver_retried_entries_count,
+                                 retried_entries_count,
+                                 grpc: true, code: code)
+        # Skip failure assertions when code indicates success, because the
+        # assertion will fail in the case when a single metric contains time
+        # series with success and failure events.
+        next if code == 0
+        assert_metric_value.call(:stackdriver_failed_requests_count,
+                                 failed_requests_count,
+                                 grpc: true, code: code)
+        assert_metric_value.call(:stackdriver_dropped_entries_count,
+                                 dropped_entries_count,
+                                 grpc: true, code: code)
+      end
     end
   end
 
@@ -260,6 +265,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
+  # TODO(qingling128): Verify if we need this on the REST side and add it if
+  # needed.
   def test_struct_payload_non_utf8_log
     setup_gce_metadata_stubs
     setup_logging_stubs do
@@ -273,14 +280,14 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'jsonPayload') do |entry|
-      fields = get_fields(entry['jsonPayload'])
+      fields = entry['jsonPayload']
       assert_equal 5, fields.size, entry
-      assert_equal 'test log entry 0', get_string(fields['msg']), entry
-      assert_equal 'test non utf8', get_string(fields['normal_key']), entry
-      assert_equal 5000, get_number(fields['non_utf8 key']), entry
-      assert_equal 'test non utf8', get_string(get_fields(get_struct(fields \
-                   ['nested_struct']))['non_utf8 key']), entry
-      assert_equal null_value, fields['null_field'], entry
+      assert_equal 'test log entry 0', fields['msg'], entry
+      assert_equal 'test non utf8', fields['normal_key'], entry
+      assert_equal 5000, fields['non_utf8 key'], entry
+      assert_equal 'test non utf8', fields['nested_struct']['non_utf8 key'],
+                   entry
+      assert_nil fields['null_field'], entry
     end
   end
 
@@ -292,9 +299,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       { 'seconds' => nil, 'nanos' => time.tv_nsec } => nil,
       { 'seconds' => 'seconds', 'nanos' => time.tv_nsec } => nil,
       { 'seconds' => time.tv_sec, 'nanos' => 'nanos' } => \
-        { 'seconds' => time.tv_sec },
+        time.utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
       { 'seconds' => time.tv_sec, 'nanos' => nil } => \
-        { 'seconds' => time.tv_sec }
+        time.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
     }.each do |input, expected|
       setup_logging_stubs do
         d = create_driver
@@ -317,6 +324,27 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   USE_GRPC_CONFIG = %(
     use_grpc true
   ).freeze
+
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '32 s' => '32s',
+      '32s' => '32s',
+      '0.32s' => '0.320000000s',
+      ' 123 s ' => '123s',
+      '1.3442 s' => '1.344200000s',
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123.5\ts\t" => '123.500000000s',
+      "\r123.5\rs\r" => '123.500000000s',
+      "\n123.5\ns\n" => '123.500000000s',
+      "\v123.5\vs\v" => '123.500000000s',
+      "\f123.5\fs\f" => '123.500000000s',
+      "\r123.5\ts\f" => '123.500000000s'
+    }
+  end
 
   # Create a Fluentd output test driver with the Google Cloud Output plugin with
   # grpc enabled. The signature of this method is different between the grpc
@@ -377,9 +405,9 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   class GRPCLoggingMockFailingService <
       Google::Cloud::Logging::V2::LoggingServiceV2Client
     def initialize(error, failed_attempts)
+      super()
       @error = error
       @failed_attempts = failed_attempts
-      super()
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
@@ -393,7 +421,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         raise @error
       rescue
         # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
-        raise Google::Gax::GaxError, @message
+        raise Google::Gax::GaxError, 'This test message does not matter.'
       end
     end
     # rubocop:enable Lint/UnusedMethodArgument
@@ -413,7 +441,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
+  def verify_log_entries(n, params, payload_type = 'textPayload',
+                         check_exact_entry_labels = true, &block)
     @requests_sent.each do |request|
       @logs_sent << {
         'entries' => request.entries.map { |entry| JSON.parse(entry.to_json) },
@@ -422,7 +451,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         'logName' => request.log_name
       }
     end
-    verify_json_log_entries(n, params, payload_type, &block)
+    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
+                            &block)
   end
 
   # Use the right single quotation mark as the sample non-utf8 character.
@@ -446,28 +476,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the payload.
-  def get_fields(payload)
-    payload['fields']
+  def expected_operation_message2
+    # 'last' is a boolean field with false as default value. Protobuf omit
+    # fields with default values during deserialization.
+    OPERATION_MESSAGE2.reject { |k, _| k == 'last' }
   end
 
-  # Get the value of a struct field.
-  def get_struct(field)
-    field['structValue']
-  end
-
-  # Get the value of a string field.
-  def get_string(field)
-    field['stringValue']
-  end
-
-  # Get the value of a number field.
-  def get_number(field)
-    field['numberValue']
-  end
-
-  # The null value.
-  def null_value
-    { 'nullValue' => 'NULL_VALUE' }
+  # Parse timestamp and convert it to a hash with two keys:
+  # "seconds" and "nanos".
+  def timestamp_parse(timestamp)
+    parsed = Time.parse(timestamp)
+    {
+      'seconds' => parsed.tv_sec,
+      'nanos' => parsed.tv_nsec
+    }
   end
 end

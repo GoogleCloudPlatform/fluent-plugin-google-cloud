@@ -1,3 +1,4 @@
+# coding: utf-8
 # Copyright 2017 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -99,12 +100,14 @@ module Constants
   MANAGED_VM_BACKEND_VERSION = 'guestbook2.0'.freeze
 
   # LogEntry fields for extraction.
-  TRACE = 'projects/proj1/traces/1234567890abcdef1234567890abcdef'.freeze
-  TRACE2 = 'projects/proj1/traces/1234567890abcdef1234567890fedcba'.freeze
-  SPAN_ID = '000000000000004a'.freeze
-  SPAN_ID2 = '000000000000007e'.freeze
   INSERT_ID = 'fah7yr7iw64tg857y'.freeze
   INSERT_ID2 = 'fah7yr7iw64tgaeuf'.freeze
+  SPAN_ID = '000000000000004a'.freeze
+  SPAN_ID2 = '000000000000007e'.freeze
+  TRACE = 'projects/proj1/traces/1234567890abcdef1234567890abcdef'.freeze
+  TRACE2 = 'projects/proj1/traces/1234567890abcdef1234567890fedcba'.freeze
+  TRACE_SAMPLED = true
+  TRACE_SAMPLED2 = false
 
   STACKDRIVER_TRACE_ID = '1234567890abcdef1234567890abcdef'.freeze
   FULL_STACKDRIVER_TRACE = \
@@ -156,6 +159,7 @@ module Constants
   K8S_SECONDS_EPOCH = 1_234_567_890
   K8S_NANOS = 987_654_321
   K8S_CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'k8s_container'.freeze
+  K8S_POD_LOCAL_RESOURCE_ID_PREFIX = 'k8s_pod'.freeze
   K8S_NODE_LOCAL_RESOURCE_ID_PREFIX = 'k8s_node'.freeze
   K8S_TAG =
     "var.log.containers.#{K8S_NAMESPACE_NAME}_#{K8S_POD_NAME}_" \
@@ -173,16 +177,6 @@ module Constants
   CONTAINER_LABEL_VALUE = 'redis-component'.freeze
   CONTAINER_SEVERITY = 'INFO'.freeze
   CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'gke_container'.freeze
-
-  # Cloud Functions specific labels.
-  CLOUDFUNCTIONS_FUNCTION_NAME = '$My_Function.Name-@1'.freeze
-  CLOUDFUNCTIONS_REGION = 'us-central1'.freeze
-  CLOUDFUNCTIONS_EXECUTION_ID = '123-0'.freeze
-  CLOUDFUNCTIONS_CLUSTER_NAME = 'cluster-1'.freeze
-  CLOUDFUNCTIONS_NAMESPACE_NAME = 'default'.freeze
-  CLOUDFUNCTIONS_POD_NAME =
-    'd.dc.myu.uc.functionp.pc.name-a.a1.987-c0l82'.freeze
-  CLOUDFUNCTIONS_CONTAINER_NAME = 'worker'.freeze
 
   # Dataflow specific labels.
   DATAFLOW_REGION = 'us-central1'.freeze
@@ -227,6 +221,14 @@ module Constants
     path: 'test/plugin/data/invalid_credentials.json',
     project_id: ''
   }.freeze
+
+  # Special googleauth environment variables.
+  PROJECT_ID_VAR = 'GOOGLE_PROJECT_ID'.freeze
+  PRIVATE_KEY_VAR = 'GOOGLE_PRIVATE_KEY'.freeze
+  CLIENT_EMAIL_VAR = 'GOOGLE_CLIENT_EMAIL'.freeze
+  CLIENT_ID_VAR = 'GOOGLE_CLIENT_ID'.freeze
+  CLIENT_SECRET_VAR = 'GOOGLE_CLIENT_SECRET'.freeze
+  REFRESH_TOKEN_VAR = 'GOOGLE_REFRESH_TOKEN'.freeze
 
   # Configuration files for various test scenarios.
   APPLICATION_DEFAULT_CONFIG = %(
@@ -279,6 +281,11 @@ module Constants
   ENABLE_PROMETHEUS_CONFIG = %(
     enable_monitoring true
     monitoring_type prometheus
+  ).freeze
+
+  ENABLE_OPENCENSUS_CONFIG = %(
+    enable_monitoring true
+    monitoring_type opencensus
   ).freeze
 
   ENABLE_METADATA_AGENT_CONFIG = %(
@@ -371,16 +378,142 @@ module Constants
     label_map { "name": "#{ML_CONSTANTS[:service]}/job_id/log_area" }
   ).freeze
 
-  CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
-    trace_key custom_trace_key
+  CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED = %(
+    insert_id_key custom_insert_id_key
+  ).freeze
+
+  CONFIG_CUSTOM_LABELS_KEY_SPECIFIED = %(
+    labels_key custom_labels_key
+  ).freeze
+
+  CONFIG_CUSTOM_OPERATION_KEY_SPECIFIED = %(
+    operation_key custom_operation_key
+  ).freeze
+
+  CONFIG_CUSTOM_SOURCE_LOCATION_KEY_SPECIFIED = %(
+    source_location_key custom_source_location_key
   ).freeze
 
   CONFIG_CUSTOM_SPAN_ID_KEY_SPECIFIED = %(
     span_id_key custom_span_id_key
   ).freeze
 
-  CONFIG_CUSTOM_INSERT_ID_KEY_SPECIFIED = %(
-    insert_id_key custom_insert_id_key
+  CONFIG_CUSTOM_TRACE_KEY_SPECIFIED = %(
+    trace_key custom_trace_key
+  ).freeze
+
+  CONFIG_CUSTOM_TRACE_SAMPLED_KEY_SPECIFIED = %(
+    trace_sampled_key custom_trace_sampled_key
+  ).freeze
+
+  # For 'labels' config.
+  LABELS_FROM_LABELS_CONFIG = {
+    'a_label_from_labels_config' => 'some_value',
+    'another_label_from_labels_config' => 'some_value'
+  }.freeze
+  CONFIG_LABELS = %(
+    labels #{LABELS_FROM_LABELS_CONFIG.to_json}
+  ).freeze
+
+  # For 'label_map' config.
+  LABEL_MAP_HASH = {
+    'target_field_from_payload' => 'a_label_from_label_map_config',
+    'another_target_field_from_payload' => 'another_label_from_label_map_config'
+  }.freeze
+  PAYLOAD_FOR_LABEL_MAP = {
+    'target_field_from_payload' => 'a_value',
+    'another_target_field_from_payload' => 'b_value'
+  }.freeze
+  LABELS_FROM_LABEL_MAP_CONFIG = {
+    'a_label_from_label_map_config' => 'a_value',
+    'another_label_from_label_map_config' => 'b_value'
+  }.freeze
+  CONFIG_LABEL_MAP = %(
+    label_map #{LABEL_MAP_HASH.to_json}
+  ).freeze
+
+  CONFIG_LABLES_AND_LABLE_MAP = %(
+    #{CONFIG_LABELS}
+    #{CONFIG_LABEL_MAP}
+  ).freeze
+
+  # For conflicting labels.
+  CONFLICTING_LABEL_NAME = 'conflicting_label_key'.freeze
+  CONFLICTING_LABEL_VALUE1 = 'conflicting_value_1'.freeze
+  CONFLICTING_LABEL_VALUE2 = 'conflicting_value_2'.freeze
+  CONFLICTING_LABEL_VALUE3 = 'conflicting_value_3'.freeze
+  LABELS_FROM_PAYLOAD_CONFLICTING = {
+    CONFLICTING_LABEL_NAME => CONFLICTING_LABEL_VALUE1
+  }.freeze
+  LABELS_FROM_LABEL_MAP_CONFIG_CONFLICTING = {
+    CONFLICTING_LABEL_NAME => CONFLICTING_LABEL_VALUE2
+  }.freeze
+  LABELS_FROM_LABELS_CONFIG_CONFLICTING = {
+    CONFLICTING_LABEL_NAME => CONFLICTING_LABEL_VALUE3
+  }.freeze
+
+  LABEL_MAP_HASH_CONFLICTING = {
+    'target_field_from_payload' => CONFLICTING_LABEL_NAME
+  }.freeze
+  PAYLOAD_FOR_LABEL_MAP_CONFLICTING = {
+    'target_field_from_payload' => CONFLICTING_LABEL_VALUE2
+  }.freeze
+  CONFIG_LABEL_MAP_CONFLICTING = %(
+    label_map #{LABEL_MAP_HASH_CONFLICTING.to_json}
+  ).freeze
+  CONFIG_LABELS_CONFLICTING = %(
+    labels #{LABELS_FROM_LABELS_CONFIG_CONFLICTING.to_json}
+  ).freeze
+  CONFIG_LABLES_AND_LABLE_MAP_CONFLICTING = %(
+    #{CONFIG_LABELS_CONFLICTING}
+    #{CONFIG_LABEL_MAP_CONFLICTING}
+  ).freeze
+
+  # For monitoring config.
+  CONFIG_UNKNOWN_MONITORING_TYPE = %(
+    enable_monitoring  true
+    monitoring_type    not_prometheus
+  ).freeze
+
+  # For statusz.
+  CONFIG_STATUSZ = %(
+    statusz_port                  5678
+
+    adjust_invalid_timestamps     false
+    autoformat_stackdriver_trace  false
+    coerce_to_utf8                false
+    detect_json                   true
+    detect_subservice             false
+    enable_metadata_agent         true
+    enable_monitoring             true
+    http_request_key              test_http_request_key
+    insert_id_key                 test_insert_id_key
+    k8s_cluster_location          test-k8s-cluster-location
+    k8s_cluster_name              test-k8s-cluster-name
+    kubernetes_tag_regexp         .*test-regexp.*
+    label_map                     { "label_map_key": "label_map_value" }
+    labels_key                    test_labels_key
+    labels                        { "labels_key": "labels_value" }
+    logging_api_url               http://localhost:52000
+    metadata_agent_url            http://localhost:12345
+    monitoring_type               not_prometheus
+    non_utf8_replacement_string   zzz
+    operation_key                 test_operation_key
+    partial_success               false
+    project_id                    test-project-id-123
+    require_valid_tags            true
+    source_location_key           test_source_location_key
+    span_id_key                   test_span_id_key
+    split_logs_by_tag             true
+    subservice_name               test_subservice_name
+    trace_key                     test_trace_key
+    trace_sampled_key             test_trace_sampled_key
+    use_aws_availability_zone     false
+    use_grpc                      true
+    use_metadata_service          false
+    vm_id                         12345
+    vm_name                       test.hostname.org
+    zone                          asia-east2
   ).freeze
 
   # Service configurations for various services.
@@ -535,6 +668,36 @@ module Constants
     log_name: CONTAINER_TAG
   ).freeze
 
+  # K8s Pod.
+  K8S_POD_PARAMS = {
+    resource: {
+      type: K8S_POD_CONSTANTS[:resource_type],
+      labels: {
+        'namespace_name' => K8S_NAMESPACE_NAME,
+        'pod_name' => K8S_POD_NAME,
+        'cluster_name' => K8S_CLUSTER_NAME,
+        'location' => K8S_LOCATION
+      }
+    },
+    project_id: PROJECT_ID,
+    labels: {}
+  }.freeze
+  K8S_POD_PARAMS_FROM_LOCAL = K8S_POD_PARAMS.merge(
+    resource: K8S_POD_PARAMS[:resource].merge(
+      labels: K8S_POD_PARAMS[:resource][:labels].merge(
+        'location' => K8S_LOCATION2
+      )
+    )
+  ).freeze
+  K8S_POD_PARAMS_CUSTOM = K8S_POD_PARAMS.merge(
+    resource: K8S_POD_PARAMS[:resource].merge(
+      labels: K8S_POD_PARAMS[:resource][:labels].merge(
+        'cluster_name' => CUSTOM_K8S_CLUSTER_NAME,
+        'location' => CUSTOM_K8S_LOCATION
+      )
+    )
+  ).freeze
+
   # K8s Node.
   K8S_NODE_PARAMS = {
     resource: {
@@ -587,52 +750,6 @@ module Constants
   ).freeze
   DOCKER_CONTAINER_PARAMS_NO_STREAM =
     DOCKER_CONTAINER_PARAMS.merge(labels: {}).freeze
-
-  # Cloud Functions.
-  CLOUDFUNCTIONS_TAG = "kubernetes.#{CLOUDFUNCTIONS_POD_NAME}_" \
-                        "#{CLOUDFUNCTIONS_NAMESPACE_NAME}_" \
-                        "#{CLOUDFUNCTIONS_CONTAINER_NAME}".freeze
-
-  CLOUDFUNCTIONS_PARAMS = {
-    resource: {
-      type: CLOUDFUNCTIONS_CONSTANTS[:resource_type],
-      labels: {
-        'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
-        'region' => CLOUDFUNCTIONS_REGION
-      }
-    },
-    log_name: 'cloud-functions',
-    project_id: PROJECT_ID,
-    labels: {
-      'execution_id' => CLOUDFUNCTIONS_EXECUTION_ID,
-      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-        CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
-      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
-    }
-  }.freeze
-
-  CLOUDFUNCTIONS_TEXT_NOT_MATCHED_PARAMS = {
-    resource: {
-      type: CLOUDFUNCTIONS_CONSTANTS[:resource_type],
-      labels: {
-        'function_name' => CLOUDFUNCTIONS_FUNCTION_NAME,
-        'region' => CLOUDFUNCTIONS_REGION
-      }
-    },
-    log_name: 'cloud-functions',
-    project_id: PROJECT_ID,
-    labels: {
-      "#{GKE_CONSTANTS[:service]}/instance_id" => VM_ID,
-      "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-        CLOUDFUNCTIONS_CLUSTER_NAME,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_id" => VM_ID,
-      "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME,
-      "#{COMPUTE_CONSTANTS[:service]}/zone" => ZONE
-    }
-  }.freeze
 
   # Cloud Dataflow.
   DATAFLOW_PARAMS = {
@@ -733,28 +850,56 @@ module Constants
   ).freeze
 
   HTTP_REQUEST_MESSAGE = {
-    'requestMethod' => 'POST',
-    'requestUrl' => 'http://example/',
-    'requestSize' => 210,
-    'status' => 200,
-    'responseSize' => 65,
-    'userAgent' => 'USER AGENT 1.0',
-    'remoteIp' => '55.55.55.55',
-    'referer' => 'http://referer/',
+    'cacheFillBytes' => '6653',
     'cacheHit' => true,
-    'cacheValidatedWithOriginServer' => true
+    'cacheLookup' => true,
+    'cacheValidatedWithOriginServer' => true,
+    'protocol' => 'HTTP/1.1',
+    'referer' => 'http://referer/',
+    'remoteIp' => '55.55.55.55',
+    'responseSize' => '65',
+    'requestMethod' => 'POST',
+    'requestSize' => '210',
+    'requestUrl' => 'http://example/',
+    'serverIp' => '66.66.66.66',
+    'status' => 200,
+    'userAgent' => 'USER AGENT 1.0'
   }.freeze
 
   SOURCE_LOCATION_MESSAGE = {
     'file' => 'source/file',
     'function' => 'my_function',
-    'line' => 18
+    'line' => '18'
+  }.freeze
+
+  SOURCE_LOCATION_MESSAGE2 = {
+    'file' => 'src/file',
+    'function' => 'my_func',
+    'line' => '8'
   }.freeze
 
   OPERATION_MESSAGE = {
     'id' => 'op_id',
     'producer' => 'my/app',
     'last' => true
+  }.freeze
+
+  OPERATION_MESSAGE2 = {
+    'id' => 'op_id2',
+    'producer' => 'my/app2',
+    'last' => false
+  }.freeze
+
+  LABELS_MESSAGE = {
+    'component' => 'front-end',
+    'source' => 'user',
+    'app' => 'request-router'
+  }.freeze
+
+  LABELS_MESSAGE2 = {
+    'component' => 'front-end',
+    'source' => 'system',
+    'app' => 'request-router'
   }.freeze
 
   CUSTOM_LABELS_MESSAGE = {
@@ -830,6 +975,18 @@ module Constants
           'namespace_name' => K8S_NAMESPACE_NAME,
           'pod_name' => K8S_POD_NAME,
           'container_name' => K8S_CONTAINER_NAME,
+          'cluster_name' => K8S_CLUSTER_NAME,
+          'location' => K8S_LOCATION
+        }
+      }.to_json,
+    # K8s pod logs.
+    "#{K8S_POD_LOCAL_RESOURCE_ID_PREFIX}.#{K8S_NAMESPACE_NAME}" \
+    ".#{K8S_POD_NAME}" =>
+      {
+        'type' => K8S_POD_CONSTANTS[:resource_type],
+        'labels' => {
+          'namespace_name' => K8S_NAMESPACE_NAME,
+          'pod_name' => K8S_POD_NAME,
           'cluster_name' => K8S_CLUSTER_NAME,
           'location' => K8S_LOCATION
         }
@@ -950,4 +1107,35 @@ module Constants
       'grpc-status-details-bin' => status_details.to_proto
     }.freeze
   end
+
+  PRESERVED_KEYS_TIMESTAMP_FIELDS = [
+    {
+      'time' => K8S_TIMESTAMP
+    },
+    {
+      'timeNanos' => K8S_NANOS
+    },
+    {
+      'timestamp' => {
+        'nanos' => K8S_NANOS,
+        'seconds' => K8S_SECONDS_EPOCH
+      }
+    },
+    {
+      'timestampNanos' => K8S_NANOS,
+      'timestampSeconds' => K8S_SECONDS_EPOCH
+    }
+  ].freeze
+
+  PRESERVED_KEYS_MAP = {
+    'severity' => CONTAINER_SEVERITY,
+    DEFAULT_HTTP_REQUEST_KEY => HTTP_REQUEST_MESSAGE,
+    DEFAULT_INSERT_ID_KEY => INSERT_ID,
+    DEFAULT_LABELS_KEY => LABELS_MESSAGE,
+    DEFAULT_OPERATION_KEY => OPERATION_MESSAGE,
+    DEFAULT_SOURCE_LOCATION_KEY => SOURCE_LOCATION_MESSAGE,
+    DEFAULT_SPAN_ID_KEY => SPAN_ID,
+    DEFAULT_TRACE_KEY => TRACE,
+    DEFAULT_TRACE_SAMPLED_KEY => TRACE_SAMPLED
+  }.freeze
 end

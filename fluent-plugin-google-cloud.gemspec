@@ -10,7 +10,7 @@ eos
   gem.homepage      =
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache-2.0'
-  gem.version       = '0.7.2'
+  gem.version       = '0.7.28'
   gem.authors       = ['Stackdriver Agents Team']
   gem.email         = ['stackdriver-agents@google.com']
   gem.required_ruby_version = Gem::Requirement.new('>= 2.2')
@@ -19,19 +19,29 @@ eos
   gem.test_files    = gem.files.grep(/^(test)/)
   gem.require_paths = ['lib']
 
-  gem.add_runtime_dependency 'fluentd', '1.2.5'
-  gem.add_runtime_dependency 'googleapis-common-protos', '1.3.7'
-  gem.add_runtime_dependency 'googleauth', '0.6.6'
-  gem.add_runtime_dependency 'google-api-client', '0.23.9'
-  gem.add_runtime_dependency 'google-cloud-logging', '1.5.4'
-  gem.add_runtime_dependency 'google-protobuf', '3.6.1'
-  gem.add_runtime_dependency 'grpc', '1.8.3'
-  gem.add_runtime_dependency 'json', '2.1.0'
+  gem.add_runtime_dependency 'fluentd', '1.6.3'
+  gem.add_runtime_dependency 'googleapis-common-protos', '1.3.9'
+  gem.add_runtime_dependency 'googleauth', '0.9.0'
+  gem.add_runtime_dependency 'google-api-client', '0.30.8'
+  gem.add_runtime_dependency 'google-cloud-logging', '1.6.6'
+  gem.add_runtime_dependency 'google-protobuf', '3.9.0'
+  gem.add_runtime_dependency 'grpc', '1.22.0'
+  gem.add_runtime_dependency 'json', '2.2.0'
 
-  gem.add_development_dependency 'mocha', '~> 1.1'
-  gem.add_development_dependency 'prometheus-client', '~> 0.7.1'
-  gem.add_development_dependency 'rake', '~> 10.3'
-  gem.add_development_dependency 'rubocop', '~> 0.39.0'
-  gem.add_development_dependency 'test-unit', '~> 3.0'
-  gem.add_development_dependency 'webmock', '~> 2.3.1'
+  gem.add_development_dependency 'mocha', '1.9.0'
+  gem.add_development_dependency 'opencensus', '0.5.0'
+  gem.add_development_dependency 'opencensus-stackdriver', '0.3.0'
+  # Keep this the same as in
+  # https://github.com/fluent/fluent-plugin-prometheus/blob/master/fluent-plugin-prometheus.gemspec
+  gem.add_development_dependency 'prometheus-client', '< 0.10'
+  # TODO(qingling128): Upgrade rake to 11.0+ after the following issues are
+  # fixed because rake (11.0+) requires ALL variables to be explicitly
+  # initialized.
+  # https://github.com/googleapis/google-auth-library-ruby/issues/227
+  # https://github.com/farcaller/rly/issues/2
+  gem.add_development_dependency 'rake', '10.5.0'
+  gem.add_development_dependency 'rubocop', '0.39.0'
+  gem.add_development_dependency 'test-unit', '3.3.3'
+  gem.add_development_dependency 'webmock', '3.6.2'
+  gem.add_development_dependency 'coveralls', '0.8.23'
 end

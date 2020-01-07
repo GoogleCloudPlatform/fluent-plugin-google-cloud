@@ -12,12 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'fluent/test/startup_shutdown'
+require 'net/http'
+
 require_relative 'base_test'
 require_relative 'test_driver'
 
 # Unit tests for Google Cloud Logging plugin
 class GoogleCloudOutputTest < Test::Unit::TestCase
   include BaseTest
+  extend Fluent::Test::StartupShutdown
 
   def test_configure_use_grpc
     setup_gce_metadata_stubs
@@ -69,7 +73,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   def test_partial_success
     setup_gce_metadata_stubs
-    setup_prometheus
+    clear_metrics
     # The API Client should not retry this and the plugin should consume
     # the exception.
     root_error_code = PARTIAL_SUCCESS_RESPONSE_BODY['error']['code']
@@ -84,21 +88,17 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_prometheus_metric_value(
       :stackdriver_successful_requests_count, 1, grpc: false, code: 200)
     assert_prometheus_metric_value(
-      :stackdriver_failed_requests_count, 0, grpc: false)
-    assert_prometheus_metric_value(
       :stackdriver_ingested_entries_count, 1, grpc: false, code: 200)
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 2, grpc: false, code: 3)
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 1, grpc: false, code: 7)
-    assert_prometheus_metric_value(
-      :stackdriver_retried_entries_count, 0, grpc: false)
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
   def test_non_api_error
     setup_gce_metadata_stubs
-    setup_prometheus
+    clear_metrics
     # The API Client should not retry this and the plugin should consume
     # the exception.
     root_error_code = PARSE_ERROR_RESPONSE_BODY['error']['code']
@@ -116,8 +116,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       :stackdriver_ingested_entries_count, 0, grpc: false, code: 200)
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 1, grpc: false, code: 400)
-    assert_prometheus_metric_value(
-      :stackdriver_retried_entries_count, 0, grpc: false)
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
@@ -143,56 +141,65 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
   # Refactor and remove duplication.
   # TODO: Use status codes instead of int literals.
-  def test_prometheus_metrics
+  def test_metrics
     setup_gce_metadata_stubs
     [
-      # Single successful request.
-      [200, 1, 1, [1, 0, 1, 0, 0]],
-      # Several successful requests.
-      [200, 2, 1, [2, 0, 2, 0, 0]],
-      # Single successful request with several entries.
-      [200, 1, 2, [1, 0, 2, 0, 0]],
-      # Single failed request that causes logs to be dropped.
-      [401, 1, 1, [0, 1, 0, 1, 0]],
-      # Single failed request that escalates without logs being dropped with
-      # several entries.
-      [500, 1, 2, [0, 0, 0, 0, 2]]
-    ].each do |code, request_count, entry_count, metric_values|
-      setup_prometheus
-      # TODO: Do this as part of setup_logging_stubs.
-      stub_request(:post, WRITE_LOG_ENTRIES_URI)
-        .to_return(status: code, body: 'Some Message')
-      (1..request_count).each do
-        d = create_driver(ENABLE_PROMETHEUS_CONFIG)
-        (1..entry_count).each do |i|
-          d.emit('message' => log_entry(i.to_s))
+      [ENABLE_PROMETHEUS_CONFIG, method(:assert_prometheus_metric_value)],
+      [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
+    ].each do |config, assert_metric_value|
+      [
+        # Single successful request.
+        [200, 1, 1, [1, 0, 1, 0, 0]],
+        # Several successful requests.
+        [200, 2, 1, [2, 0, 2, 0, 0]],
+        # Single successful request with several entries.
+        [200, 1, 2, [1, 0, 2, 0, 0]],
+        # Single failed request that causes logs to be dropped.
+        [401, 1, 1, [0, 1, 0, 1, 0]],
+        # Single failed request that escalates without logs being dropped with
+        # several entries.
+        [500, 1, 2, [0, 0, 0, 0, 2]]
+      ].each do |code, request_count, entry_count, metric_values|
+        clear_metrics
+        # TODO: Do this as part of setup_logging_stubs.
+        stub_request(:post, WRITE_LOG_ENTRIES_URI)
+          .to_return(status: code, body: 'Some Message')
+        (1..request_count).each do
+          d = create_driver(config)
+          (1..entry_count).each do |i|
+            d.emit('message' => log_entry(i.to_s))
+          end
+          # rubocop:disable Lint/HandleExceptions
+          begin
+            d.run
+          rescue Google::Apis::AuthorizationError
+          rescue Google::Apis::ServerError
+          end
+          # rubocop:enable Lint/HandleExceptions
         end
-        # rubocop:disable Lint/HandleExceptions
-        begin
-          d.run
-        rescue Google::Apis::AuthorizationError
-        rescue Google::Apis::ServerError
-        end
-        # rubocop:enable Lint/HandleExceptions
-      end
-      successful_requests_count, failed_requests_count,
+        successful_requests_count, failed_requests_count,
         ingested_entries_count, dropped_entries_count,
         retried_entries_count = metric_values
-      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     successful_requests_count,
-                                     grpc: false, code: 200)
-      assert_prometheus_metric_value(:stackdriver_failed_requests_count,
-                                     failed_requests_count,
-                                     grpc: false, code: code)
-      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     ingested_entries_count,
-                                     grpc: false, code: 200)
-      assert_prometheus_metric_value(:stackdriver_dropped_entries_count,
-                                     dropped_entries_count,
-                                     grpc: false, code: code)
-      assert_prometheus_metric_value(:stackdriver_retried_entries_count,
-                                     retried_entries_count,
-                                     grpc: false, code: code)
+        assert_metric_value.call(:stackdriver_successful_requests_count,
+                                 successful_requests_count,
+                                 grpc: false, code: 200)
+        assert_metric_value.call(:stackdriver_ingested_entries_count,
+                                 ingested_entries_count,
+                                 grpc: false, code: 200)
+        assert_metric_value.call(:stackdriver_retried_entries_count,
+                                 retried_entries_count,
+                                 grpc: false, code: code)
+        # Skip failure assertions when code indicates success, because the
+        # assertion will fail in the case when a single metric contains time
+        # series with success and failure events.
+        next if code == 200
+        assert_metric_value.call(:stackdriver_failed_requests_count,
+                                 failed_requests_count,
+                                 grpc: false, code: code)
+        assert_metric_value.call(:stackdriver_dropped_entries_count,
+                                 dropped_entries_count,
+                                 grpc: false, code: code)
+      end
     end
   end
 
@@ -330,6 +337,62 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
+  def test_statusz_endpoint
+    setup_gce_metadata_stubs
+    WebMock.disable_net_connect!(allow_localhost: true)
+    # TODO(davidbtucker): Consider searching for an unused port
+    # instead of hardcoding a constant here.
+    d = create_driver(CONFIG_STATUSZ)
+    d.run do
+      resp = Net::HTTP.get('127.0.0.1', '/statusz', 5678)
+      must_match = [
+        '<h1>Status for .*</h1>.*',
+
+        '\badjust_invalid_timestamps\b.*\bfalse\b',
+        '\bautoformat_stackdriver_trace\b.*\bfalse\b',
+        '\bcoerce_to_utf8\b.*\bfalse\b',
+        '\bdetect_json\b.*\btrue\b',
+        '\bdetect_subservice\b.*\bfalse\b',
+        '\benable_metadata_agent\b.*\btrue\b',
+        '\benable_monitoring\b.*\btrue\b',
+        '\bhttp_request_key\b.*\btest_http_request_key\b',
+        '\binsert_id_key\b.*\btest_insert_id_key\b',
+        '\bk8s_cluster_location\b.*\btest-k8s-cluster-location\b',
+        '\bk8s_cluster_name\b.*\btest-k8s-cluster-name\b',
+        '\bkubernetes_tag_regexp\b.*\b.*test-regexp.*\b',
+        '\blabel_map\b.*{"label_map_key"=>"label_map_value"}',
+        '\blabels_key\b.*\btest_labels_key\b',
+        '\blabels\b.*{"labels_key"=>"labels_value"}',
+        '\blogging_api_url\b.*\bhttp://localhost:52000\b',
+        '\bmetadata_agent_url\b.*\bhttp://localhost:12345\b',
+        '\bmonitoring_type\b.*\bnot_prometheus\b',
+        '\bnon_utf8_replacement_string\b.*\bzzz\b',
+        '\boperation_key\b.*\btest_operation_key\b',
+        '\bpartial_success\b.*\bfalse\b',
+        '\bproject_id\b.*\btest-project-id-123\b',
+        '\brequire_valid_tags\b.*\btrue\b',
+        '\bsource_location_key\b.*\btest_source_location_key\b',
+        '\bspan_id_key\b.*\btest_span_id_key\b',
+        '\bsplit_logs_by_tag\b.*\btrue\b',
+        '\bstatusz_port\b.*\b5678\b',
+        '\bsubservice_name\b.*\btest_subservice_name\b',
+        '\btrace_key\b.*\btest_trace_key\b',
+        '\btrace_sampled_key\b.*\btest_trace_sampled_key\b',
+        '\buse_aws_availability_zone\b.*\bfalse\b',
+        '\buse_grpc\b.*\btrue\b',
+        '\buse_metadata_service\b.*\bfalse\b',
+        '\bvm_id\b.*\b12345\b',
+        '\bvm_name\b.*\btest.hostname.org\b',
+        '\bzone\b.*\basia-east2\b',
+
+        '^</html>$'
+      ]
+      must_match.each do |re|
+        assert_match Regexp.new(re), resp
+      end
+    end
+  end
+
   private
 
   WRITE_LOG_ENTRIES_URI =
@@ -348,6 +411,27 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     yield
   end
 
+  # The conversions from user input to output.
+  def latency_conversion
+    {
+      '32 s' => { 'seconds' => 32 },
+      '32s' => { 'seconds' => 32 },
+      '0.32s' => { 'nanos' => 320_000_000 },
+      ' 123 s ' => { 'seconds' => 123 },
+      '1.3442 s' => { 'seconds' => 1, 'nanos' => 344_200_000 },
+
+      # Test whitespace.
+      # \t: tab. \r: carriage return. \n: line break.
+      # \v: vertical whitespace. \f: form feed.
+      "\t123.5\ts\t" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\rs\r" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\n123.5\ns\n" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\v123.5\vs\v" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\f123.5\fs\f" => { 'seconds' => 123, 'nanos' => 500_000_000 },
+      "\r123.5\ts\f" => { 'seconds' => 123, 'nanos' => 500_000_000 }
+    }
+  end
+
   # Create a Fluentd output test driver with the Google Cloud Output plugin.
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG,
                     tag = 'test',
@@ -364,8 +448,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload', &block)
-    verify_json_log_entries(n, params, payload_type, &block)
+  def verify_log_entries(n, params, payload_type = 'textPayload',
+                         check_exact_entry_labels = true, &block)
+    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
+                            &block)
   end
 
   # For an optional field with default values, Protobuf omits the field when it
@@ -382,49 +468,13 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     end
   end
 
-  # Get the fields of the payload.
-  def get_fields(payload)
-    payload
+  def expected_operation_message2
+    OPERATION_MESSAGE2
   end
 
-  # Get the value of a struct field.
-  def get_struct(field)
-    field
-  end
-
-  # Get the value of a string field.
-  def get_string(field)
-    field
-  end
-
-  # Get the value of a number field.
-  def get_number(field)
-    field
-  end
-
-  # The null value.
-  def null_value
-    nil
-  end
-
-  # 'responseSize' and 'requestSize' are Integers in the gRPC proto, yet Strings
-  # in REST API client.
-  # TODO(qingling128): Address this accordingly once the following question is
-  # answered: https://github.com/google/google-api-ruby-client/issues/619.
-  # If this discrepancy is legit, add some comments to explain the reason.
-  # Otherwise once the discrepancy is fixed, we need to upgrade to that version
-  # and change our tests accordingly.
-  def http_request_message
-    HTTP_REQUEST_MESSAGE.merge(
-      'responseSize' => HTTP_REQUEST_MESSAGE['responseSize'].to_s,
-      'requestSize' => HTTP_REQUEST_MESSAGE['requestSize'].to_s
-    )
-  end
-
-  # 'line' is an Integer in the gRPC proto, yet a String in the REST API client.
-  def source_location_message
-    SOURCE_LOCATION_MESSAGE.merge(
-      'line' => SOURCE_LOCATION_MESSAGE['line'].to_s
-    )
+  # Directly return the timestamp value, which should be a hash two keys:
+  # "seconds" and "nanos".
+  def timestamp_parse(timestamp)
+    timestamp
   end
 end

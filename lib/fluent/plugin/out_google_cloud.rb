@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+require 'cgi'
 require 'erb'
 require 'grpc'
 require 'json'
@@ -28,35 +29,51 @@ require 'google/logging/v2/log_entry_pb'
 require 'googleauth'
 
 require_relative 'monitoring'
+require_relative 'statusz'
 
 module Google
   module Protobuf
     # Alias the has_key? method to have the same interface as a regular map.
     class Map
       alias key? has_key?
+      alias to_hash to_h
     end
   end
 end
 
 module Google
   module Auth
-    # Extract project_id in initialize.
-    class ServiceAccountCredentials
-      singleton_class.send(:alias_method, :super_make_creds, :make_creds)
-      def self.make_creds(options = {})
-        json_key_io, scope = options.values_at(:json_key_io, :scope)
-        if json_key_io
-          json_key = MultiJson.load(json_key_io.read)
-          project_id = json_key['project_id']
-        end
-        creds = super_make_creds(
-          json_key_io: StringIO.new(MultiJson.dump(json_key)), scope: scope)
-        creds.instance_variable_set(:@project_id, project_id) if project_id
-        creds
+    # Disable gcloud lookup in googleauth to avoid picking up its project id.
+    module CredentialsLoader
+      # Set $VERBOSE to nil to mute the "already initialized constant" warnings.
+      warn_level = $VERBOSE
+      begin
+        $VERBOSE = nil
+        # These constants are used to invoke gcloud on Linux and Windows,
+        # respectively. Ideally, we would have overridden
+        # CredentialsLoader.load_gcloud_project_id, but we cannot catch it
+        # before it's invoked via "require 'googleauth'". So we override the
+        # constants instead.
+        GCLOUD_POSIX_COMMAND = '/bin/true'.freeze
+        GCLOUD_WINDOWS_COMMAND = 'cd .'.freeze
+        GCLOUD_CONFIG_COMMAND = ''.freeze
+      ensure
+        $VERBOSE = warn_level
       end
-      attr_reader :project_id
     end
   end
+end
+
+# FluentLogger exposes the Fluent logger to the gRPC library.
+module FluentLogger
+  def logger
+    $log # rubocop:disable Style/GlobalVars
+  end
+end
+
+# Define a gRPC module-level logger method before grpc/logconfig.rb loads.
+module GRPC
+  extend FluentLogger
 end
 
 module Fluent
@@ -68,14 +85,6 @@ module Fluent
         service: 'appengine.googleapis.com',
         resource_type: 'gae_app',
         metadata_attributes: %w(gae_backend_name gae_backend_version)
-      }.freeze
-      CLOUDFUNCTIONS_CONSTANTS = {
-        service: 'cloudfunctions.googleapis.com',
-        resource_type: 'cloud_function',
-        stream_severity_map: {
-          'stdout' => 'INFO',
-          'stderr' => 'ERROR'
-        }
       }.freeze
       COMPUTE_CONSTANTS = {
         service: 'compute.googleapis.com',
@@ -94,6 +103,9 @@ module Fluent
       }.freeze
       K8S_CONTAINER_CONSTANTS = {
         resource_type: 'k8s_container'
+      }.freeze
+      K8S_POD_CONSTANTS = {
+        resource_type: 'k8s_pod'
       }.freeze
       K8S_NODE_CONSTANTS = {
         resource_type: 'k8s_node'
@@ -143,12 +155,14 @@ module Fluent
       # Default values for JSON payload keys to set the "httpRequest",
       # "operation", "sourceLocation", "trace" fields in the LogEntry.
       DEFAULT_HTTP_REQUEST_KEY = 'httpRequest'.freeze
+      DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
+      DEFAULT_LABELS_KEY = 'logging.googleapis.com/labels'.freeze
       DEFAULT_OPERATION_KEY = 'logging.googleapis.com/operation'.freeze
       DEFAULT_SOURCE_LOCATION_KEY =
         'logging.googleapis.com/sourceLocation'.freeze
-      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
       DEFAULT_SPAN_ID_KEY = 'logging.googleapis.com/spanId'.freeze
-      DEFAULT_INSERT_ID_KEY = 'logging.googleapis.com/insertId'.freeze
+      DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
+      DEFAULT_TRACE_SAMPLED_KEY = 'logging.googleapis.com/trace_sampled'.freeze
 
       DEFAULT_METADATA_AGENT_URL =
         'http://local-metadata-agent.stackdriver.com:8000'.freeze
@@ -179,33 +193,27 @@ module Fluent
           # Map from subfields' names to their types.
           [
             # subfield key in the payload, destination key, cast lambda (opt)
-            %w(requestMethod request_method parse_string),
-            %w(requestUrl request_url parse_string),
-            %w(requestSize request_size parse_int),
-            %w(status status parse_int),
-            %w(responseSize response_size parse_int),
-            %w(userAgent user_agent parse_string),
-            %w(remoteIp remote_ip parse_string),
-            %w(referer referer parse_string),
+            %w(cacheFillBytes cache_fill_bytes parse_int),
             %w(cacheHit cache_hit parse_bool),
+            %w(cacheLookup cache_lookup parse_bool),
             %w(cacheValidatedWithOriginServer
                cache_validated_with_origin_server parse_bool),
-            %w(latency latency parse_latency)
+            %w(latency latency parse_latency),
+            %w(protocol protocol parse_string),
+            %w(referer referer parse_string),
+            %w(remoteIp remote_ip parse_string),
+            %w(responseSize response_size parse_int),
+            %w(requestMethod request_method parse_string),
+            %w(requestSize request_size parse_int),
+            %w(requestUrl request_url parse_string),
+            %w(serverIp server_ip parse_string),
+            %w(status status parse_int),
+            %w(userAgent user_agent parse_string)
           ],
           # The grpc version class name.
           'Google::Logging::Type::HttpRequest',
           # The non-grpc version class name.
           'Google::Apis::LoggingV2::HttpRequest'
-        ],
-        'source_location' => [
-          '@source_location_key',
-          [
-            %w(file file parse_string),
-            %w(function function parse_string),
-            %w(line line parse_int)
-          ],
-          'Google::Logging::V2::LogEntrySourceLocation',
-          'Google::Apis::LoggingV2::LogEntrySourceLocation'
         ],
         'operation' => [
           '@operation_key',
@@ -217,6 +225,16 @@ module Fluent
           ],
           'Google::Logging::V2::LogEntryOperation',
           'Google::Apis::LoggingV2::LogEntryOperation'
+        ],
+        'source_location' => [
+          '@source_location_key',
+          [
+            %w(file file parse_string),
+            %w(function function parse_string),
+            %w(line line parse_int)
+          ],
+          'Google::Logging::V2::LogEntrySourceLocation',
+          'Google::Apis::LoggingV2::LogEntrySourceLocation'
         ]
       }.freeze
 
@@ -232,12 +250,15 @@ module Fluent
 
     Fluent::Plugin.register_output('google_cloud', self)
 
+    helpers :server, :timer
+
     PLUGIN_NAME = 'Fluentd Google Cloud Logging plugin'.freeze
 
+    # Follows semver.org format.
     PLUGIN_VERSION = begin
       # Extract plugin version from file path.
       match_data = __FILE__.match(
-        %r{fluent-plugin-google-cloud-(?<version>[0-9a-zA-Z\.]*)/})
+        %r{fluent-plugin-google-cloud-(?<version>[^/]*)/})
       if match_data
         match_data['version']
       else
@@ -248,7 +269,9 @@ module Fluent
           proc { |spec,| __FILE__.include?(spec.full_gem_path) }) do |spec,|
             spec.version.to_s
           end
-        matching_version
+        # If no matching version was found, return a valid but obviously wrong
+        # value.
+        matching_version || '0.0.0-unknown'
       end
     end.freeze
 
@@ -291,12 +314,15 @@ module Fluent
     # Map keys from a JSON payload to corresponding LogEntry fields.
     config_param :http_request_key, :string, :default =>
       DEFAULT_HTTP_REQUEST_KEY
+    config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
+    config_param :labels_key, :string, :default => DEFAULT_LABELS_KEY
     config_param :operation_key, :string, :default => DEFAULT_OPERATION_KEY
     config_param :source_location_key, :string, :default =>
       DEFAULT_SOURCE_LOCATION_KEY
-    config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
     config_param :span_id_key, :string, :default => DEFAULT_SPAN_ID_KEY
-    config_param :insert_id_key, :string, :default => DEFAULT_INSERT_ID_KEY
+    config_param :trace_key, :string, :default => DEFAULT_TRACE_KEY
+    config_param :trace_sampled_key, :string, :default =>
+      DEFAULT_TRACE_SAMPLED_KEY
 
     # Whether to try to detect if the record is a text log entry with JSON
     # content that needs to be parsed.
@@ -435,6 +461,11 @@ module Fluent
     # LogEntry.trace.
     config_param :autoformat_stackdriver_trace, :bool, :default => true
 
+    # Port for web server that exposes a /statusz endpoint with
+    # diagnostic information in HTML format.  If the value is 0,
+    # the server is not created.
+    config_param :statusz_port, :integer, :default => 0
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -451,6 +482,15 @@ module Fluent
       super
       # use the global logger
       @log = $log # rubocop:disable Style/GlobalVars
+
+      @failed_requests_count = nil
+      @successful_requests_count = nil
+      @dropped_entries_count = nil
+      @ingested_entries_count = nil
+      @retried_entries_count = nil
+
+      @ok_code = nil
+      @uptime_update_time = Time.now.to_i
     end
 
     def configure(conf)
@@ -477,31 +517,6 @@ module Fluent
           else
             ENV[METADATA_AGENT_URL_ENV_VAR]
           end
-      end
-
-      # If monitoring is enabled, register metrics in the default registry
-      # and store metric objects for future use.
-      if @enable_monitoring
-        registry = Monitoring::MonitoringRegistryFactory.create @monitoring_type
-        @successful_requests_count = registry.counter(
-          :stackdriver_successful_requests_count,
-          'A number of successful requests to the Stackdriver Logging API')
-        @failed_requests_count = registry.counter(
-          :stackdriver_failed_requests_count,
-          'A number of failed requests to the Stackdriver Logging API,'\
-            ' broken down by the error code')
-        @ingested_entries_count = registry.counter(
-          :stackdriver_ingested_entries_count,
-          'A number of log entries ingested by Stackdriver Logging')
-        @dropped_entries_count = registry.counter(
-          :stackdriver_dropped_entries_count,
-          'A number of log entries dropped by the Stackdriver output plugin')
-        @retried_entries_count = registry.counter(
-          :stackdriver_retried_entries_count,
-          'The number of log entries that failed to be ingested by the'\
-            ' Stackdriver output plugin due to a transient error and were'\
-            ' retried')
-        @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
       end
 
       # Alert on old authentication configuration.
@@ -536,22 +551,54 @@ module Fluent
       # to get it from Metadata Agent.
       @resource ||= determine_agent_level_monitored_resource_via_legacy
 
+      # If monitoring is enabled, register metrics in the default registry
+      # and store metric objects for future use.
+      if @enable_monitoring
+        unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
+          @monitoring_type)
+          @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
+                    'there will be no metrics'
+        end
+        @registry = Monitoring::MonitoringRegistryFactory
+                    .create(@monitoring_type, @project_id, @resource)
+        # Export metrics every 60 seconds.
+        timer_execute(:export_metrics, 60) { @registry.export }
+        # Uptime should be a gauge, but the metric definition is a counter and
+        # we can't change it.
+        @uptime_metric = @registry.counter(
+          :uptime, [:version], 'Uptime of Logging agent')
+        update_uptime
+        timer_execute(:update_uptime, 1) { update_uptime }
+        @successful_requests_count = @registry.counter(
+          :stackdriver_successful_requests_count,
+          [:grpc, :code],
+          'A number of successful requests to the Stackdriver Logging API')
+        @failed_requests_count = @registry.counter(
+          :stackdriver_failed_requests_count,
+          [:grpc, :code],
+          'A number of failed requests to the Stackdriver Logging '\
+          'API, broken down by the error code')
+        @ingested_entries_count = @registry.counter(
+          :stackdriver_ingested_entries_count,
+          [:grpc, :code],
+          'A number of log entries ingested by Stackdriver Logging')
+        @dropped_entries_count = @registry.counter(
+          :stackdriver_dropped_entries_count,
+          [:grpc, :code],
+          'A number of log entries dropped by the Stackdriver output plugin')
+        @retried_entries_count = @registry.counter(
+          :stackdriver_retried_entries_count,
+          [:grpc, :code],
+          'The number of log entries that failed to be ingested by '\
+          'the Stackdriver output plugin due to a transient error '\
+          'and were retried')
+        @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
+      end
+
       # Set regexp that we should match tags against later on. Using a list
-      # instead of a map to ensure order. For example, tags will be matched
-      # against Cloud Functions first, then GKE.
+      # instead of a map to ensure order.
       @tag_regexp_list = []
       if @resource.type == GKE_CONSTANTS[:resource_type]
-        # We only support Cloud Functions logs for GKE right now.
-        if fetch_gce_metadata('instance/attributes/'
-                             ).split.include?('gcf_region')
-          # Fetch this info and store it to avoid recurring
-          # metadata server calls.
-          @gcf_region = fetch_gce_metadata('instance/attributes/gcf_region')
-          @tag_regexp_list << [
-            CLOUDFUNCTIONS_CONSTANTS[:resource_type],
-            @compiled_cloudfunctions_tag_regexp
-          ]
-        end
         @tag_regexp_list << [
           GKE_CONSTANTS[:resource_type], @compiled_kubernetes_tag_regexp
         ]
@@ -588,10 +635,26 @@ module Fluent
       init_api_client
       @successful_call = false
       @timenanos_warning = false
+
+      if @statusz_port > 0
+        @log.info "Starting statusz server on port #{@statusz_port}"
+        server_create(:out_google_cloud_statusz,
+                      @statusz_port,
+                      bind: '127.0.0.1') do |data, conn|
+          if data.split(' ')[1] == '/statusz'
+            write_html_response(data, conn, 200, Statusz.response(self))
+          else
+            write_html_response(data, conn, 404, "Not found\n")
+          end
+        end
+      end
     end
 
     def shutdown
       super
+      # Export metrics on shutdown. This is a best-effort attempt, and it might
+      # fail, for instance if there was a recent write to the same time series.
+      @registry.export unless @registry.nil?
     end
 
     def write(chunk)
@@ -614,8 +677,23 @@ module Fluent
             # Save the following fields if available, then clear them out to
             # allow for determining whether we should parse the log or message
             # field.
+            # This list should be in sync with
+            # https://cloud.google.com/logging/docs/agent/configuration#special-fields.
             preserved_keys = [
-              'time', 'severity', @trace_key, @span_id_key, @insert_id_key
+              'time',
+              'timeNanos',
+              'timestamp',
+              'timestampNanos',
+              'timestampSeconds',
+              'severity',
+              @http_request_key,
+              @insert_id_key,
+              @labels_key,
+              @operation_key,
+              @source_location_key,
+              @span_id_key,
+              @trace_key,
+              @trace_sampled_key
             ]
 
             # If the log is json, we want to export it as a structured log
@@ -632,7 +710,8 @@ module Fluent
               # Propagate these if necessary. Note that we don't want to
               # override these keys in the JSON we've just parsed.
               preserved_keys.each do |key|
-                record_json[key] ||= record[key] if record.key?(key)
+                record_json[key] ||= record[key] if
+                  record.key?(key) && !record_json.key?(key)
               end
 
               record = record_json
@@ -640,10 +719,14 @@ module Fluent
             end
           end
 
-          ts_secs, ts_nanos = compute_timestamp(
-            entry_level_resource.type, record, time)
+          ts_secs, ts_nanos = compute_timestamp(record, time)
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
+
+          dynamic_labels_from_payload = parse_labels(record)
+
+          entry_level_common_labels = entry_level_common_labels.merge!(
+            dynamic_labels_from_payload) if dynamic_labels_from_payload
 
           entry = @construct_log_entry.call(entry_level_common_labels,
                                             entry_level_resource,
@@ -651,13 +734,15 @@ module Fluent
                                             ts_secs,
                                             ts_nanos)
 
-          trace = record.delete(@trace_key)
-          entry.trace = compute_trace(trace) if trace
-
-          span_id = record.delete(@span_id_key)
-          entry.span_id = span_id if span_id
           insert_id = record.delete(@insert_id_key)
           entry.insert_id = insert_id if insert_id
+          span_id = record.delete(@span_id_key)
+          entry.span_id = span_id if span_id
+          trace = record.delete(@trace_key)
+          entry.trace = compute_trace(trace) if trace
+          trace_sampled = record.delete(@trace_sampled_key)
+          entry.trace_sampled = parse_bool(trace_sampled) unless
+            trace_sampled.nil?
 
           set_log_entry_fields(record, entry)
           set_payload(entry_level_resource.type, record, entry, is_json)
@@ -700,7 +785,34 @@ module Fluent
       end
     end
 
+    def multi_workers_ready?
+      true
+    end
+
+    def self.version_string
+      @version_string ||= "google-fluentd/#{PLUGIN_VERSION}"
+    end
+
+    def update_uptime
+      now = Time.now.to_i
+      @uptime_metric.increment(
+        by: now - @uptime_update_time,
+        labels: { version: Fluent::GoogleCloudOutput.version_string })
+      @uptime_update_time = now
+    end
+
     private
+
+    def write_html_response(data, conn, code, response)
+      @log.info "#{conn.remote_host} - - " \
+                "#{Time.now.strftime('%d/%b/%Y:%H:%M:%S %z')} " \
+                "\"#{data.lines.first.strip}\" #{code} #{response.bytesize}"
+      conn.write "HTTP/1.1 #{code}\r\n"
+      conn.write "Content-Type: text/html\r\n"
+      conn.write "Content-Length: #{response.bytesize}\r\n"
+      conn.write "\r\n"
+      conn.write response
+    end
 
     def compute_trace(trace)
       return trace unless @autoformat_stackdriver_trace &&
@@ -953,8 +1065,7 @@ module Fluent
     end
 
     def parse_json_or_nil(input)
-      # Only here to please rubocop...
-      return nil if input.nil?
+      return nil unless input.is_a?(String)
 
       input.each_codepoint do |c|
         if c == 123
@@ -991,7 +1102,7 @@ module Fluent
       end
 
       begin
-        open('http://' + METADATA_SERVICE_ADDR) do |f|
+        open('http://' + METADATA_SERVICE_ADDR, proxy: false) do |f|
           if f.meta['metadata-flavor'] == 'Google'
             @log.info 'Detected GCE platform'
             return Platform::GCE
@@ -1014,7 +1125,8 @@ module Fluent
         @platform == Platform::GCE
       # See https://cloud.google.com/compute/docs/metadata
       open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
-           metadata_path, 'Metadata-Flavor' => 'Google', &:read)
+           metadata_path, 'Metadata-Flavor' => 'Google', :proxy => false,
+           &:read)
     end
 
     # EC2 Metadata server returns everything in one call. Store it after the
@@ -1025,7 +1137,7 @@ module Fluent
       unless @ec2_metadata
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
         open('http://' + METADATA_SERVICE_ADDR +
-             '/latest/dynamic/instance-identity/document') do |f|
+             '/latest/dynamic/instance-identity/document', proxy: false) do |f|
           contents = f.read
           @ec2_metadata = JSON.parse(contents)
         end
@@ -1038,14 +1150,6 @@ module Fluent
     def set_regexp_patterns
       @compiled_kubernetes_tag_regexp = Regexp.new(@kubernetes_tag_regexp) if
         @kubernetes_tag_regexp
-
-      @compiled_cloudfunctions_tag_regexp =
-        /\.(?<encoded_function_name>.+)\.\d+-[^-]+_default_worker$/
-      @compiled_cloudfunctions_log_regexp = /^
-        (?:\[(?<severity>.)\])?
-        \[(?<timestamp>.{24})\]
-        (?:\[(?<execution_id>[^\]]+)\])?
-        [ ](?<text>.*)$/x
 
       @compiled_http_latency_regexp =
         /^\s*(?<seconds>\d+)(?<decimal>\.\d+)?\s*s\s*$/
@@ -1173,6 +1277,8 @@ module Fluent
 
       # GCE.
       when COMPUTE_CONSTANTS[:resource_type]
+        raise "Cannot construct a #{type} resource without vm_id and zone" \
+          unless @vm_id && @zone
         return {
           'instance_id' => @vm_id,
           'zone' => @zone
@@ -1180,6 +1286,8 @@ module Fluent
 
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
+        raise "Cannot construct a #{type} resource without vm_id and zone" \
+          unless @vm_id && @zone
         return {
           'instance_id' => @vm_id,
           'zone' => @zone,
@@ -1200,6 +1308,8 @@ module Fluent
 
       # EC2.
       when EC2_CONSTANTS[:resource_type]
+        raise "Cannot construct a #{type} resource without vm_id and zone" \
+          unless @vm_id && @zone
         labels = {
           'instance_id' => @vm_id,
           'region' => @zone
@@ -1211,8 +1321,10 @@ module Fluent
 
       {}
     rescue StandardError => e
-      @log.error "Failed to set monitored resource labels for #{type}: ",
-                 error: e
+      if [Platform::GCE, Platform::EC2].include?(@platform)
+        @log.error "Failed to set monitored resource labels for #{type}: ",
+                   error: e
+      end
       {}
     end
 
@@ -1254,7 +1366,7 @@ module Fluent
       chunk.msgpack_each do |tag, time, record|
         unless record.is_a?(Hash)
           @log.warn 'Dropping log entries with malformed record: ' \
-                    "'#{record.inspect}'. " \
+                    "'#{record.inspect}' from tag '#{tag}' at '#{time}'. " \
                     'A log record should be in JSON format.'
           next
         end
@@ -1310,23 +1422,6 @@ module Fluent
 
       # Once the resource type is settled down, determine the labels.
       case resource.type
-      # Cloud Functions.
-      when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        resource.labels.merge!(
-          'region' => @gcf_region,
-          'function_name' => decode_cloudfunctions_function_name(
-            matched_regexp_group['encoded_function_name'])
-        )
-        instance_id = resource.labels.delete('instance_id')
-        common_labels.merge!(
-          "#{GKE_CONSTANTS[:service]}/instance_id" => instance_id,
-          "#{COMPUTE_CONSTANTS[:service]}/resource_id" => instance_id,
-          "#{GKE_CONSTANTS[:service]}/cluster_name" =>
-            resource.labels.delete('cluster_name'),
-          "#{COMPUTE_CONSTANTS[:service]}/zone" =>
-            resource.labels.delete('zone')
-        )
-
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
         if matched_regexp_group
@@ -1361,6 +1456,7 @@ module Fluent
       # TODO(qingling128): Temporary fallback for metadata agent restarts.
       # K8s resources.
       when K8S_CONTAINER_CONSTANTS[:resource_type],
+           K8S_POD_CONSTANTS[:resource_type],
            K8S_NODE_CONSTANTS[:resource_type]
         common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
 
@@ -1402,12 +1498,12 @@ module Fluent
           resource.type = 'container' if resource.type == 'gke_container'
           return resource
         end
+        @log.debug('Failed to retrieve monitored resource from Metadata' \
+                   " Agent with local_resource_id #{local_resource_id}.")
       end
       # Fall back to constructing monitored resource locally.
       # TODO(qingling128): This entire else clause is temporary until we
       # implement buffering and caching.
-      @log.debug('Failed to retrieve monitored resource from Metadata' \
-                 " Agent with local_resource_id #{local_resource_id}.")
       construct_k8s_resource_locally(local_resource_id)
     end
 
@@ -1420,17 +1516,6 @@ module Fluent
       common_labels = group_level_common_labels.dup
 
       case resource.type
-      # Cloud Functions.
-      when CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        if record.key?('log')
-          @cloudfunctions_log_match =
-            @compiled_cloudfunctions_log_regexp.match(record['log'])
-          common_labels['execution_id'] =
-            @cloudfunctions_log_match['execution_id'] if
-              @cloudfunctions_log_match &&
-              @cloudfunctions_log_match['execution_id']
-        end
-
       # GKE container.
       when GKE_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
@@ -1572,7 +1657,7 @@ module Fluent
       nil
     end
 
-    def compute_timestamp(resource_type, record, time)
+    def compute_timestamp(record, time)
       current_time = Time.now
       if record.key?('timestamp') &&
          record['timestamp'].is_a?(Hash) &&
@@ -1600,12 +1685,6 @@ module Fluent
             'timestampSeconds and timestampNanos instead.'
         end
         timestamp = time_or_nil(ts_secs, ts_nanos)
-      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-            @cloudfunctions_log_match
-        timestamp = DateTime.parse(
-          @cloudfunctions_log_match['timestamp']).to_time
-        ts_secs = timestamp.tv_sec
-        ts_nanos = timestamp.tv_nsec
       elsif record.key?('time')
         # k8s ISO8601 timestamp
         begin
@@ -1663,14 +1742,7 @@ module Fluent
     end
 
     def compute_severity(resource_type, record, entry_level_common_labels)
-      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        if @cloudfunctions_log_match && @cloudfunctions_log_match['severity']
-          return parse_severity(@cloudfunctions_log_match['severity'])
-        elsif record.key?('stream')
-          return CLOUDFUNCTIONS_CONSTANTS[:stream_severity_map].fetch(
-            record.delete('stream'), 'DEFAULT')
-        end
-      elsif record.key?('severity')
+      if record.key?('severity')
         return parse_severity(record.delete('severity'))
       elsif resource_type == GKE_CONSTANTS[:resource_type]
         stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
@@ -1680,6 +1752,10 @@ module Fluent
     end
 
     def set_log_entry_fields(record, entry)
+      # TODO(qingling128) On the next major after 0.7.4, make all logEntry
+      # subfields behave the same way: if the field is not in the correct
+      # format, log an error in the Fluentd log and remove this field from
+      # payload. This is the preferred behavior per PM decision.
       LOG_ENTRY_FIELDS_MAP.each do |field_name, config|
         payload_key, subfields, grpc_class, non_grpc_class = config
         begin
@@ -1721,6 +1797,31 @@ module Fluent
           @log.error "Failed to set log entry field for #{field_name}.", err
         end
       end
+    end
+
+    # Parse labels. Return nil if not set.
+    def parse_labels(record)
+      payload_labels = record.delete(@labels_key)
+      return nil unless payload_labels
+      unless payload_labels.is_a?(Hash)
+        @log.error "Invalid value of '#{@labels_key}' in the payload: " \
+                   "#{payload_labels}. Labels need to be a JSON object."
+        return nil
+      end
+
+      non_string_keys = payload_labels.each_with_object([]) do |(k, v), a|
+        a << k unless k.is_a?(String) && v.is_a?(String)
+      end
+      unless non_string_keys.empty?
+        @log.error "Invalid value of '#{@labels_key}' in the payload: " \
+                   "#{payload_labels}. Labels need string values for all " \
+                   "keys; keys #{non_string_keys} don't."
+        return nil
+      end
+      payload_labels
+    rescue StandardError => err
+      @log.error "Failed to extract '#{@labels_key}' from payload.", err
+      return nil
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
@@ -1862,14 +1963,6 @@ module Fluent
       end
     end
 
-    def decode_cloudfunctions_function_name(function_name)
-      function_name.gsub(/c\.[a-z]/) { |s| s.upcase[-1] }
-                   .gsub('u.u', '_')
-                   .gsub('d.d', '$')
-                   .gsub('a.a', '@')
-                   .gsub('p.p', '.')
-    end
-
     def format(tag, time, record)
       Fluent::Engine.msgpack_factory.packer.write([tag, time, record]).to_s
     end
@@ -1945,23 +2038,17 @@ module Fluent
       ret
     end
 
+    # TODO(qingling128): Fix the inconsistent behavior of 'message', 'log' and
+    # 'msg' in the next major version 1.0.0.
     def set_payload(resource_type, record, entry, is_json)
       # Only one of {text_payload, json_payload} will be set.
       text_payload = nil
       json_payload = nil
-      # If this is a Cloud Functions log that matched the expected regexp,
-      # use text payload. Otherwise, use JSON if we found valid JSON, or text
-      # payload in the following cases:
-      # 1. This is a Cloud Functions log and the 'log' key is available
-      # 2. This is an unstructured Container log and the 'log' key is available
-      # 3. The only remaining key is 'message'
-      if resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-         @cloudfunctions_log_match
-        text_payload = @cloudfunctions_log_match['text']
-      elsif resource_type == CLOUDFUNCTIONS_CONSTANTS[:resource_type] &&
-            record.key?('log')
-        text_payload = record['log']
-      elsif is_json
+      # Use JSON if we found valid JSON, or text payload in the following
+      # cases:
+      # 1. This is an unstructured Container log and the 'log' key is available
+      # 2. The only remaining key is 'message'
+      if is_json
         json_payload = record
       elsif [GKE_CONSTANTS[:resource_type],
              DOCKER_CONSTANTS[:resource_type]].include?(resource_type) &&
@@ -1980,6 +2067,7 @@ module Fluent
                                json_payload
                              end
       elsif text_payload
+        text_payload = text_payload.to_s
         entry.text_payload = if @use_grpc
                                convert_to_utf8(text_payload)
                              else
@@ -1989,9 +2077,7 @@ module Fluent
     end
 
     def log_name(tag, resource)
-      if resource.type == CLOUDFUNCTIONS_CONSTANTS[:resource_type]
-        tag = 'cloud-functions'
-      elsif resource.type == APPENGINE_CONSTANTS[:resource_type]
+      if resource.type == APPENGINE_CONSTANTS[:resource_type]
         # Add a prefix to Managed VM logs to prevent namespace collisions.
         tag = "#{APPENGINE_CONSTANTS[:service]}/#{tag}"
       elsif resource.type == GKE_CONSTANTS[:resource_type]
@@ -2007,6 +2093,8 @@ module Fluent
     end
 
     def init_api_client
+      # Set up the logger for the auto-generated Google Cloud APIs.
+      Google::Apis.logger = @log
       if @use_grpc
         uri = URI.parse(@logging_api_url)
         host = uri.host
@@ -2237,7 +2325,6 @@ module Fluent
     def construct_error_details_map_grpc(gax_error)
       return {} unless @partial_success
       error_details_map = Hash.new { |h, k| h[k] = [] }
-
       error_details = ensure_array(gax_error.status_details)
       raise JSON::ParserError, 'The error details are empty.' if
         error_details.empty?
@@ -2265,6 +2352,10 @@ module Fluent
           \.(?<pod_name>[.0-9a-z-]+)
           \.(?<container_name>[0-9a-z-]+)$/x =~ local_resource_id ||
         /^
+          (?<resource_type>k8s_pod)
+          \.(?<namespace_name>[0-9a-z-]+)
+          \.(?<pod_name>[.0-9a-z-]+)$/x =~ local_resource_id ||
+        /^
           (?<resource_type>k8s_node)
           \.(?<node_name>[0-9a-z-]+)$/x =~ local_resource_id
 
@@ -2291,6 +2382,14 @@ module Fluent
           'location' => @k8s_cluster_location
         }
         fallback_resource = GKE_CONSTANTS[:resource_type]
+      when K8S_POD_CONSTANTS[:resource_type]
+        labels = {
+          'namespace_name' => namespace_name,
+          'pod_name' => pod_name,
+          'cluster_name' => @k8s_cluster_name,
+          'location' => @k8s_cluster_location
+        }
+        fallback_resource = GKE_CONSTANTS[:resource_type]
       when K8S_NODE_CONSTANTS[:resource_type]
         labels = {
           'node_name' => node_name,
@@ -2313,10 +2412,12 @@ module Fluent
       constructed_resource
     end
 
+    # Convert the value to a Ruby array.
     def ensure_array(value)
       Array.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
     end
 
+    # Convert the value to a Ruby hash.
     def ensure_hash(value)
       Hash.try_convert(value) || (raise JSON::ParserError, value.class.to_s)
     end
@@ -2324,36 +2425,40 @@ module Fluent
     # Increment the metric for the number of successful requests.
     def increment_successful_requests_count
       return unless @successful_requests_count
-      @successful_requests_count.increment(grpc: @use_grpc, code: @ok_code)
+      @successful_requests_count.increment(
+        labels: { grpc: @use_grpc, code: @ok_code })
     end
 
     # Increment the metric for the number of failed requests, labeled by
     # the provided status code.
     def increment_failed_requests_count(code)
       return unless @failed_requests_count
-      @failed_requests_count.increment(grpc: @use_grpc, code: code)
+      @failed_requests_count.increment(
+        labels: { grpc: @use_grpc, code: code })
     end
 
     # Increment the metric for the number of log entries, successfully
     # ingested by the Stackdriver Logging API.
     def increment_ingested_entries_count(count)
       return unless @ingested_entries_count
-      @ingested_entries_count.increment({ grpc: @use_grpc, code: @ok_code },
-                                        count)
+      @ingested_entries_count.increment(
+        labels: { grpc: @use_grpc, code: @ok_code }, by: count)
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
     def increment_dropped_entries_count(count, code)
       return unless @dropped_entries_count
-      @dropped_entries_count.increment({ grpc: @use_grpc, code: code }, count)
+      @dropped_entries_count.increment(
+        labels: { grpc: @use_grpc, code: code }, by: count)
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
     def increment_retried_entries_count(count, code)
       return unless @retried_entries_count
-      @retried_entries_count.increment({ grpc: @use_grpc, code: code }, count)
+      @retried_entries_count.increment(
+        labels: { grpc: @use_grpc, code: code }, by: count)
     end
   end
 end

@@ -13,10 +13,51 @@
 # limitations under the License.
 
 module Monitoring
+  # Base class for the counter.
+  class BaseCounter
+    def increment(*)
+    end
+  end
+
+  # Prometheus implementation of counters.
+  class PrometheusCounter < BaseCounter
+    def initialize(prometheus_counter)
+      @counter = prometheus_counter
+    end
+
+    def increment(by: 1, labels: {})
+      @counter.increment(labels, by)
+    end
+  end
+
+  # OpenCensus implementation of counters.
+  class OpenCensusCounter < BaseCounter
+    def initialize(recorder, measure, translator)
+      raise ArgumentError, 'measure must not be nil' if measure.nil?
+      @recorder = recorder
+      @measure = measure
+      @translator = translator
+    end
+
+    def increment(by: 1, labels: {})
+      labels = @translator.translate_labels(labels)
+      tag_map = OpenCensus::Tags::TagMap.new(
+        labels.map { |k, v| [k.to_s, v.to_s] }.to_h)
+      @recorder.record(@measure.create_measurement(value: by, tags: tag_map))
+    end
+  end
+
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
-    def counter(_name, _desc)
-      _undefined
+    def initialize(_project_id, _monitored_resource)
+    end
+
+    def counter(_name, _labels, _docstring)
+      BaseCounter.new
+    end
+
+    def export
+      nil
     end
   end
 
@@ -27,16 +68,69 @@ module Monitoring
       'prometheus'
     end
 
-    def initialize
+    def initialize(_project_id, _monitored_resource)
+      super
       require 'prometheus/client'
       @registry = Prometheus::Client.registry
     end
 
     # Exception-driven behavior to avoid synchronization errors.
-    def counter(name, desc)
-      return @registry.counter(name, desc)
+    def counter(name, _labels, docstring)
+      # When we upgrade to Prometheus client 0.10.0 or higher, pass the
+      # labels in the metric constructor. The 'labels' field in
+      # Prometheus client 0.9.0 has a different function and will not
+      # work as intended.
+      return PrometheusCounter.new(@registry.counter(name, docstring))
     rescue Prometheus::Client::Registry::AlreadyRegisteredError
-      return @registry.get(name)
+      return PrometheusCounter.new(@registry.get(name))
+    end
+  end
+
+  # OpenCensus implementation of the monitoring registry.
+  class OpenCensusMonitoringRegistry < BaseMonitoringRegistry
+    def self.name
+      'opencensus'
+    end
+
+    def initialize(project_id, monitored_resource)
+      super
+      require 'opencensus'
+      require 'opencensus-stackdriver'
+      @log = $log # rubocop:disable Style/GlobalVars
+      @recorder = OpenCensus::Stats.ensure_recorder
+      @exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
+        project_id: project_id,
+        metric_prefix: 'agent.googleapis.com/agent',
+        resource_type: monitored_resource.type,
+        resource_labels: monitored_resource.labels)
+      OpenCensus.configure do |c|
+        c.stats.exporter = @exporter
+      end
+      @log.debug "OpenCensus config=#{OpenCensus.config}"
+    end
+
+    def counter(name, labels, docstring)
+      translator = MetricTranslator.new(name, labels)
+      measure = OpenCensus::Stats::MeasureRegistry.get(translator.name)
+      if measure.nil?
+        measure = OpenCensus::Stats.create_measure_int(
+          name: translator.name,
+          unit: OpenCensus::Stats::Measure::UNIT_NONE,
+          description: docstring
+        )
+      end
+      OpenCensus::Stats.create_and_register_view(
+        name: translator.name,
+        measure: measure,
+        aggregation: OpenCensus::Stats.create_sum_aggregation,
+        description: docstring,
+        columns: translator.view_labels.map(&:to_s)
+      )
+      OpenCensusCounter.new(@recorder, measure, translator)
+    end
+
+    def export
+      @exporter.export @recorder.views_data
     end
   end
 
@@ -45,11 +139,53 @@ module Monitoring
   class MonitoringRegistryFactory
     @known_registry_types = {
       PrometheusMonitoringRegistry.name =>
-        PrometheusMonitoringRegistry
+        PrometheusMonitoringRegistry,
+      OpenCensusMonitoringRegistry.name =>
+        OpenCensusMonitoringRegistry
     }
 
-    def self.create(name)
-      (@known_registry_types[name] || BaseMonitoringRegistry).new
+    def self.supports_monitoring_type(name)
+      @known_registry_types.key?(name)
+    end
+
+    def self.create(name, project_id, monitored_resource)
+      registry = @known_registry_types[name] || BaseMonitoringRegistry
+      registry.new(project_id, monitored_resource)
+    end
+  end
+
+  # Translate the internal metrics to the curated metrics in Stackdriver.  The
+  # Prometheus metrics are collected by Google Kubernetes Engine's monitoring,
+  # so we can't redefine them.
+  # Avoid this mechanism for new metrics by defining them in their final form,
+  # so they don't need translation.
+  class MetricTranslator
+    attr_reader :name
+    attr_reader :view_labels
+
+    def initialize(name, metric_labels)
+      @legacy = true
+      case name
+      when :stackdriver_successful_requests_count,
+           :stackdriver_failed_requests_count
+        @name = :request_count
+      when :stackdriver_ingested_entries_count,
+           :stackdriver_dropped_entries_count
+        @name = :log_entry_count
+      when :stackdriver_retried_entries_count
+        @name = :log_entry_retry_count
+      else
+        @name = name
+        @legacy = false
+      end
+      # Collapsed from [:response_code, :grpc]
+      @view_labels = @legacy ? [:response_code] : metric_labels
+    end
+
+    def translate_labels(labels)
+      return labels unless @legacy
+      translation = { code: :response_code, grpc: :grpc }
+      labels.map { |k, v| [translation[k], v] }.to_h
     end
   end
 end
