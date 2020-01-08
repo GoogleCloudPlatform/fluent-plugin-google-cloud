@@ -943,77 +943,206 @@ module BaseTest
     end
   end
 
-  def test_timestamps
+  def test_compute_timestamp
     setup_gce_metadata_stubs
-    current_time = Time.now
+    d = create_driver(APPLICATION_DEFAULT_CONFIG)
+
+    compute_timestamp = lambda do |driver, record, time|
+      driver.instance.send(:compute_timestamp, record, time)
+    end
+
+    current_time = Time.new(2019, 12, 29, 10, 23, 35, '-08:00')
+    one_day_later = current_time.to_datetime.next_day.to_time
+    just_under_one_day_later = one_day_later - 1
     next_year = Time.mktime(current_time.year + 1)
     one_second_before_next_year = next_year - 1
-    adjusted_to_last_year =
-      one_second_before_next_year.to_datetime.prev_year.to_time
     one_second_into_next_year = next_year + 1
-    one_day_into_next_year = next_year.to_date.next_day.to_time
+    one_day_into_next_year = next_year.to_datetime.next_day.to_time
+
+    [
+      Time.at(123_456.789),
+      Time.at(0),
+      current_time,
+      just_under_one_day_later,
+      one_second_before_next_year,
+      next_year,
+      one_second_into_next_year,
+      one_day_into_next_year
+    ].each do |ts|
+      # Use record collection time.
+      ts_secs, ts_nanos, actual_ts = compute_timestamp[d, {
+        'message' => ''
+      }, ts.to_f]
+      assert_timestamp_matches ts, ts_secs, ts_nanos, actual_ts.iso8601
+
+      # Use the (deprecated) timeNanos key.
+      ts_secs, ts_nanos, actual_ts = compute_timestamp[d, {
+        'message' => '',
+        'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec
+      }, 1.0]
+      assert_timestamp_matches ts, ts_secs, ts_nanos, actual_ts.iso8601
+
+      # Use the structured timestamp key.
+      ts_secs, ts_nanos, actual_ts = compute_timestamp[d, {
+        'message' => '',
+        'timestamp' => { 'seconds' => ts.tv_sec, 'nanos' => ts.tv_nsec }
+      }, 1.0]
+      assert_timestamp_matches ts, ts_secs, ts_nanos, actual_ts.iso8601
+
+      # Use the timestampSeconds/timestampNanos keys.
+      ts_secs, ts_nanos, actual_ts = compute_timestamp[d, {
+        'message' => '',
+        'timestampSeconds' => ts.tv_sec,
+        'timestampNanos' => ts.tv_nsec
+      }, 1.0]
+      assert_timestamp_matches ts, ts_secs, ts_nanos, actual_ts.iso8601
+
+      # Use the string timestampSeconds/timestampNanos keys.
+      ts_secs, ts_nanos, actual_ts = compute_timestamp[d, {
+        'message' => '',
+        'timestampSeconds' => ts.tv_sec.to_s,
+        'timestampNanos' => ts.tv_nsec.to_s
+      }, 1.0]
+      assert_timestamp_matches ts, ts_secs, ts_nanos, actual_ts.iso8601
+    end
+  end
+
+  def test_adjust_timestamp
+    setup_gce_metadata_stubs
+    d = create_driver(APPLICATION_DEFAULT_CONFIG)
+
+    adjust_timestamp_if_invalid = lambda do |driver, timestamp, current_time|
+      driver.instance.send(:adjust_timestamp_if_invalid, timestamp,
+                           current_time)
+    end
+
+    december_29 = Time.new(2019, 12, 29, 10, 23, 35, '-08:00')
+    december_31 = Time.new(2019, 12, 31, 10, 23, 35, '-08:00')
+    january_1 = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
+
     {
-      APPLICATION_DEFAULT_CONFIG => {
-        Time.at(123_456.789) => Time.at(123_456.789),
-        Time.at(0) => Time.at(0),
-        current_time => current_time,
-        one_second_before_next_year => adjusted_to_last_year,
-        next_year => Time.at(0),
-        one_second_into_next_year => Time.at(0),
-        one_day_into_next_year => Time.at(0)
-      },
-      NO_ADJUST_TIMESTAMPS_CONFIG => {
-        Time.at(123_456.789) => Time.at(123_456.789),
-        Time.at(0) => Time.at(0),
-        current_time => current_time,
-        one_second_before_next_year => one_second_before_next_year,
-        next_year => next_year,
-        one_second_into_next_year => one_second_into_next_year,
-        one_day_into_next_year => one_day_into_next_year
-      }
-    }.each do |config, timestamps|
+      # December 29, 2019 (normal operation).
+      december_29 => begin
+        one_day_later = Time.new(2019, 12, 30, 10, 23, 35, '-08:00')
+        one_day_a_year_earlier = Time.new(2018, 12, 30, 10, 23, 35, '-08:00')
+        just_under_one_day_later = Time.new(2019, 12, 30, 10, 23, 34, '-08:00')
+        next_year = Time.new(2020, 1, 1, 0, 0, 0, '-08:00')
+        one_second_before_next_year =
+          Time.new(2019, 12, 31, 11, 59, 59, '-08:00')
+        one_second_before_this_year =
+          Time.new(2018, 12, 31, 11, 59, 59, '-08:00')
+        one_second_into_next_year = Time.new(2020, 1, 1, 0, 0, 1, '-08:00')
+        one_day_into_next_year = Time.new(2020, 1, 2, 0, 0, 0, '-08:00')
+        {
+          Time.at(123_456.789) => Time.at(123_456.789),
+          Time.at(0) => Time.at(0),
+          december_29 => december_29,
+          one_day_later => one_day_a_year_earlier,
+          just_under_one_day_later => just_under_one_day_later,
+          one_second_before_next_year => one_second_before_this_year,
+          next_year => Time.at(0),
+          one_second_into_next_year => Time.at(0),
+          one_day_into_next_year => Time.at(0)
+        }
+      end,
+      # January 1, 2020 (normal operation).
+      january_1 => begin
+        one_day_later = Time.new(2020, 1, 2, 10, 23, 35, '-08:00')
+        one_day_a_year_earlier = Time.new(2019, 1, 2, 10, 23, 35, '-08:00')
+        just_under_one_day_later = Time.new(2020, 1, 2, 10, 23, 34, '-08:00')
+        next_year = Time.new(2021, 1, 1, 0, 0, 0, '-08:00')
+        one_second_before_next_year =
+          Time.new(2020, 12, 31, 11, 59, 59, '-08:00')
+        one_second_before_this_year =
+          Time.new(2019, 12, 31, 11, 59, 59, '-08:00')
+        one_second_into_next_year = Time.new(2021, 1, 1, 0, 0, 1, '-08:00')
+        one_day_into_next_year = Time.new(2021, 1, 2, 0, 0, 0, '-08:00')
+        {
+          Time.at(123_456.789) => Time.at(123_456.789),
+          Time.at(0) => Time.at(0),
+          january_1 => january_1,
+          one_day_later => one_day_a_year_earlier,
+          just_under_one_day_later => just_under_one_day_later,
+          one_second_before_next_year => one_second_before_this_year,
+          next_year => Time.at(0),
+          one_second_into_next_year => Time.at(0),
+          one_day_into_next_year => Time.at(0)
+        }
+      end,
+      # December 31, 2019 (next day overlaps new year).
+      december_31 => begin
+        one_day_later = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
+        just_under_one_day_later = Time.new(2020, 1, 1, 10, 23, 34, '-08:00')
+        next_year = Time.new(2020, 1, 1, 0, 0, 0, '-08:00')
+        one_second_before_next_year =
+          Time.new(2019, 12, 31, 11, 59, 59, '-08:00')
+        one_second_into_next_year = Time.new(2020, 1, 1, 0, 0, 1, '-08:00')
+        one_day_into_next_year = Time.new(2020, 1, 2, 0, 0, 0, '-08:00')
+        {
+          Time.at(123_456.789) => Time.at(123_456.789),
+          Time.at(0) => Time.at(0),
+          december_31 => december_31,
+          one_day_later => Time.at(0), # Falls into the next year.
+          just_under_one_day_later => just_under_one_day_later,
+          one_second_before_next_year => one_second_before_next_year,
+          next_year => next_year,
+          one_second_into_next_year => one_second_into_next_year,
+          one_day_into_next_year => Time.at(0)
+        }
+      end
+    }.each do |current_time, timestamps|
       timestamps.each do |ts, expected_ts|
-        emit_index = 0
-        setup_logging_stubs do
-          @logs_sent = []
-          d = create_driver(config)
-          # Test the "native" fluentd timestamp as well as our nanosecond tags.
-          d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
-          emit_index += 1
-          d.emit('message' => log_entry(emit_index),
-                 'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
-          emit_index += 1
-          d.emit('message' => log_entry(emit_index),
-                 'timestamp' => { 'seconds' => ts.tv_sec,
-                                  'nanos' => ts.tv_nsec })
-          emit_index += 1
-          d.emit('message' => log_entry(emit_index),
-                 'timestampSeconds' => ts.tv_sec,
-                 'timestampNanos' => ts.tv_nsec)
-          emit_index += 1
-          d.emit('message' => log_entry(emit_index),
-                 'timestampSeconds' => ts.tv_sec.to_s,
-                 'timestampNanos' => ts.tv_nsec.to_s)
-          emit_index += 1
-          d.run
-          verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
-            verify_default_log_entry_text(entry['textPayload'], i, entry)
-            actual_timestamp = timestamp_parse(entry['timestamp'])
-            assert_equal actual_timestamp['seconds'], expected_ts.tv_sec, entry
-            # Fluentd v0.14 onwards supports nanosecond timestamp values.
-            # Added in 600 ns delta to avoid flaky tests introduced
-            # due to rounding error in double-precision floating-point numbers
-            # (to account for the missing 9 bits of precision ~ 512 ns).
-            # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
-            assert_in_delta expected_ts.tv_nsec, actual_timestamp['nanos'],
-                            600, entry
-          end
+        ts_secs, ts_nanos = adjust_timestamp_if_invalid[d, ts, current_time]
+        adjusted_ts = Time.at(ts_secs, ts_nanos / 1_000.0)
+        assert_timestamp_matches expected_ts, ts_secs, ts_nanos,
+                                 adjusted_ts.iso8601
+      end
+    end
+  end
+
+  def test_log_timestamps
+    setup_gce_metadata_stubs
+    current_time = Time.now
+    {
+      # Verify that timestamps make it through.
+      Time.at(123_456.789) => Time.at(123_456.789),
+      Time.at(0) => Time.at(0),
+      current_time => current_time
+    }.each do |ts, expected_ts|
+      emit_index = 0
+      setup_logging_stubs do
+        @logs_sent = []
+        d = create_driver(APPLICATION_DEFAULT_CONFIG)
+        # Test the "native" fluentd timestamp as well as our nanosecond tags.
+        d.emit({ 'message' => log_entry(emit_index) }, ts.to_f)
+        emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timeNanos' => ts.tv_sec * 1_000_000_000 + ts.tv_nsec)
+        emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timestamp' => { 'seconds' => ts.tv_sec,
+                                'nanos' => ts.tv_nsec })
+        emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timestampSeconds' => ts.tv_sec,
+               'timestampNanos' => ts.tv_nsec)
+        emit_index += 1
+        d.emit('message' => log_entry(emit_index),
+               'timestampSeconds' => ts.tv_sec.to_s,
+               'timestampNanos' => ts.tv_nsec.to_s)
+        emit_index += 1
+        d.run
+        verify_log_entries(emit_index, COMPUTE_PARAMS) do |entry, i|
+          verify_default_log_entry_text(entry['textPayload'], i, entry)
+          actual_timestamp = timestamp_parse(entry['timestamp'])
+          assert_timestamp_matches expected_ts, actual_timestamp['seconds'],
+                                   actual_timestamp['nanos'], entry
         end
       end
     end
   end
 
-  def test_malformed_timestamp
+  def test_malformed_timestamp_field
     setup_gce_metadata_stubs
     setup_logging_stubs do
       d = create_driver
@@ -2747,6 +2876,17 @@ module BaseTest
   # a plain equal. e.g. assert_in_delta.
   def assert_equal_with_default(_field, _expected_value, _default_value, _entry)
     _undefined
+  end
+
+  # Compare the timestamp seconds and nanoseconds with the expected timestamp.
+  def assert_timestamp_matches(expected_ts, ts_secs, ts_nanos, entry)
+    assert_equal expected_ts.tv_sec, ts_secs, entry
+    # Fluentd v0.14 onwards supports nanosecond timestamp values.
+    # Added in 600 ns delta to avoid flaky tests introduced
+    # due to rounding error in double-precision floating-point numbers
+    # (to account for the missing 9 bits of precision ~ 512 ns).
+    # See http://wikipedia.org/wiki/Double-precision_floating-point_format.
+    assert_in_delta expected_ts.tv_nsec, ts_nanos, 600, entry
   end
 
   def assert_prometheus_metric_value(metric_name, expected_value, labels = {})
