@@ -39,7 +39,7 @@ module Fluent
       end
     end
 
-    def filter_mode1(_tag, _time, record)
+    def filter_mode1(tag, _time, record)
       # Extract "kubernetes"->"labels" and set them as
       # "logging.googleapis.com/labels". Prefix these labels with
       # "k8s-pod-labels" to distinguish with other labels and avoid
