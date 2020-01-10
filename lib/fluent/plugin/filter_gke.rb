@@ -26,6 +26,7 @@ module Fluent
     end
 
     def filter(tag, time, record)
+      p 'input', record
       case mode
       when '1'
         return filter_mode1(tag, time, record)
@@ -66,6 +67,7 @@ module Fluent
       record['severity'] ||= if record['stream'] == 'stderr' then 'ERROR' else 'INFO' end
       record.delete('log')
       record.delete('stream')
+      p 'output 1', record
       record
     end
 
@@ -87,12 +89,14 @@ module Fluent
         source_parts = record['source'].split(':', 2)
         record['logging.googleapis.com/sourceLocation'] = {'file' => source_parts[0], 'line' => source_parts[1]} if source_parts.length == 2
       end
+      p 'output 2', record
       record
     end
 
     def filter_mode3(_tag, _time, record)
       # Attach local_resource_id for 'k8s_node' monitored resource.
       record['logging.googleapis.com/local_resource_id'] = "k8s_node.#{ENV['NODE_NAME']}"
+      p 'output 3', record
       record
     end
 
