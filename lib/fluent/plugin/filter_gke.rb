@@ -53,6 +53,9 @@ module Fluent
       # Extract local_resource_id from tag for 'k8s_container' monitored
       # resource. The format is:
       # 'k8s_container.<namespace_name>.<pod_name>.<container_name>'.
+      # tag_suffix comes from record_reformer and can probably be simplified.
+      tag_parts = tag.split('.')
+      tag_suffix = tag_suffix(tag_parts)
       record['logging.googleapis.com/local_resource_id'] = "k8s_container.#{tag_suffix[4].rpartition('.')[0].split('_')[1]}.#{tag_suffix[4].rpartition('.')[0].split('_')[0]}.#{tag_suffix[4].rpartition('.')[0].split('_')[2].rpartition('-')[0]}"
       # Rename the field 'log' to a more generic field 'message'. This way the
       # fluent-plugin-google-cloud knows to flatten the field as textPayload
@@ -91,6 +94,18 @@ module Fluent
       # Attach local_resource_id for 'k8s_node' monitored resource.
       record['logging.googleapis.com/local_resource_id'] = "k8s_node.#{ENV['NODE_NAME']}"
       record
+    end
+
+    private
+
+    def tag_suffix(tag_parts)
+      return [] if tag_parts.empty?
+      rev_tag_parts = tag_parts.reverse
+      rev_tag_suffix = [rev_tag_parts.first]
+      1.upto(tag_parts.size-1).each do |i|
+        rev_tag_suffix[i] = "#{rev_tag_parts[i]}.#{rev_tag_suffix[i-1]}"
+      end
+      rev_tag_suffix.reverse!
     end
   end
 end
