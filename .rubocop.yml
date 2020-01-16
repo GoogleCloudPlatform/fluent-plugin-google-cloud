@@ -6,6 +6,10 @@ AllCops:
     # Generated files.
     - 'lib/google/**/*'
 
+Style/GlobalVars:
+  AllowedVariables:
+    - $log
+
 # TODO: Re-enable this and fix frozen strings.
 Style/FrozenStringLiteralComment:
   Enabled: false

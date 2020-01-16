@@ -56,13 +56,12 @@ module Fluent
 
     def start
       super
-      @log = $log # rubocop:disable Style/GlobalVars
 
       # Initialize the insertID.
-      @log.info "Started the add_insert_ids plugin with #{@insert_id_key}" \
-                ' as the insert ID key.'
+      log.info "Started the add_insert_ids plugin with #{@insert_id_key}" \
+               ' as the insert ID key.'
       @insert_id = generate_initial_insert_id
-      @log.info "Initialized the insert ID key to #{@insert_id}."
+      log.info "Initialized the insert ID key to #{@insert_id}."
     end
 
     def configure(conf)

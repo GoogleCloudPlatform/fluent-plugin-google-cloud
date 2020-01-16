@@ -485,8 +485,6 @@ module Fluent
 
     def initialize
       super
-      # use the global logger
-      @log = $log # rubocop:disable Style/GlobalVars
 
       @failed_requests_count = nil
       @successful_requests_count = nil
@@ -504,7 +502,7 @@ module Fluent
       # TODO(qingling128): Remove this warning after the support is added. Also
       # remove the comment in the description of this configuration.
       unless @logging_api_url == DEFAULT_LOGGING_API_URL || @use_grpc
-        @log.warn 'Detected customized logging_api_url while use_grpc is not' \
+        $log.warn 'Detected customized logging_api_url while use_grpc is not' \
                   ' enabled. Customized logging_api_url for the non-gRPC path' \
                   ' is not supported. The logging_api_url option will be' \
                   ' ignored.'
@@ -629,7 +627,7 @@ module Fluent
 
       if [Platform::GCE, Platform::EC2].include?(@platform)
         # Log an informational message containing the Logs viewer URL
-        @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
+        $log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
                   "viewer?project=#{@project_id}&resource=#{@resource.type}/",
                   "instance_id/#{@vm_id}"
       end
@@ -901,7 +899,7 @@ module Fluent
       # aid with verification and troubleshooting.
       unless @successful_call
         @successful_call = true
-        @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
+        log.info 'Successfully sent gRPC to Stackdriver Logging API.'
       end
 
     rescue Google::Gax::GaxError => gax_error
@@ -922,8 +920,8 @@ module Fluent
           # HTTP status 504 (Gateway Timeout).
           GRPC::DeadlineExceeded
         increment_retried_entries_count(entries_count, error.code)
-        @log.debug "Retrying #{entries_count} log message(s) later.",
-                   error: error.to_s, error_code: error.code.to_s
+        log.debug "Retrying #{entries_count} log message(s) later.",
+                  error: error.to_s, error_code: error.code.to_s
         raise error
 
       # Most client errors indicate a problem with the request itself and
@@ -950,8 +948,8 @@ module Fluent
           GRPC::Unknown
         increment_failed_requests_count(error.code)
         increment_dropped_entries_count(entries_count, error.code)
-        @log.warn "Dropping #{entries_count} log message(s)",
-                  error: error.to_s, error_code: error.code.to_s
+        log.warn "Dropping #{entries_count} log message(s)",
+                 error: error.to_s, error_code: error.code.to_s
 
       # If partial_success is enabled, valid entries should have be
       # written even if some other entries fail due to InvalidArgument or
@@ -965,16 +963,16 @@ module Fluent
         if error_details_map.empty?
           increment_failed_requests_count(error.code)
           increment_dropped_entries_count(entries_count, error.code)
-          @log.warn "Dropping #{entries_count} log message(s)",
-                    error: error.to_s, error_code: error.code.to_s
+          log.warn "Dropping #{entries_count} log message(s)",
+                   error: error.to_s, error_code: error.code.to_s
         else
           error_details_map.each do |(error_code, error_message), indexes|
             partial_errors_count = indexes.length
             increment_dropped_entries_count(partial_errors_count,
                                             error_code)
             entries_count -= partial_errors_count
-            @log.warn "Dropping #{partial_errors_count} log message(s)",
-                      error: error_message, error_code: error_code.to_s
+            log.warn "Dropping #{partial_errors_count} log message(s)",
+                     error: error_message, error_code: error_code.to_s
           end
           # Consider partially successful requests successful.
           increment_successful_requests_count
@@ -990,9 +988,9 @@ module Fluent
                      end
         increment_failed_requests_count(error_code)
         increment_dropped_entries_count(entries_count, error_code)
-        @log.error "Unknown response code #{error_code} from the server," \
-                   " dropping #{entries_count} log message(s)",
-                   error: error.to_s, error_code: error_code.to_s
+        log.error "Unknown response code #{error_code} from the server," \
+                  " dropping #{entries_count} log message(s)",
+                  error: error.to_s, error_code: error_code.to_s
       end
 
     # Got an unexpected error (not Google::Gax::GaxError) from the
@@ -1001,9 +999,9 @@ module Fluent
       increment_failed_requests_count(GRPC::Core::StatusCodes::UNKNOWN)
       increment_dropped_entries_count(entries_count,
                                       GRPC::Core::StatusCodes::UNKNOWN)
-      @log.error "Unexpected error type #{error.class.name} from the client" \
-                 " library, dropping #{entries_count} log message(s)",
-                 error: error.to_s
+      log.error "Unexpected error type #{error.class.name} from the client" \
+                " library, dropping #{entries_count} log message(s)",
+                error: error.to_s
     end
 
     def write_request_via_rest(entries:,
@@ -1029,14 +1027,14 @@ module Fluent
       # with verification and troubleshooting.
       unless @successful_call
         @successful_call = true
-        @log.info 'Successfully sent to Stackdriver Logging API.'
+        log.info 'Successfully sent to Stackdriver Logging API.'
       end
 
     rescue Google::Apis::ServerError => error
       # 5xx server errors. Retry via re-raising the error.
       increment_retried_entries_count(entries_count, error.status_code)
-      @log.debug "Retrying #{entries_count} log message(s) later.",
-                 error: error.to_s, error_code: error.status_code.to_s
+      log.debug "Retrying #{entries_count} log message(s) later.",
+                error: error.to_s, error_code: error.status_code.to_s
       raise error
 
     rescue Google::Apis::AuthorizationError => error
@@ -1045,8 +1043,8 @@ module Fluent
       # the permissions on the Google Cloud project.
       increment_failed_requests_count(error.status_code)
       increment_dropped_entries_count(entries_count, error.status_code)
-      @log.warn "Dropping #{entries_count} log message(s)",
-                error: error.to_s, error_code: error.status_code.to_s
+      log.warn "Dropping #{entries_count} log message(s)",
+               error: error.to_s, error_code: error.status_code.to_s
 
     rescue Google::Apis::ClientError => error
       # 4xx client errors. Most client errors indicate a problem with the
@@ -1055,16 +1053,16 @@ module Fluent
       if error_details_map.empty?
         increment_failed_requests_count(error.status_code)
         increment_dropped_entries_count(entries_count, error.status_code)
-        @log.warn "Dropping #{entries_count} log message(s)",
-                  error: error.to_s, error_code: error.status_code.to_s
+        log.warn "Dropping #{entries_count} log message(s)",
+                 error: error.to_s, error_code: error.status_code.to_s
       else
         error_details_map.each do |(error_code, error_message), indexes|
           partial_errors_count = indexes.length
           increment_dropped_entries_count(partial_errors_count, error_code)
           entries_count -= partial_errors_count
-          @log.warn "Dropping #{partial_errors_count} log message(s)",
-                    error: error_message,
-                    error_code: "google.rpc.Code[#{error_code}]"
+          log.warn "Dropping #{partial_errors_count} log message(s)",
+                   error: error_message,
+                   error_code: "google.rpc.Code[#{error_code}]"
         end
         # Consider partially successful requests successful.
         increment_successful_requests_count
@@ -1105,26 +1103,26 @@ module Fluent
     # service (unless the user has explicitly disabled using that).
     def detect_platform
       unless @use_metadata_service
-        @log.info 'use_metadata_service is false; not detecting platform'
+        $log.info 'use_metadata_service is false; not detecting platform'
         return Platform::OTHER
       end
 
       begin
         open('http://' + METADATA_SERVICE_ADDR, proxy: false) do |f|
           if f.meta['metadata-flavor'] == 'Google'
-            @log.info 'Detected GCE platform'
+            $log.info 'Detected GCE platform'
             return Platform::GCE
           end
           if f.meta['server'] == 'EC2ws'
-            @log.info 'Detected EC2 platform'
+            $log.info 'Detected EC2 platform'
             return Platform::EC2
           end
         end
       rescue StandardError => e
-        @log.error 'Failed to access metadata service: ', error: e
+        $log.error 'Failed to access metadata service: ', error: e
       end
 
-      @log.info 'Unable to determine platform'
+      $log.info 'Unable to determine platform'
       Platform::OTHER
     end
 
@@ -1197,7 +1195,7 @@ module Fluent
       @vm_id ||= fetch_gce_metadata('instance/id') if @platform == Platform::GCE
       @vm_id ||= ec2_metadata['instanceId'] if @platform == Platform::EC2
     rescue StandardError => e
-      @log.error 'Failed to obtain vm_id: ', error: e
+      log.error 'Failed to obtain vm_id: ', error: e
     end
 
     # 1. Return the value if it is explicitly set in the config already.
@@ -1205,7 +1203,7 @@ module Fluent
     def set_vm_name
       @vm_name ||= Socket.gethostname
     rescue StandardError => e
-      @log.error 'Failed to obtain vm name: ', error: e
+      log.error 'Failed to obtain vm name: ', error: e
     end
 
     # 1. Return the value if it is explicitly set in the config already.
@@ -1222,7 +1220,7 @@ module Fluent
       @zone ||= 'aws:' + ec2_metadata[aws_location_key] if
         @platform == Platform::EC2 && ec2_metadata.key?(aws_location_key)
     rescue StandardError => e
-      @log.error 'Failed to obtain location: ', error: e
+      log.error 'Failed to obtain location: ', error: e
     end
 
     # Retrieve monitored resource via the legacy way.
@@ -1261,7 +1259,7 @@ module Fluent
               return resource_type if attributes.superset?(expected)
             end
           rescue StandardError => e
-            @log.error 'Failed to detect subservice: ', error: e
+            log.error 'Failed to detect subservice: ', error: e
           end
         end
 
@@ -1330,8 +1328,8 @@ module Fluent
       {}
     rescue StandardError => e
       if [Platform::GCE, Platform::EC2].include?(@platform)
-        @log.error "Failed to set monitored resource labels for #{type}: ",
-                   error: e
+        log.error "Failed to set monitored resource labels for #{type}: ",
+                  error: e
       end
       {}
     end
@@ -1373,14 +1371,14 @@ module Fluent
       groups = {}
       chunk.msgpack_each do |tag, time, record|
         unless record.is_a?(Hash)
-          @log.warn 'Dropping log entries with malformed record: ' \
+          log.warn 'Dropping log entries with malformed record: ' \
                     "'#{record.inspect}' from tag '#{tag}' at '#{time}'. " \
                     'A log record should be in JSON format.'
           next
         end
         sanitized_tag = sanitize_tag(tag)
         if sanitized_tag.nil?
-          @log.warn "Dropping log entries with invalid tag: '#{tag.inspect}'." \
+          log.warn "Dropping log entries with invalid tag: '#{tag.inspect}'." \
                     ' A tag should be a string with utf8 characters.'
           next
         end
@@ -1494,11 +1492,11 @@ module Fluent
     def monitored_resource_from_local_resource_id(local_resource_id)
       return unless local_resource_id
       if @enable_metadata_agent
-        @log.debug 'Calling metadata agent with local_resource_id: ' \
+        log.debug 'Calling metadata agent with local_resource_id: ' \
                   "#{local_resource_id}."
         resource = query_metadata_agent_for_monitored_resource(
           local_resource_id)
-        @log.debug 'Retrieved monitored resource from metadata agent: ' \
+        log.debug 'Retrieved monitored resource from metadata agent: ' \
                   "#{resource.inspect}."
         if resource
           # TODO(qingling128): Fix this temporary renaming from 'gke_container'
@@ -1586,7 +1584,7 @@ module Fluent
       begin
         resource = Google::Api::MonitoredResource.decode_json(response.to_json)
       rescue Google::Protobuf::ParseError, ArgumentError => e
-        @log.error 'Error parsing monitored resource from Metadata Agent. ' \
+        log.error 'Error parsing monitored resource from Metadata Agent. ' \
                    "response: #{response.inspect}", error: e
         return nil
       end
@@ -1604,20 +1602,20 @@ module Fluent
     # to JSON. Return nil in case of failure.
     def query_metadata_agent(path)
       url = "#{@metadata_agent_url}/#{path}"
-      @log.debug("Calling Metadata Agent: #{url}")
+      log.debug("Calling Metadata Agent: #{url}")
       open(url) do |f|
         response = f.read
         parsed_hash = parse_json_or_nil(response)
         if parsed_hash.nil?
-          @log.error 'Response from Metadata Agent is not in valid json ' \
+          log.error 'Response from Metadata Agent is not in valid json ' \
                      "format: '#{response.inspect}'."
           return nil
         end
-        @log.debug "Response from Metadata Agent: #{parsed_hash}"
+        log.debug "Response from Metadata Agent: #{parsed_hash}"
         return parsed_hash
       end
     rescue StandardError => e
-      @log.error "Error calling Metadata Agent at #{url}.", error: e
+      log.error "Error calling Metadata Agent at #{url}.", error: e
       nil
     end
 
@@ -1688,7 +1686,7 @@ module Fluent
         unless @timenanos_warning
           # Warn the user this is deprecated, but only once to avoid spam.
           @timenanos_warning = true
-          @log.warn 'timeNanos is deprecated - please use ' \
+          log.warn 'timeNanos is deprecated - please use ' \
             'timestampSeconds and timestampNanos instead.'
         end
         timestamp = time_or_nil(ts_secs, ts_nanos)
@@ -1789,7 +1787,7 @@ module Fluent
             begin
               casted_value = send(cast_fn, value)
             rescue TypeError
-              @log.error "Failed to #{cast_fn} for #{field_name}." \
+              log.error "Failed to #{cast_fn} for #{field_name}." \
                          "#{original_key} with value #{value.inspect}.", err
               next
             end
@@ -1812,7 +1810,7 @@ module Fluent
 
           entry.send("#{field_name}=", output)
         rescue StandardError => err
-          @log.error "Failed to set log entry field for #{field_name}.", err
+          log.error "Failed to set log entry field for #{field_name}.", err
         end
       end
     end
@@ -2034,7 +2032,7 @@ module Fluent
       when Array
         ret.list_value = list_from_ruby(value)
       else
-        @log.error "Unknown type: #{value.class}"
+        log.error "Unknown type: #{value.class}"
         raise Google::Protobuf::Error, "Unknown type: #{value.class}"
       end
       ret
@@ -2178,10 +2176,10 @@ module Fluent
         begin
           input.encode('utf-8')
         rescue EncodingError
-          @log.error 'Encountered encoding issues potentially due to non ' \
-                     'UTF-8 characters. To allow non-UTF-8 characters and ' \
-                     'replace them with spaces, please set "coerce_to_utf8" ' \
-                     'to true.'
+          log.error 'Encountered encoding issues potentially due to non ' \
+                    'UTF-8 characters. To allow non-UTF-8 characters and ' \
+                    'replace them with spaces, please set "coerce_to_utf8" ' \
+                    'to true.'
           raise
         end
       end
@@ -2286,8 +2284,8 @@ module Fluent
       end
       error_details_map
     rescue JSON::ParserError => e
-      @log.warn 'Failed to extract log entry errors from the error details:' \
-                " #{error.body}.", error: e
+      log.warn 'Failed to extract log entry errors from the error details:' \
+               " #{error.body}.", error: e
       {}
     end
 
@@ -2347,8 +2345,8 @@ module Fluent
       end
       error_details_map
     rescue JSON::ParserError => e
-      @log.warn 'Failed to extract log entry errors from the error details:' \
-                " #{gax_error.details.inspect}.", error: e
+      log.warn 'Failed to extract log entry errors from the error details:' \
+               " #{gax_error.details.inspect}.", error: e
       {}
     end
 
@@ -2378,8 +2376,8 @@ module Fluent
         @k8s_cluster_location ||= fetch_gce_metadata(
           'instance/attributes/cluster-location')
       rescue StandardError => e
-        @log.error 'Failed to retrieve k8s cluster name and location.', \
-                   error: e
+        log.error 'Failed to retrieve k8s cluster name and location.', \
+                  error: e
       end
       case resource_type
       when K8S_CONTAINER_CONSTANTS[:resource_type]
@@ -2408,16 +2406,16 @@ module Fluent
         fallback_resource = COMPUTE_CONSTANTS[:resource_type]
       end
       unless @k8s_cluster_name && @k8s_cluster_location
-        @log.error "Failed to construct #{resource_type} resource locally." \
-                   ' Falling back to writing logs against' \
-                   " #{fallback_resource} resource.", error: e
+        log.error "Failed to construct #{resource_type} resource locally." \
+                  ' Falling back to writing logs against' \
+                  " #{fallback_resource} resource.", error: e
         return
       end
       constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
         type: resource_type,
         labels: labels)
-      @log.debug("Constructed #{resource_type} resource locally: " \
-                 "#{constructed_resource.inspect}")
+      log.debug("Constructed #{resource_type} resource locally: " \
+                "#{constructed_resource.inspect}")
       constructed_resource
     end
 
