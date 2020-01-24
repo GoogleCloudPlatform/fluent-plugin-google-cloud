@@ -1982,7 +1982,7 @@ module Fluent
     end
 
     def format(tag, time, record)
-      Fluent::Engine.msgpack_factory.packer.write([tag, time, record]).to_s
+      Fluent::MessagePackFactory.msgpack_packer.write([tag, time, record]).to_s
     end
 
     # Given a tag, returns the corresponding valid tag if possible, or nil if
