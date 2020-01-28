@@ -402,8 +402,8 @@ module Fluent
 
     # Whether to enable gRPC compression when communicating with the Stackdriver
     # Logging API. Only used if 'use_grpc' is set to true.
-    config_param :grpc_compression_level, :enum,
-                 list: [:none, :low, :medium, :high],
+    config_param :grpc_compression_algorithm, :enum,
+                 list: [:none, :gzip],
                  :default => nil
 
     # Whether valid entries should be written even if some other entries fail
@@ -2127,10 +2127,10 @@ module Fluent
                 'The logging_api_url option specifies an invalid URL:' \
                 " #{@logging_api_url}."
         end
-        if @grpc_compression_level
+        if @grpc_compression_algorithm
           compression_options =
             GRPC::Core::CompressionOptions.new(
-              default_level: @grpc_compression_level)
+              default_algorithm: @grpc_compression_algorithm)
           compression_channel_args = compression_options.to_channel_arg_hash
         else
           compression_channel_args = {}
