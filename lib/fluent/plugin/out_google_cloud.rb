@@ -76,6 +76,17 @@ module GRPC
   extend FluentLogger
 end
 
+# Disable the nurse/strptime gem used by FluentD's TimeParser class in
+# lib/fluent/time.rb. We found this gem to be slower than the builtin Ruby
+# parser in recent versions of Ruby. Fortunately FluentD will fall back to the
+# builtin parser.
+require 'strptime'
+# Dummy Strptime class.
+class Strptime
+  def self.new(_)
+  end
+end
+
 module Fluent
   # fluentd output plugin for the Stackdriver Logging API
   class GoogleCloudOutput < BufferedOutput
@@ -719,7 +730,10 @@ module Fluent
             end
           end
 
-          ts_secs, ts_nanos = compute_timestamp(record, time)
+          ts_secs, ts_nanos, timestamp = compute_timestamp(record, time)
+          ts_secs, ts_nanos = adjust_timestamp_if_invalid(timestamp, Time.now) \
+            if @adjust_invalid_timestamps && timestamp
+
           severity = compute_severity(
             entry_level_resource.type, record, entry_level_common_labels)
 
@@ -1658,7 +1672,6 @@ module Fluent
     end
 
     def compute_timestamp(record, time)
-      current_time = Time.now
       if record.key?('timestamp') &&
          record['timestamp'].is_a?(Hash) &&
          record['timestamp'].key?('seconds') &&
@@ -1710,32 +1723,43 @@ module Fluent
                    ts_nanos
                  end
 
-      if @adjust_invalid_timestamps && timestamp
-        # Adjust timestamps from the future.
-        # There are two cases:
-        # 1. The parsed timestamp is later in the current year:
-        # This can happen when system log lines from previous years are missing
-        # the year, so the date parser assumes the current year.
-        # We treat these lines as coming from last year. This could label
-        # 2-year-old logs incorrectly, but this probably isn't super important.
-        #
-        # 2. The parsed timestamp is past the end of the current year:
-        # Since the year is different from the current year, this isn't the
-        # missing year in system logs. It is unlikely that users explicitly
-        # write logs at a future date. This could result from an unsynchronized
-        # clock on a VM, or some random value being parsed as the timestamp.
-        # We reset the timestamp on those lines to the default value and let the
-        # downstream API handle it.
-        next_year = Time.mktime(current_time.year + 1)
-        one_day_later = current_time.to_datetime.next_day.to_time
-        if timestamp >= next_year # Case 2.
-          ts_secs = 0
-          ts_nanos = 0
-        elsif timestamp >= one_day_later # Case 1.
-          adjusted_timestamp = timestamp.to_datetime.prev_year.to_time
-          ts_secs = adjusted_timestamp.tv_sec
-          # The value of ts_nanos should not change when subtracting a year.
-        end
+      [ts_secs, ts_nanos, timestamp]
+    end
+
+    # Adjust timestamps from the future.
+    # The base case is:
+    # 0. The parsed timestamp is less than one day into the future.
+    # This is allowed by the API, and should be left unchanged.
+    #
+    # Beyond that, there are two cases:
+    # 1. The parsed timestamp is later in the current year:
+    # This can happen when system log lines from previous years are missing
+    # the year, so the date parser assumes the current year.
+    # We treat these lines as coming from last year. This could label
+    # 2-year-old logs incorrectly, but this probably isn't super important.
+    #
+    # 2. The parsed timestamp is past the end of the current year:
+    # Since the year is different from the current year, this isn't the
+    # missing year in system logs. It is unlikely that users explicitly
+    # write logs at a future date. This could result from an unsynchronized
+    # clock on a VM, or some random value being parsed as the timestamp.
+    # We reset the timestamp on those lines to the default value and let the
+    # downstream API handle it.
+    def adjust_timestamp_if_invalid(timestamp, current_time)
+      ts_secs = timestamp.tv_sec
+      ts_nanos = timestamp.tv_nsec
+
+      next_year = Time.mktime(current_time.year + 1)
+      one_day_later = current_time.to_datetime.next_day.to_time
+      if timestamp < one_day_later # Case 0.
+        # Leave the timestamp as-is.
+      elsif timestamp >= next_year # Case 2.
+        ts_secs = 0
+        ts_nanos = 0
+      else # Case 1.
+        adjusted_timestamp = timestamp.to_datetime.prev_year.to_time
+        ts_secs = adjusted_timestamp.tv_sec
+        # The value of ts_nanos should not change when subtracting a year.
       end
 
       [ts_secs, ts_nanos]
