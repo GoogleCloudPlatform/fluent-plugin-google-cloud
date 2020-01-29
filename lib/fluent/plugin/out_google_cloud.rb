@@ -400,6 +400,12 @@ module Fluent
     # Stackdriver Logging API.
     config_param :use_grpc, :bool, :default => false
 
+    # Whether to enable gRPC compression when communicating with the Stackdriver
+    # Logging API. Only used if 'use_grpc' is set to true.
+    config_param :grpc_compression_algorithm, :enum,
+                 list: [:none, :gzip],
+                 :default => nil
+
     # Whether valid entries should be written even if some other entries fail
     # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
     # the Stackdriver Logging API. This is highly recommended.
@@ -2121,6 +2127,14 @@ module Fluent
                 'The logging_api_url option specifies an invalid URL:' \
                 " #{@logging_api_url}."
         end
+        if @grpc_compression_algorithm
+          compression_options =
+            GRPC::Core::CompressionOptions.new(
+              default_algorithm: @grpc_compression_algorithm)
+          compression_channel_args = compression_options.to_channel_arg_hash
+        else
+          compression_channel_args = {}
+        end
         if uri.scheme == 'https'
           ssl_creds = GRPC::Core::ChannelCredentials.new
           authentication = Google::Auth.get_application_default
@@ -2133,10 +2147,11 @@ module Fluent
         user_agent = \
           "#{PLUGIN_NAME}/#{PLUGIN_VERSION} grpc-ruby/#{GRPC::VERSION} " \
           "#{Google::Apis::OS_VERSION}"
+        channel_args = { 'grpc.primary_user_agent' => user_agent }
+                       .merge!(compression_channel_args)
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
           credentials: GRPC::Core::Channel.new(
-            "#{host}#{port}", { 'grpc.primary_user_agent' => user_agent },
-            creds))
+            "#{host}#{port}", channel_args, creds))
       else
         # TODO: Use a non-default ClientOptions object.
         Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
