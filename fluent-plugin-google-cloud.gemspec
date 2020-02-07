@@ -27,10 +27,10 @@ eos
   gem.add_runtime_dependency 'google-protobuf', '3.9.0'
   gem.add_runtime_dependency 'grpc', '1.22.0'
   gem.add_runtime_dependency 'json', '2.2.0'
+  gem.add_runtime_dependency 'opencensus', '0.5.0'
+  gem.add_runtime_dependency 'opencensus-stackdriver', '0.3.1'
 
   gem.add_development_dependency 'mocha', '1.9.0'
-  gem.add_development_dependency 'opencensus', '0.5.0'
-  gem.add_development_dependency 'opencensus-stackdriver', '0.3.0'
   # Keep this the same as in
   # https://github.com/fluent/fluent-plugin-prometheus/blob/master/fluent-plugin-prometheus.gemspec
   gem.add_development_dependency 'prometheus-client', '< 0.10'
