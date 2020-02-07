@@ -477,6 +477,10 @@ module Fluent
     # the server is not created.
     config_param :statusz_port, :integer, :default => 0
 
+    # Override for the Google Cloud Monitoring service hostname, or
+    # `nil` to leave as the default.
+    config_param :gcm_service_address, :string, :default => nil
+
     # rubocop:enable Style/HashSyntax
 
     # TODO: Add a log_name config option rather than just using the tag?
@@ -571,7 +575,8 @@ module Fluent
                     'there will be no metrics'
         end
         @registry = Monitoring::MonitoringRegistryFactory
-                    .create(@monitoring_type, @project_id, @resource)
+                    .create(@monitoring_type, @project_id, @resource,
+                            @gcm_service_address)
         # Export metrics every 60 seconds.
         timer_execute(:export_metrics, 60) { @registry.export }
         # Uptime should be a gauge, but the metric definition is a counter and

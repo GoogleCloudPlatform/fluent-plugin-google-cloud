@@ -49,7 +49,7 @@ module Monitoring
 
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
-    def initialize(_project_id, _monitored_resource)
+    def initialize(_project_id, _monitored_resource, _gcm_service_address)
     end
 
     def counter(_name, _labels, _docstring)
@@ -68,7 +68,7 @@ module Monitoring
       'prometheus'
     end
 
-    def initialize(_project_id, _monitored_resource)
+    def initialize(_project_id, _monitored_resource, _gcm_service_address)
       super
       require 'prometheus/client'
       @registry = Prometheus::Client.registry
@@ -92,7 +92,7 @@ module Monitoring
       'opencensus'
     end
 
-    def initialize(project_id, monitored_resource)
+    def initialize(project_id, monitored_resource, gcm_service_address)
       super
       require 'opencensus'
       require 'opencensus-stackdriver'
@@ -102,7 +102,9 @@ module Monitoring
         project_id: project_id,
         metric_prefix: 'agent.googleapis.com/agent',
         resource_type: monitored_resource.type,
-        resource_labels: monitored_resource.labels)
+        resource_labels: monitored_resource.labels,
+        gcm_service_address: gcm_service_address
+      )
       OpenCensus.configure do |c|
         c.stats.exporter = @exporter
       end
@@ -148,9 +150,9 @@ module Monitoring
       @known_registry_types.key?(name)
     end
 
-    def self.create(name, project_id, monitored_resource)
+    def self.create(name, project_id, monitored_resource, gcm_service_address)
       registry = @known_registry_types[name] || BaseMonitoringRegistry
-      registry.new(project_id, monitored_resource)
+      registry.new(project_id, monitored_resource, gcm_service_address)
     end
   end
 
