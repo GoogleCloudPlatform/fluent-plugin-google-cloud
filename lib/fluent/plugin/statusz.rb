@@ -55,7 +55,6 @@ CONFIG_KEYS = %w(
   monitoring_type
   non_utf8_replacement_string
   operation_key
-  partial_success
   project_id
   require_valid_tags
   source_location_key

@@ -402,11 +402,6 @@ module Fluent
                  list: [:none, :gzip],
                  :default => nil
 
-    # Whether valid entries should be written even if some other entries fail
-    # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
-    # the Stackdriver Logging API. This is highly recommended.
-    config_param :partial_success, :bool, :default => true
-
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
     # non-UTF-8 character would be replaced by the string specified by
     # 'non_utf8_replacement_string'. If set to false, any non-UTF-8 character
@@ -899,7 +894,7 @@ module Fluent
         labels: labels.map do |k, v|
           [k.encode('utf-8'), convert_to_utf8(v)]
         end.to_h,
-        partial_success: @partial_success
+        partial_success: true
       )
       increment_successful_requests_count
       increment_ingested_entries_count(entries_count)
@@ -960,7 +955,7 @@ module Fluent
         @log.warn "Dropping #{entries_count} log message(s)",
                   error: error.to_s, error_code: error.code.to_s
 
-      # If partial_success is enabled, valid entries should have be
+      # As partial_success is enabled, valid entries should have be
       # written even if some other entries fail due to InvalidArgument or
       # PermissionDenied errors. Only invalid entries will be dropped.
       when \
@@ -1025,7 +1020,7 @@ module Fluent
           log_name: log_name,
           resource: resource,
           labels: labels,
-          partial_success: @partial_success
+          partial_success: true
         ),
         options: { api_format_version: '2' }
       )
@@ -2198,7 +2193,7 @@ module Fluent
     end
 
     # Extract a map of error details from a potentially partially successful
-    # REST request. Return an empty map if @partial_success is not enabled.
+    # REST request.
     #
     # The keys in this map are [error_code, error_message] pairs, and the values
     # are a list of stringified indexes of log entries that failed due to this
@@ -2273,7 +2268,6 @@ module Fluent
     #   [3, 'Log name contains illegal character :']: ['1', '3']
     # }
     def construct_error_details_map(error)
-      return {} unless @partial_success
       error_details_map = Hash.new { |h, k| h[k] = [] }
 
       error_details = ensure_array(
@@ -2302,7 +2296,7 @@ module Fluent
     end
 
     # Extract a map of error details from a potentially partially successful
-    # gRPC request. Return an empty map if @partial_success is not enabled.
+    # gRPC request.
     #
     # The keys in this map are [error_code, error_message] pairs, and the values
     # are a list of indexes of log entries that failed due to this error.
@@ -2342,7 +2336,6 @@ module Fluent
     #   [3, 'Log name contains illegal character :']: [1, 3]
     # }
     def construct_error_details_map_grpc(gax_error)
-      return {} unless @partial_success
       error_details_map = Hash.new { |h, k| h[k] = [] }
       error_details = ensure_array(gax_error.status_details)
       raise JSON::ParserError, 'The error details are empty.' if

@@ -368,7 +368,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
         '\bmonitoring_type\b.*\bnot_prometheus\b',
         '\bnon_utf8_replacement_string\b.*\bzzz\b',
         '\boperation_key\b.*\btest_operation_key\b',
-        '\bpartial_success\b.*\bfalse\b',
         '\bproject_id\b.*\btest-project-id-123\b',
         '\brequire_valid_tags\b.*\btrue\b',
         '\bsource_location_key\b.*\btest_source_location_key\b',
