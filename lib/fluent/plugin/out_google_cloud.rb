@@ -405,7 +405,8 @@ module Fluent
     # Whether valid entries should be written even if some other entries fail
     # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
     # the Stackdriver Logging API. This flag is no longer used, and is kept for
-    # backwards compatibility, partial_success is enabled for all requests..
+    # backwards compatibility, partial_success is enabled for all requests.
+    # TODO: Breaking change. Remove this flag in Logging Agent 2.0.0 release.
     config_param :partial_success, :bool, :default => true
 
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
