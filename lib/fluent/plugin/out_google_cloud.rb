@@ -402,6 +402,12 @@ module Fluent
                  list: [:none, :gzip],
                  :default => nil
 
+    # Whether valid entries should be written even if some other entries fail
+    # due to INVALID_ARGUMENT or PERMISSION_DENIED errors when communicating to
+    # the Stackdriver Logging API. This flag is no longer used, and is kept for
+    # backwards compatibility, partial_success is enabled for all requests..
+    config_param :partial_success, :bool, :default => true
+
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
     # non-UTF-8 character would be replaced by the string specified by
     # 'non_utf8_replacement_string'. If set to false, any non-UTF-8 character
@@ -955,7 +961,7 @@ module Fluent
         @log.warn "Dropping #{entries_count} log message(s)",
                   error: error.to_s, error_code: error.code.to_s
 
-      # As partial_success is enabled, valid entries should have be
+      # As partial_success is enabled, valid entries should have been
       # written even if some other entries fail due to InvalidArgument or
       # PermissionDenied errors. Only invalid entries will be dropped.
       when \
