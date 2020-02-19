@@ -447,10 +447,12 @@ module Fluent
 
     # Whether to call metadata agent to retrieve monitored resource. This flag
     # is kept for backwards compatibility, and is no longer used.
+    # TODO: Breaking change. Remove this flag in Logging Agent 2.0.0 release.
     config_param :enable_metadata_agent, :bool, :default => false
 
     # The URL of the Metadata Agent. This flag is kept for backwards
     # compatibility, and is no longer used.
+    # TODO: Breaking change. Remove this flag in Logging Agent 2.0.0 release.
     config_param :metadata_agent_url, :string, :default => nil
 
     # Whether to split log entries with different log tags into different
