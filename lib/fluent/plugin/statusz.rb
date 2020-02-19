@@ -40,7 +40,6 @@ CONFIG_KEYS = %w(
   coerce_to_utf8
   detect_json
   detect_subservice
-  enable_metadata_agent
   enable_monitoring
   http_request_key
   insert_id_key
@@ -51,7 +50,6 @@ CONFIG_KEYS = %w(
   labels_key
   labels
   logging_api_url
-  metadata_agent_url
   monitoring_type
   non_utf8_replacement_string
   operation_key
