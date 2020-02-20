@@ -410,7 +410,7 @@ module Fluent
     config_param :partial_success, :bool,
                  :default => true,
                  :skip_accessor => true,
-                 :deprecated => 'This feature is permanently enabled by default'
+                 :deprecated => 'This feature is permanently enabled'
 
     # Whether to allow non-UTF-8 characters in user logs. If set to true, any
     # non-UTF-8 character would be replaced by the string specified by
