@@ -407,7 +407,8 @@ module Fluent
     # the Stackdriver Logging API. This flag is no longer used, and is kept for
     # backwards compatibility, partial_success is enabled for all requests.
     # TODO: Breaking change. Remove this flag in Logging Agent 2.0.0 release.
-    config_param :partial_success, :bool, :default => true,
+    config_param :partial_success, :bool,
+                 :default => true,
                  :skip_accessor => true,
                  :deprecated => 'This feature is permanently enabled by default'
 
