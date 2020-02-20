@@ -170,10 +170,6 @@ module Fluent
       DEFAULT_SPAN_ID_KEY = 'logging.googleapis.com/spanId'.freeze
       DEFAULT_TRACE_KEY = 'logging.googleapis.com/trace'.freeze
       DEFAULT_TRACE_SAMPLED_KEY = 'logging.googleapis.com/trace_sampled'.freeze
-
-      DEFAULT_METADATA_AGENT_URL =
-        'http://local-metadata-agent.stackdriver.com:8000'.freeze
-      METADATA_AGENT_URL_ENV_VAR = 'STACKDRIVER_METADATA_AGENT_URL'.freeze
     end
 
     # Internal constants.
@@ -450,15 +446,21 @@ module Fluent
     config_param :monitoring_type, :string,
                  :default => Monitoring::PrometheusMonitoringRegistry.name
 
-    # Whether to call metadata agent to retrieve monitored resource.
-    config_param :enable_metadata_agent, :bool, :default => false
+    # Whether to call metadata agent to retrieve monitored resource. This flag
+    # is kept for backwards compatibility, and is no longer used.
+    # TODO: Breaking change. Remove this flag in Logging Agent 2.0.0 release.
+    config_param :enable_metadata_agent, :bool,
+                 :default => false,
+                 :skip_accessor => true,
+                 :deprecated => 'This feature is permanently disabled'
 
-    # The URL of the Metadata Agent.
-    # If this option is set, its value is used to contact the Metadata Agent.
-    # Otherwise, the value of the STACKDRIVER_METADATA_AGENT_URL environment
-    # variable is used. If that is also unset, this defaults to
-    # 'http://local-metadata-agent.stackdriver.com:8000'.
-    config_param :metadata_agent_url, :string, :default => nil
+    # The URL of the Metadata Agent. This flag is kept for backwards
+    # compatibility, and is no longer used.
+    # TODO: Breaking change. Remove this flag in Logging Agent 2.0.0 release.
+    config_param :metadata_agent_url, :string,
+                 :default => nil,
+                 :skip_accessor => true,
+                 :deprecated => 'This feature is permanently disabled'
 
     # Whether to split log entries with different log tags into different
     # requests when talking to Stackdriver Logging API.
@@ -519,20 +521,6 @@ module Fluent
                   ' enabled. Customized logging_api_url for the non-gRPC path' \
                   ' is not supported. The logging_api_url option will be' \
                   ' ignored.'
-      end
-
-      # 1. If @metadata_agent_url is customized (aka not nil), use that.
-      # 2. Otherwise check the presence of the environment variable
-      #    STACKDRIVER_METADATA_AGENT_URL and use that if set.
-      # 3. Fall back to the default if neither is set.
-      if @enable_metadata_agent
-        # Convert to string to capture empty string.
-        @metadata_agent_url ||=
-          if ENV[METADATA_AGENT_URL_ENV_VAR].to_s.empty?
-            DEFAULT_METADATA_AGENT_URL
-          else
-            ENV[METADATA_AGENT_URL_ENV_VAR]
-          end
       end
 
       # Alert on old authentication configuration.
@@ -1497,32 +1485,6 @@ module Fluent
       [resource, common_labels]
     end
 
-    # Take a locally unique resource id and convert it to the globally unique
-    # monitored resource.
-    def monitored_resource_from_local_resource_id(local_resource_id)
-      return unless local_resource_id
-      if @enable_metadata_agent
-        @log.debug 'Calling metadata agent with local_resource_id: ' \
-                  "#{local_resource_id}."
-        resource = query_metadata_agent_for_monitored_resource(
-          local_resource_id)
-        @log.debug 'Retrieved monitored resource from metadata agent: ' \
-                  "#{resource.inspect}."
-        if resource
-          # TODO(qingling128): Fix this temporary renaming from 'gke_container'
-          # to 'container'.
-          resource.type = 'container' if resource.type == 'gke_container'
-          return resource
-        end
-        @log.debug('Failed to retrieve monitored resource from Metadata' \
-                   " Agent with local_resource_id #{local_resource_id}.")
-      end
-      # Fall back to constructing monitored resource locally.
-      # TODO(qingling128): This entire else clause is temporary until we
-      # implement buffering and caching.
-      construct_k8s_resource_locally(local_resource_id)
-    end
-
     # Extract entry level monitored resource and common labels that should be
     # applied to individual entries.
     def determine_entry_level_monitored_resource_and_labels(
@@ -1584,49 +1546,6 @@ module Fluent
       end
 
       [resource, common_labels]
-    end
-
-    # Call Metadata Agent to get monitored resource information and parse
-    # response to Google::Api::MonitoredResource.
-    def query_metadata_agent_for_monitored_resource(local_resource_id)
-      response = query_metadata_agent("monitoredResource/#{local_resource_id}")
-      return nil if response.nil?
-      begin
-        resource = Google::Api::MonitoredResource.decode_json(response.to_json)
-      rescue Google::Protobuf::ParseError, ArgumentError => e
-        @log.error 'Error parsing monitored resource from Metadata Agent. ' \
-                   "response: #{response.inspect}", error: e
-        return nil
-      end
-
-      # TODO(qingling128): Use Google::Api::MonitoredResource directly after we
-      # upgrade gRPC version to include the fix for the protobuf map
-      # corruption issue.
-      Google::Apis::LoggingV2::MonitoredResource.new(
-        type: resource.type,
-        labels: resource.labels.to_h
-      )
-    end
-
-    # Issue a request to the Metadata Agent's local API and parse the response
-    # to JSON. Return nil in case of failure.
-    def query_metadata_agent(path)
-      url = "#{@metadata_agent_url}/#{path}"
-      @log.debug("Calling Metadata Agent: #{url}")
-      open(url) do |f|
-        response = f.read
-        parsed_hash = parse_json_or_nil(response)
-        if parsed_hash.nil?
-          @log.error 'Response from Metadata Agent is not in valid json ' \
-                     "format: '#{response.inspect}'."
-          return nil
-        end
-        @log.debug "Response from Metadata Agent: #{parsed_hash}"
-        return parsed_hash
-      end
-    rescue StandardError => e
-      @log.error "Error calling Metadata Agent at #{url}.", error: e
-      nil
     end
 
     # TODO: This functionality should eventually be available in another
@@ -2365,8 +2284,9 @@ module Fluent
       {}
     end
 
-    # Construct monitored resource locally for k8s resources.
-    def construct_k8s_resource_locally(local_resource_id)
+    # Take a locally unique resource id and convert it to the globally unique
+    # monitored resource.
+    def monitored_resource_from_local_resource_id(local_resource_id)
       return unless
         /^
           (?<resource_type>k8s_container)

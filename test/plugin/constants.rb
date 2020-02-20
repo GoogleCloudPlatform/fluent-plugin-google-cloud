@@ -52,8 +52,6 @@ module Constants
   # Generic attributes.
   HOSTNAME = Socket.gethostname
   CUSTOM_LOGGING_API_URL = 'http://localhost:52000'.freeze
-  CUSTOM_METADATA_AGENT_URL = 'http://localhost:12345'.freeze
-  METADATA_AGENT_URL_FROM_ENV = 'http://localhost:54321'.freeze
 
   # TODO(qingling128) Separate constants into different submodules.
   # Attributes used for the GCE metadata service.
@@ -226,10 +224,6 @@ module Constants
     logging_api_url #{CUSTOM_LOGGING_API_URL}
   ).freeze
 
-  CUSTOM_METADATA_AGENT_URL_CONFIG = %(
-    metadata_agent_url #{CUSTOM_METADATA_AGENT_URL}
-  ).freeze
-
   DETECT_JSON_CONFIG = %(
     detect_json true
   ).freeze
@@ -268,14 +262,6 @@ module Constants
     monitoring_type opencensus
   ).freeze
 
-  ENABLE_METADATA_AGENT_CONFIG = %(
-    enable_metadata_agent true
-  ).freeze
-
-  DISABLE_METADATA_AGENT_CONFIG = %(
-    enable_metadata_agent false
-  ).freeze
-
   ENABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
     autoformat_stackdriver_trace true
   ).freeze
@@ -306,14 +292,12 @@ module Constants
   CONFIG_MISSING_METADATA_ALL = %(
   ).freeze
 
-  CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG = %(
-    enable_metadata_agent true
+  CUSTOM_K8S_CONFIG = %(
     k8s_cluster_name #{CUSTOM_K8S_CLUSTER_NAME}
     k8s_cluster_location #{CUSTOM_K8S_LOCATION}
   ).freeze
 
-  EMPTY_K8S_ENABLE_METADATA_AGENT_CONFIG = %(
-    enable_metadata_agent true
+  EMPTY_K8S_CONFIG = %(
     k8s_cluster_name ""
     k8s_cluster_location ""
   ).freeze
@@ -458,7 +442,6 @@ module Constants
     coerce_to_utf8                false
     detect_json                   true
     detect_subservice             false
-    enable_metadata_agent         true
     enable_monitoring             true
     http_request_key              test_http_request_key
     insert_id_key                 test_insert_id_key
@@ -469,7 +452,6 @@ module Constants
     labels_key                    test_labels_key
     labels                        { "labels_key": "labels_value" }
     logging_api_url               http://localhost:52000
-    metadata_agent_url            http://localhost:12345
     monitoring_type               not_prometheus
     non_utf8_replacement_string   zzz
     operation_key                 test_operation_key

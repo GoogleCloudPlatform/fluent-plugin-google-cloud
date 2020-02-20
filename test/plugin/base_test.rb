@@ -127,30 +127,6 @@ module BaseTest
     end
   end
 
-  def test_metadata_agent_url_customization
-    [
-      # If @metadata_agent_url is set, use that even if the environment
-      # variable is set.
-      [CUSTOM_METADATA_AGENT_URL_CONFIG, true, CUSTOM_METADATA_AGENT_URL],
-      # If @metadata_agent_url is set and the environment variable is
-      # not set, use @metadata_agent_url.
-      [CUSTOM_METADATA_AGENT_URL_CONFIG, false, CUSTOM_METADATA_AGENT_URL],
-      # If @metadata_agent_url is not set and the environment variable is set,
-      # use the env.
-      [APPLICATION_DEFAULT_CONFIG, true, METADATA_AGENT_URL_FROM_ENV],
-      # If @metadata_agent_url is not set and the environment variable is
-      # not set, fall back to the default.
-      [APPLICATION_DEFAULT_CONFIG, false, DEFAULT_METADATA_AGENT_URL]
-    ].each do |(config, url_from_env, expected_url)|
-      ENV[METADATA_AGENT_URL_ENV_VAR] = METADATA_AGENT_URL_FROM_ENV if
-        url_from_env
-      setup_gce_metadata_stubs
-      d = create_driver(ENABLE_METADATA_AGENT_CONFIG + config)
-      assert_equal expected_url, d.instance.metadata_agent_url
-      ENV.delete(METADATA_AGENT_URL_ENV_VAR)
-    end
-  end
-
   def test_configure_ignores_unknown_monitoring_type
     # Verify that driver creation succeeds when monitoring type is not
     # "prometheus" (in which case, we simply don't record metrics),
@@ -1746,106 +1722,48 @@ module BaseTest
     end
   end
 
-  # Metadata Agent related tests.
-
-  # Test enable_metadata_agent not set or set to false.
-  def test_configure_enable_metadata_agent_default_and_false
-    setup_gce_metadata_stubs
-    [create_driver, create_driver(DISABLE_METADATA_AGENT_CONFIG)].each do |d|
-      assert_false d.instance.instance_variable_get(:@enable_metadata_agent)
-    end
-  end
-
-  # Test enable_metadata_agent set to true.
-  def test_configure_enable_metadata_agent_true
-    new_stub_context do
-      setup_gce_metadata_stubs
-      setup_metadata_agent_stubs
-      d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
-      assert_true d.instance.instance_variable_get(:@enable_metadata_agent)
-    end
-  end
-
-  # Test k8s_container monitored resource including the fallback when Metadata
-  # Agent restarts.
-  def test_k8s_container_monitored_resource_fallback
+  # Test k8s_container monitored resource.
+  def test_k8s_container_monitored_resource
     [
-      # When enable_metadata_agent is false.
       {
         config: APPLICATION_DEFAULT_CONFIG,
-        setup_metadata_agent_stub: false,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
-        setup_metadata_agent_stub: true,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
-        setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
-        setup_metadata_agent_stub: false,
-        setup_k8s_stub: true,
-        log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
-      },
-      # When enable_metadata_agent is true.
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: false,
-        setup_k8s_stub: false,
-        log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
-      },
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: false,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
       },
       {
-        config: CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: false,
+        config: CUSTOM_K8S_CONFIG,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
         expected_params: K8S_CONTAINER_PARAMS_CUSTOM
       },
       {
-        config: EMPTY_K8S_ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
+        config: EMPTY_K8S_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS
-      },
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: false,
-        log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS
-      },
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: true,
-        log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS
+        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
       }
     ].each do |test_params|
       new_stub_context do
         setup_gce_metadata_stubs
-        setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
         setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config], CONTAINER_TAG)
@@ -1867,16 +1785,14 @@ module BaseTest
     [
       # When local_resource_id is not present or does not match k8s regexes.
       {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
+        config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
         expected_params: CONTAINER_FROM_TAG_PARAMS
       },
       {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
+        config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0),
@@ -1886,7 +1802,6 @@ module BaseTest
     ].each do |test_params|
       new_stub_context do
         setup_gce_metadata_stubs
-        setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
         setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config], CONTAINER_TAG)
@@ -1900,49 +1815,30 @@ module BaseTest
     end
   end
 
-  # Test k8s_pod monitored resource including the fallback when Metadata Agent
-  # restarts.
-  def test_k8s_pod_monitored_resource_fallback
+  # Test k8s_pod monitored resource.
+  def test_k8s_pod_monitored_resource
     [
       {
         config: APPLICATION_DEFAULT_CONFIG,
-        setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_pod_log_entry(log_entry(0)),
         expected_params: K8S_POD_PARAMS_FROM_LOCAL
       },
       {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: false,
-        setup_k8s_stub: true,
-        log_entry: k8s_pod_log_entry(log_entry(0)),
-        expected_params: K8S_POD_PARAMS_FROM_LOCAL
-      },
-      {
-        config: CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: false,
+        config: CUSTOM_K8S_CONFIG,
         setup_k8s_stub: false,
         log_entry: k8s_pod_log_entry(log_entry(0)),
         expected_params: K8S_POD_PARAMS_CUSTOM
       },
       {
-        config: EMPTY_K8S_ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
+        config: EMPTY_K8S_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_pod_log_entry(log_entry(0)),
-        expected_params: K8S_POD_PARAMS
-      },
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: true,
-        log_entry: k8s_pod_log_entry(log_entry(0)),
-        expected_params: K8S_POD_PARAMS
+        expected_params: K8S_POD_PARAMS_FROM_LOCAL
       }
     ].each do |test_params|
       new_stub_context do
         setup_gce_metadata_stubs
-        setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
         setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config])
@@ -1960,49 +1856,30 @@ module BaseTest
     end
   end
 
-  # Test k8s_node monitored resource including the fallback when Metadata Agent
-  # restarts.
-  def test_k8s_node_monitored_resource_fallback
+  # Test k8s_node monitored resource.
+  def test_k8s_node_monitored_resource
     [
       {
         config: APPLICATION_DEFAULT_CONFIG,
-        setup_metadata_agent_stub: true,
         setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: K8S_NODE_PARAMS_FROM_LOCAL
       },
       {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: false,
-        setup_k8s_stub: true,
-        log_entry: k8s_node_log_entry(log_entry(0)),
-        expected_params: K8S_NODE_PARAMS_FROM_LOCAL
-      },
-      {
-        config: CUSTOM_K8S_ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: false,
+        config: CUSTOM_K8S_CONFIG,
         setup_k8s_stub: false,
         log_entry: k8s_node_log_entry(log_entry(0)),
         expected_params: K8S_NODE_PARAMS_CUSTOM
       },
       {
-        config: EMPTY_K8S_ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
+        config: EMPTY_K8S_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_node_log_entry(log_entry(0)),
-        expected_params: K8S_NODE_PARAMS
-      },
-      {
-        config: ENABLE_METADATA_AGENT_CONFIG,
-        setup_metadata_agent_stub: true,
-        setup_k8s_stub: true,
-        log_entry: k8s_node_log_entry(log_entry(0)),
-        expected_params: K8S_NODE_PARAMS
+        expected_params: K8S_NODE_PARAMS_FROM_LOCAL
       }
     ].each do |test_params|
       new_stub_context do
         setup_gce_metadata_stubs
-        setup_metadata_agent_stubs(test_params[:setup_metadata_agent_stub])
         setup_k8s_metadata_stubs(test_params[:setup_k8s_stub])
         setup_logging_stubs do
           d = create_driver(test_params[:config])
@@ -2016,30 +1893,6 @@ module BaseTest
           assert_equal 'test log entry 0', fields['log'], entry
           assert_equal K8S_STREAM, fields['stream'], entry
         end
-      end
-    end
-  end
-
-  # Test GKE container logs. These logs have the label
-  # "logging.googleapis.com/local_resource_id" set in the format of
-  # "gke_container.<namespace_id>.<pod_name>.<container_name>".
-  def test_gke_container_logs
-    [1, 2, 3, 5, 11, 50].each do |n|
-      new_stub_context do
-        setup_gce_metadata_stubs
-        setup_k8s_metadata_stubs
-        setup_metadata_agent_stubs
-        setup_logging_stubs do
-          d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
-          n.times do |i|
-            d.emit(gke_container_log_entry(log_entry(i)))
-          end
-          d.run
-        end
-        verify_log_entries(n, CONTAINER_FROM_APPLICATION_PARAMS)
-        assert_requested_metadata_agent_stub(
-          "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
-          ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}")
       end
     end
   end
@@ -2180,38 +2033,12 @@ module BaseTest
     OpenCensus::Stats.ensure_recorder.clear_stats
   end
 
-  # Metadata Agent.
-
-  def metadata_request_url(local_resource_id)
-    "#{DEFAULT_METADATA_AGENT_URL}/monitoredResource/#{local_resource_id}"
-  end
-
   # Provide a stub context that initializes @logs_sent, executes the block and
   # resets WebMock at the end.
   def new_stub_context
     @logs_sent = []
     yield
     WebMock.reset!
-  end
-
-  def setup_metadata_agent_stubs(should_respond = true)
-    if should_respond
-      MONITORED_RESOURCE_STUBS.each do |local_resource_id, resource|
-        stub_request(:get, metadata_request_url(local_resource_id))
-          .to_return(status: 200, body: resource)
-      end
-      stub_request(:get, metadata_request_url(RANDOM_LOCAL_RESOURCE_ID))
-        .to_return(status: 404, body: '')
-    else
-      # Simulate an environment with no metadata agent endpoint present.
-      stub_request(:get,
-                   %r{#{DEFAULT_METADATA_AGENT_URL}\/monitoredResource/.*})
-        .to_raise(Errno::EHOSTUNREACH)
-    end
-  end
-
-  def assert_requested_metadata_agent_stub(local_resource_id)
-    assert_requested :get, metadata_request_url(local_resource_id)
   end
 
   # GKE Container.
