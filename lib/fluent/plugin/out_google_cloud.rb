@@ -121,10 +121,6 @@ module Fluent
       K8S_NODE_CONSTANTS = {
         resource_type: 'k8s_node'
       }.freeze
-      DOCKER_CONSTANTS = {
-        service: 'docker.googleapis.com',
-        resource_type: 'docker_container'
-      }.freeze
       DATAFLOW_CONSTANTS = {
         service: 'dataflow.googleapis.com',
         resource_type: 'dataflow_step',
@@ -346,7 +342,7 @@ module Fluent
     # running on GCE.
     #
     # The initial motivation for this is to separate out Kubernetes node
-    # component (Docker, Kubelet, etc.) logs from container logs.
+    # component (Kubelet, etc.) logs from container logs.
     config_param :detect_subservice, :bool, :default => true
     # The subservice_name overrides the subservice detection, if provided.
     config_param :subservice_name, :string, :default => nil
@@ -1431,8 +1427,8 @@ module Fluent
       # Metadata Agent with this key.
       #
       # Examples:
-      # "container.<container_id>" // Docker container.
       # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
+      # "k8s_container.<namespace_name>.<pod_name>.<container_name>" // GKE container.
       if local_resource_id
         converted_resource = monitored_resource_from_local_resource_id(
           local_resource_id)
@@ -1465,12 +1461,6 @@ module Fluent
               GKE_CONSTANTS[:extra_common_labels]
                 .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
         end
-
-      # Docker container.
-      # TODO(qingling128): Remove this logic once the resource is retrieved at a
-      # proper time (b/65175256).
-      when DOCKER_CONSTANTS[:resource_type]
-        common_labels.delete("#{COMPUTE_CONSTANTS[:service]}/resource_name")
 
       # TODO(qingling128): Temporary fallback for metadata agent restarts.
       # K8s resources.
@@ -2079,8 +2069,7 @@ module Fluent
       # 2. The only remaining key is 'message'
       if is_json
         json_payload = record
-      elsif [GKE_CONSTANTS[:resource_type],
-             DOCKER_CONSTANTS[:resource_type]].include?(resource_type) &&
+      elsif GKE_CONSTANTS[:resource_type] == resource_type &&
             record.key?('log')
         text_payload = record['log']
       elsif record.size == 1 && record.key?('message')

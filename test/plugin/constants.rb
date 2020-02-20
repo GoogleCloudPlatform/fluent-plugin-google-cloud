@@ -133,18 +133,6 @@ module Constants
     "projects/#{PROJECT_ID}/" \
     "traces/#{INVALID_NON_HEX_STACKDRIVER_TRACE_ID}".freeze
 
-  # Docker Container labels.
-  DOCKER_CONTAINER_ID =
-    '0d0f03ff8d3c42688692536d1af77a28cd135c0a5c531f25a31'.freeze
-  DOCKER_CONTAINER_NAME = 'happy_hippo'.freeze
-  DOCKER_CONTAINER_STREAM_STDOUT = 'stdout'.freeze
-  DOCKER_CONTAINER_STREAM_STDERR = 'stderr'.freeze
-  # Timestamp for 1234567890 seconds and 987654321 nanoseconds since epoch.
-  DOCKER_CONTAINER_TIMESTAMP = '2009-02-13T23:31:30.987654321Z'.freeze
-  DOCKER_CONTAINER_SECONDS_EPOCH = 1_234_567_890
-  DOCKER_CONTAINER_NANOS = 987_654_321
-  DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX = 'container'.freeze
-
   # New K8s resource constants.
   K8S_LOCATION = 'us-central1-b'.freeze
   K8S_LOCATION2 = 'us-central1-c'.freeze
@@ -298,12 +286,6 @@ module Constants
 
   DISABLE_AUTOFORMAT_STACKDRIVER_TRACE_CONFIG = %(
     autoformat_stackdriver_trace false
-  ).freeze
-
-  DOCKER_CONTAINER_CONFIG = %(
-    enable_metadata_agent true
-    label_map { "source": "#{DOCKER_CONSTANTS[:service]}/stream" }
-    detect_json true
   ).freeze
 
   CUSTOM_METADATA_CONFIG = %(
@@ -724,29 +706,6 @@ module Constants
     )
   ).freeze
 
-  # Docker Container.
-  DOCKER_CONTAINER_PARAMS = {
-    resource: {
-      type: DOCKER_CONSTANTS[:resource_type],
-      labels: {
-        'container_id' => DOCKER_CONTAINER_ID,
-        'location' => ZONE
-      }
-    },
-    log_name: 'test',
-    project_id: PROJECT_ID,
-    labels: {
-      "#{DOCKER_CONSTANTS[:service]}/stream" => DOCKER_CONTAINER_STREAM_STDOUT
-    }
-  }.freeze
-  DOCKER_CONTAINER_PARAMS_STREAM_STDERR = DOCKER_CONTAINER_PARAMS.merge(
-    labels: DOCKER_CONTAINER_PARAMS[:labels].merge(
-      "#{DOCKER_CONSTANTS[:service]}/stream" => DOCKER_CONTAINER_STREAM_STDERR
-    )
-  ).freeze
-  DOCKER_CONTAINER_PARAMS_NO_STREAM =
-    DOCKER_CONTAINER_PARAMS.merge(labels: {}).freeze
-
   # Cloud Dataflow.
   DATAFLOW_PARAMS = {
     resource: {
@@ -930,24 +889,6 @@ module Constants
   # Stub value for Monitored resources from Metadata Agent.
   # Map from the local_resource_id to the retrieved monitored resource.
   MONITORED_RESOURCE_STUBS = {
-    # Docker container stderr / stdout logs.
-    "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_ID}" =>
-      {
-        'type' => DOCKER_CONSTANTS[:resource_type],
-        'labels' => {
-          'location' => ZONE,
-          'container_id' => DOCKER_CONTAINER_ID
-        }
-      }.to_json,
-    # Docker container application logs.
-    "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_NAME}" =>
-      {
-        'type' => DOCKER_CONSTANTS[:resource_type],
-        'labels' => {
-          'location' => ZONE,
-          'container_id' => DOCKER_CONTAINER_ID
-        }
-      }.to_json,
     # GKE container logs.
     "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
     ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}" =>

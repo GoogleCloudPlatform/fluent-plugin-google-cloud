@@ -1778,76 +1778,6 @@ module BaseTest
     end
   end
 
-  # Docker Container.
-
-  # Test textPayload logs from Docker container stdout / stderr.
-  def test_docker_container_stdout_stderr_logs_text_payload
-    [1, 2, 3, 5, 11, 50].each do |n|
-      new_stub_context do
-        setup_gce_metadata_stubs
-        setup_metadata_agent_stubs
-        setup_logging_stubs do
-          d = create_driver(DOCKER_CONTAINER_CONFIG)
-          n.times do |i|
-            d.emit(docker_container_stdout_stderr_log_entry(log_entry(i)))
-          end
-          d.run
-        end
-        verify_log_entries(n, DOCKER_CONTAINER_PARAMS)
-        assert_requested_metadata_agent_stub("container.#{DOCKER_CONTAINER_ID}")
-      end
-    end
-  end
-
-  # Test jsonPayload logs from Docker container stdout / stderr.
-  def test_docker_container_stdout_stderr_logs_json_payload
-    [1, 2, 3, 5, 11, 50].each do |n|
-      new_stub_context do
-        setup_gce_metadata_stubs
-        setup_metadata_agent_stubs
-        setup_logging_stubs do
-          d = create_driver(DOCKER_CONTAINER_CONFIG)
-          n.times do
-            d.emit(docker_container_stdout_stderr_log_entry(
-                     '{"msg": "test log entry ' \
-                     "#{n}" \
-                     '", "tag2": "test", "data": ' \
-                     '5000, "severity": "WARNING"}'))
-          end
-          d.run
-        end
-        verify_log_entries(n, DOCKER_CONTAINER_PARAMS, 'jsonPayload') do |entry|
-          fields = entry['jsonPayload']
-          assert_equal 3, fields.size, entry
-          assert_equal "test log entry #{n}", fields['msg'], entry
-          assert_equal 'test', fields['tag2'], entry
-          assert_equal 5000, fields['data'], entry
-        end
-        assert_requested_metadata_agent_stub("container.#{DOCKER_CONTAINER_ID}")
-      end
-    end
-  end
-
-  # Test logs from applications running in Docker containers. These logs have
-  # the label "logging.googleapis.com/local_resource_id" set in the format of
-  # "container.<container_name>".
-  def test_docker_container_application_logs
-    new_stub_context do
-      setup_gce_metadata_stubs
-      setup_metadata_agent_stubs
-      setup_logging_stubs do
-        # Metadata Agent is not enabled. Will call Docker Remote API for
-        # container info.
-        d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
-        d.emit(docker_container_application_log_entry(log_entry(0)))
-        d.run
-      end
-      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM)
-      assert_requested_metadata_agent_stub(
-        "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_NAME}")
-    end
-  end
-
   # Test k8s_container monitored resource including the fallback when Metadata
   # Agent restarts.
   def test_k8s_container_monitored_resource_fallback
@@ -2102,59 +2032,6 @@ module BaseTest
     end
   end
 
-  # Test that the 'time' field from the json record is extracted and set to
-  # entry.timestamp for Docker container logs.
-  def test_time_field_extraction_for_docker_container_logs
-    new_stub_context do
-      setup_gce_metadata_stubs
-      setup_metadata_agent_stubs
-      setup_logging_stubs do
-        d = create_driver(ENABLE_METADATA_AGENT_CONFIG)
-        d.emit(docker_container_application_log_entry(log_entry(0)))
-        d.run
-      end
-      verify_log_entries(1, DOCKER_CONTAINER_PARAMS_NO_STREAM) do |entry, i|
-        verify_default_log_entry_text(entry['textPayload'], i, entry)
-        # Timestamp in 'time' field from log entry should be set properly.
-        actual_timestamp = timestamp_parse(entry['timestamp'])
-        assert_equal DOCKER_CONTAINER_SECONDS_EPOCH,
-                     actual_timestamp['seconds'], entry
-        assert_equal DOCKER_CONTAINER_NANOS, actual_timestamp['nanos'], entry
-      end
-      assert_requested_metadata_agent_stub(
-        "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{DOCKER_CONTAINER_NAME}")
-    end
-  end
-
-  # Test that the 'source' field is properly extracted from the record json and
-  # set as a common label 'stream'.
-  def test_source_for_docker_container_logs
-    {
-      docker_container_stdout_stderr_log_entry(
-        log_entry(0), DOCKER_CONTAINER_STREAM_STDOUT) =>
-        DOCKER_CONTAINER_PARAMS,
-      docker_container_stdout_stderr_log_entry(
-        log_entry(0), DOCKER_CONTAINER_STREAM_STDERR) =>
-        DOCKER_CONTAINER_PARAMS_STREAM_STDERR,
-      docker_container_application_log_entry(log_entry(0)) =>
-        DOCKER_CONTAINER_PARAMS_NO_STREAM,
-      docker_container_application_log_entry(log_entry(0)) \
-        .merge('severity' => 'warning') =>
-        DOCKER_CONTAINER_PARAMS_NO_STREAM
-    }.each do |log_entry, expected_params|
-      new_stub_context do
-        setup_gce_metadata_stubs
-        setup_metadata_agent_stubs
-        setup_logging_stubs do
-          d = create_driver(DOCKER_CONTAINER_CONFIG)
-          d.emit(log_entry)
-          d.run
-        end
-        verify_log_entries(1, expected_params)
-      end
-    end
-  end
-
   # Test GKE container logs. These logs have the label
   # "logging.googleapis.com/local_resource_id" set in the format of
   # "gke_container.<namespace_id>.<pod_name>.<container_name>".
@@ -2388,32 +2265,6 @@ module BaseTest
       LOCAL_RESOURCE_ID_KEY =>
         "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
         ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}"
-    }
-  end
-
-  # Docker Container.
-
-  def docker_container_stdout_stderr_log_entry(
-    log, stream = DOCKER_CONTAINER_STREAM_STDOUT)
-    severity = if stream == DOCKER_CONTAINER_STREAM_STDOUT
-                 'INFO'
-               else
-                 'ERROR'
-               end
-    {
-      log: log,
-      source: stream,
-      severity: severity,
-      LOCAL_RESOURCE_ID_KEY => "container.#{DOCKER_CONTAINER_ID}"
-    }
-  end
-
-  def docker_container_application_log_entry(log)
-    {
-      log: log,
-      time: DOCKER_CONTAINER_TIMESTAMP,
-      LOCAL_RESOURCE_ID_KEY => "#{DOCKER_CONTAINER_LOCAL_RESOURCE_ID_PREFIX}." \
-                               "#{DOCKER_CONTAINER_NAME}"
     }
   end
 
