@@ -234,10 +234,6 @@ module Constants
     detect_json true
   ).freeze
 
-  PARTIAL_SUCCESS_DISABLED_CONFIG = %(
-    partial_success false
-  ).freeze
-
   # rubocop:disable Metrics/LineLength
   PRIVATE_KEY_CONFIG = %(
      auth_method private_key
@@ -477,7 +473,6 @@ module Constants
     monitoring_type               not_prometheus
     non_utf8_replacement_string   zzz
     operation_key                 test_operation_key
-    partial_success               false
     project_id                    test-project-id-123
     require_valid_tags            true
     source_location_key           test_source_location_key

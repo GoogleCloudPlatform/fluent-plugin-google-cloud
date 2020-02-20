@@ -127,18 +127,6 @@ module BaseTest
     end
   end
 
-  def test_configure_partial_success
-    setup_gce_metadata_stubs
-    {
-      APPLICATION_DEFAULT_CONFIG => true,
-      PARTIAL_SUCCESS_DISABLED_CONFIG => false
-    }.each do |(config, partial_success)|
-      d = create_driver(config)
-      assert_equal partial_success,
-                   d.instance.instance_variable_get(:@partial_success)
-    end
-  end
-
   def test_metadata_agent_url_customization
     [
       # If @metadata_agent_url is set, use that even if the environment
