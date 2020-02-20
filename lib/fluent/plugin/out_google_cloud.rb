@@ -1427,8 +1427,10 @@ module Fluent
       # Metadata Agent with this key.
       #
       # Examples:
-      # "k8s_pod.<namespace_name>.<pod_name>" // GKE pod.
-      # "k8s_container.<namespace_name>.<pod_name>.<container_name>" // GKE container.
+      # // GKE Pod.
+      # "k8s_pod.<namespace_name>.<pod_name>"
+      # // GKE container.
+      # "k8s_container.<namespace_name>.<pod_name>.<container_name>"
       if local_resource_id
         converted_resource = monitored_resource_from_local_resource_id(
           local_resource_id)
@@ -2069,8 +2071,7 @@ module Fluent
       # 2. The only remaining key is 'message'
       if is_json
         json_payload = record
-      elsif GKE_CONSTANTS[:resource_type] == resource_type &&
-            record.key?('log')
+      elsif GKE_CONSTANTS[:resource_type] == resource_type && record.key?('log')
         text_payload = record['log']
       elsif record.size == 1 && record.key?('message')
         text_payload = record['message']
