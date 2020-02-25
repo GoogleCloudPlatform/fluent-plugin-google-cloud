@@ -28,7 +28,7 @@ eos
   gem.add_runtime_dependency 'grpc', '1.22.0'
   gem.add_runtime_dependency 'json', '2.2.0'
   gem.add_runtime_dependency 'opencensus', '0.5.0'
-  gem.add_runtime_dependency 'opencensus-stackdriver', '0.3.1'
+  gem.add_runtime_dependency 'opencensus-stackdriver', '0.3.2'
 
   gem.add_development_dependency 'mocha', '1.9.0'
   # Keep this the same as in
