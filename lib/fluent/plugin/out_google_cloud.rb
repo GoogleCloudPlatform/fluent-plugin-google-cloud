@@ -1575,7 +1575,7 @@ module Fluent
       # Recognizes IAM format (account@project-name.iam.gserviceaccount.com)
       # as well as the legacy format with a project number at the front of the
       # string, terminated by a dash (-) which is not part of the ID, i.e.:
-      # <PROJECTD_ID>-<OTHER_PARTS>.apps.googleusercontent.com
+      # <PROJECT_ID>-<OTHER_PARTS>.apps.googleusercontent.com
       def self.extract_project_id(str)
         [/^.*@(?<project_id>.+)\.iam\.gserviceaccount\.com/,
          /^(?<project_id>\d+)-/].each do |exp|
