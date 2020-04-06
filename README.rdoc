@@ -1,4 +1,4 @@
-= Google Cloud Logging plugin for {fluentd}[http://github.com/fluent/fluentd]
+some new stringLogging plugin for {fluentd}[http://github.com/fluent/fluentd]
 
 fluent-plugin-google-cloud gem includes two plugins:
 1. A {filter plugin for fluentd}[https://docs.fluentd.org/filter] that embeds insertIds into log entries to guarantee order and uniqueness.
