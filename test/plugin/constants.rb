@@ -471,6 +471,12 @@ module Constants
     zone                          asia-east2
   ).freeze
 
+  # For analyze_config.
+  CONFIG_ANALYZE_CONFIG = %(
+    google_fluentd_config_path          test/plugin/data/google-fluentd-custom.conf
+    google_fluentd_baseline_config_path test/plugin/data/google-fluentd-baseline.conf
+  ).freeze
+
   # Service configurations for various services.
 
   # GCE.
