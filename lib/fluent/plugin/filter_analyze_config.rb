@@ -73,40 +73,51 @@ module Fluent
         ]
       }.freeze
 
-      # These are the config params for which we want usage metrics.
-      GOOGLE_CONFIG_PARAMS = %w(
-        adjust_invalid_timestamps
-        auth_method
-        autoformat_stackdriver_trace
-        coerce_to_utf8
-        detect_json
-        enable_monitoring
-        gcm_service_address
-        grpc_compression_algorithm
-        http_request_key
-        insert_id_key
-        label_map
-        labels
-        labels_key
-        logging_api_url
-        monitoring_type
-        non_utf8_replacement_string
-        operation_key
-        private_key_email
-        private_key_passphrase
-        private_key_path
-        project_id
-        source_location_key
-        span_id_key
-        statusz_port
-        trace_key
-        trace_sampled_key
-        use_grpc
-        use_metadata_service
-        vm_id
-        vm_name
-        zone
-      ).freeze
+      # For Google plugins, we collect metrics on the params listed here.
+      GOOGLE_PLUGIN_PARAMS = {
+        'google_cloud' => %w(
+          adjust_invalid_timestamps
+          auth_method
+          autoformat_stackdriver_trace
+          coerce_to_utf8
+          detect_json
+          enable_monitoring
+          gcm_service_address
+          grpc_compression_algorithm
+          http_request_key
+          insert_id_key
+          label_map
+          labels
+          labels_key
+          logging_api_url
+          monitoring_type
+          non_utf8_replacement_string
+          operation_key
+          private_key_email
+          private_key_passphrase
+          private_key_path
+          project_id
+          source_location_key
+          span_id_key
+          statusz_port
+          trace_key
+          trace_sampled_key
+          use_grpc
+          use_metadata_service
+          vm_id
+          vm_name
+          zone
+        ),
+        'detect_exceptions' => %w(
+          languages
+          max_bytes
+          max_lines
+          message
+          multiline_flush_interval
+          remove_tag_prefix
+          stream
+        )
+      }.freeze
     end
 
     include self::Constants
@@ -164,7 +175,7 @@ module Fluent
          KNOWN_PLUGINS[e.name].include?(e['@type'])
         "#{e.name}/#{e['@type']}"
       else
-        "#{e.name}"
+        e.name.to_s
       end
     end
 
@@ -195,8 +206,8 @@ module Fluent
           'Enabled plugins')
         config_usage = registry.counter(
           :stackdriver_config_usage,
-          [:param, :is_present, :has_default_value],
-          'Parameter usage for Google Cloud plugin')
+          [:plugin_name, :param, :is_present, :has_default_value],
+          'Parameter usage for Google Cloud plugins')
 
         config = parse_config(@google_fluentd_config_path)
         baseline_config = parse_config(@google_fluentd_baseline_config_path)
@@ -211,8 +222,6 @@ module Fluent
 
         # Look at each top-level config element and see whether it
         # matches the baseline value.
-        #
-        # TODO: Does this need to examine nested config elements?
         config.elements.each do |e|
           plugin_name = default_plugin_name(e)
           if baseline_elements.key?(plugin_name)
@@ -232,11 +241,13 @@ module Fluent
             },
             by: 1)
 
-          # Additional metric for Google Cloud plugin.
-          next unless e['@type'] == 'google_cloud'
-          GOOGLE_CONFIG_PARAMS.each do |p|
+          # Additional metric for Google plugins (google_cloud and
+          # detect_exceptions).
+          next unless GOOGLE_PLUGIN_PARAMS.key?(e['@type'])
+          GOOGLE_PLUGIN_PARAMS[e['@type']].each do |p|
             config_usage.increment(
               labels: {
+                plugin_name: e['@type'],
                 param: p,
                 is_present: e.key?(p),
                 is_default_value: (e.key?(p) &&

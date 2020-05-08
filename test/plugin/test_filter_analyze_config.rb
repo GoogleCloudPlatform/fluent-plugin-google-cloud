@@ -98,18 +98,21 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
     assert_prometheus_metric_value(
       :stackdriver_config_usage,
       1,
+      plugin_name: 'google_cloud',
       param: 'adjust_invalid_timestamps',
       is_present: true,
       is_default_value: true)
     assert_prometheus_metric_value(
       :stackdriver_config_usage,
       1,
+      plugin_name: 'google_cloud',
       param: 'autoformat_stackdriver_trace',
       is_present: true,
       is_default_value: false)
     assert_prometheus_metric_value(
       :stackdriver_config_usage,
       1,
+      plugin_name: 'google_cloud',
       param: 'coerce_to_utf8',
       is_present: true,
       is_default_value: false)
@@ -147,6 +150,7 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_config_usage,
         1,
+        plugin_name: 'google_cloud',
         param: p,
         is_present: false,
         is_default_value: false)
