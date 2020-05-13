@@ -222,6 +222,14 @@ module Fluent
 
         # Look at each top-level config element and see whether it
         # matches the baseline value.
+        #
+        # Note on custom configurations: If the plugin has a custom
+        # value (e.g. if a tail plugin has pos_file
+        # /var/lib/google-fluentd/pos/my-custom-value.pos), then the
+        # default_plugin_name (e.g. source/tail/my-custom-value) won't
+        # be a key in baseline_elements below, so it won't be
+        # used.  Instead it will use the custom_plugin_name
+        # (e.g. source/tail).
         config.elements.each do |e|
           plugin_name = default_plugin_name(e)
           if baseline_elements.key?(plugin_name)

@@ -116,7 +116,8 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       param: 'coerce_to_utf8',
       is_present: true,
       is_default_value: false)
-    # The remaining params are not present.
+    # The remaining "google_cloud" params are not present.
+    # The are no params for "detect_exceptions".
     %w(
       auth_method
       detect_json
