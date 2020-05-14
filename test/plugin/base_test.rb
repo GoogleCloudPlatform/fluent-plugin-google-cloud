@@ -107,7 +107,7 @@ module BaseTest
 
   def test_configure_metadata_missing_parts_on_other_platforms
     setup_no_metadata_service_stubs
-    Fluent::GoogleCloudOutput::CredentialsInfo.stubs(:project_id).returns(nil)
+    Resource::Utils::CredentialsInfo.stubs(:project_id).returns(nil)
     [[CONFIG_MISSING_METADATA_PROJECT_ID, ['project_id'], false],
      [CONFIG_MISSING_METADATA_ZONE, [], true],
      [CONFIG_MISSING_METADATA_VM_ID, [], true],
