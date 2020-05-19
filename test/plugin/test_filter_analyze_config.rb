@@ -156,6 +156,26 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         is_present: false,
         is_default_value: false)
     end
+
+    # We also export values for the bools.
+    assert_prometheus_metric_value(
+      :stackdriver_config_bool_values,
+      1,
+      plugin_name: 'google_cloud',
+      param: 'adjust_invalid_timestamps',
+      value: true)
+    assert_prometheus_metric_value(
+      :stackdriver_config_bool_values,
+      1,
+      plugin_name: 'google_cloud',
+      param: 'autoformat_stackdriver_trace',
+      value: false)
+    assert_prometheus_metric_value(
+      :stackdriver_config_bool_values,
+      1,
+      plugin_name: 'google_cloud',
+      param: 'coerce_to_utf8',
+      value: true)
   end
 
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG)

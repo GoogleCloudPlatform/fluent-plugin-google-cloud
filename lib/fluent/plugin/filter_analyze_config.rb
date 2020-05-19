@@ -208,6 +208,10 @@ module Fluent
           :stackdriver_config_usage,
           [:plugin_name, :param, :is_present, :has_default_value],
           'Parameter usage for Google Cloud plugins')
+        config_bool_values = registry.counter(
+          :stackdriver_config_bool_values,
+          [:plugin_name, :param, :value],
+          'Values for bool parameters in Google Cloud plugins')
 
         config = parse_config(@google_fluentd_config_path)
         baseline_config = parse_config(@google_fluentd_baseline_config_path)
@@ -263,6 +267,15 @@ module Fluent
                                    e[p] == baseline_google_element[p])
               },
               by: 1)
+            if e.key?(p) && ['true', 'false'].include?(e[p])
+              config_bool_values.increment(
+                labels: {
+                  plugin_name: e['@type'],
+                  param: p,
+                  value: e[p] == 'true'
+                },
+                by: 1)
+            end
           end
         end
       else
