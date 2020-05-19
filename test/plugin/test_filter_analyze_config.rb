@@ -47,21 +47,21 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       1,
       plugin_name: 'source/syslog/tcp',
       is_default_plugin: true,
-      has_customized_config: false,
+      has_default_value: true,
       has_ruby_snippet: false)
     assert_prometheus_metric_value(
       :stackdriver_enabled_plugins,
       1,
       plugin_name: 'source/tail/apache-access',
       is_default_plugin: true,
-      has_customized_config: false,
+      has_default_value: true,
       has_ruby_snippet: false)
     assert_prometheus_metric_value(
       :stackdriver_enabled_plugins,
       1,
       plugin_name: 'filter/add_insert_ids',
       is_default_plugin: true,
-      has_customized_config: false,
+      has_default_value: true,
       has_ruby_snippet: false)
 
     # Default plugins, with custom config.
@@ -70,7 +70,7 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       1,
       plugin_name: 'match/google_cloud',
       is_default_plugin: true,
-      has_customized_config: true,
+      has_default_value: false,
       has_ruby_snippet: false)
 
     # Custom plugins, some with embedded Ruby.
@@ -79,21 +79,21 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       1,
       plugin_name: 'filter',
       is_default_plugin: false,
-      has_customized_config: true,
+      has_default_value: false,
       has_ruby_snippet: false)
     assert_prometheus_metric_value(
       :stackdriver_enabled_plugins,
       1,
       plugin_name: 'filter/record_transformer',
       is_default_plugin: false,
-      has_customized_config: true,
+      has_default_value: false,
       has_ruby_snippet: true)
     assert_prometheus_metric_value(
       :stackdriver_enabled_plugins,
       1,
       plugin_name: 'match/stdout',
       is_default_plugin: false,
-      has_customized_config: true,
+      has_default_value: false,
       has_ruby_snippet: true)
 
     # For out_google_cloud, 3 params are present.
@@ -103,21 +103,21 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       plugin_name: 'google_cloud',
       param: 'adjust_invalid_timestamps',
       is_present: true,
-      is_default_value: true)
+      has_default_value: true)
     assert_prometheus_metric_value(
       :stackdriver_config_usage,
       1,
       plugin_name: 'google_cloud',
       param: 'autoformat_stackdriver_trace',
       is_present: true,
-      is_default_value: false)
+      has_default_value: false)
     assert_prometheus_metric_value(
       :stackdriver_config_usage,
       1,
       plugin_name: 'google_cloud',
       param: 'coerce_to_utf8',
       is_present: true,
-      is_default_value: false)
+      has_default_value: false)
     # The remaining "google_cloud" params are not present.
     # The are no params for "detect_exceptions".
     %w(
@@ -156,7 +156,7 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         plugin_name: 'google_cloud',
         param: p,
         is_present: false,
-        is_default_value: false)
+        has_default_value: false)
     end
 
     # We also export values for the bools.
