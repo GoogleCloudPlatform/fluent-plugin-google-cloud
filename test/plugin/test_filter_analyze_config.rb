@@ -13,14 +13,16 @@
 # limitations under the License.
 
 require_relative '../helper'
-require_relative 'base_test'
+require_relative 'asserts'
+require_relative 'constants'
 
 require 'fluent/test/driver/filter'
 require 'fluent/plugin/filter_analyze_config'
 
 # Unit tests for filter_analyze_config plugin.
 class FilterAnalyzeConfigTest < Test::Unit::TestCase
-  include BaseTest
+  include Asserts
+  include Constants
   include Fluent::AnalyzeConfigFilter::Constants
 
   APPLICATION_DEFAULT_CONFIG = ''.freeze
