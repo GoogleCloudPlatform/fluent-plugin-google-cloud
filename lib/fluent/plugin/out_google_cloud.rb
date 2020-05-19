@@ -28,8 +28,8 @@ require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
 require 'googleauth'
 
+require_relative 'common'
 require_relative 'monitoring'
-require_relative 'resource'
 require_relative 'statusz'
 
 module Google
@@ -181,7 +181,7 @@ module Fluent
         .freeze
     end
 
-    include Resource::ServiceConstants
+    include Common::ServiceConstants
     include self::ConfigConstants
     include self::InternalConstants
 
@@ -467,7 +467,7 @@ module Fluent
 
       set_regexp_patterns
 
-      @utils = Resource::Utils.new(@log)
+      @utils = Common::Utils.new(@log)
 
       @platform = @utils.detect_platform(@use_metadata_service)
 
@@ -565,7 +565,7 @@ module Fluent
         @write_request = method(:write_request_via_rest)
       end
 
-      if [Resource::Platform::GCE, Resource::Platform::EC2].include?(@platform)
+      if [Common::Platform::GCE, Common::Platform::EC2].include?(@platform)
         # Log an informational message containing the Logs viewer URL
         @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
                   "viewer?project=#{@project_id}&resource=#{@resource.type}/",
@@ -1748,7 +1748,7 @@ module Fluent
         Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
         @client = Google::Apis::LoggingV2::LoggingService.new
         @client.authorization = Google::Auth.get_application_default(
-          Resource::LOGGING_SCOPE)
+          Common::LOGGING_SCOPE)
       end
     end
 

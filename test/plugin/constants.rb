@@ -45,7 +45,7 @@ end
 
 # Constants used by unit tests for Google Cloud Logging plugin.
 module Constants
-  include Resource::ServiceConstants
+  include Common::ServiceConstants
   include Fluent::GoogleCloudOutput::ConfigConstants
   include Fluent::GoogleCloudOutput::InternalConstants
 
