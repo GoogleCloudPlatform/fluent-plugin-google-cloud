@@ -267,15 +267,14 @@ module Fluent
                                     e[p] == baseline_google_element[p])
               },
               by: 1)
-            if e.key?(p) && ['true', 'false'].include?(e[p])
-              config_bool_values.increment(
-                labels: {
-                  plugin_name: e['@type'],
-                  param: p,
-                  value: e[p] == 'true'
-                },
-                by: 1)
-            end
+            next unless e.key?(p) && %w(true false).include?(e[p])
+            config_bool_values.increment(
+              labels: {
+                plugin_name: e['@type'],
+                param: p,
+                value: e[p] == 'true'
+              },
+              by: 1)
           end
         end
       else
