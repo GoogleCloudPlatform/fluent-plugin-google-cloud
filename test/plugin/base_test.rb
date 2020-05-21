@@ -22,6 +22,7 @@ require 'mocha/test_unit'
 require 'webmock/test_unit'
 require 'prometheus/client'
 
+require_relative 'asserts'
 require_relative 'constants'
 
 module Monitoring
