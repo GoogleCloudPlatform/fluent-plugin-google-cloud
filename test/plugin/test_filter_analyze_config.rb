@@ -39,145 +39,152 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
   end
 
   def test_analyze_config
-    create_driver(CONFIG_ANALYZE_CONFIG)
+    [
+      [CONFIG_ANALYZE_CONFIG_PROMETHEUS,
+       method(:assert_prometheus_metric_value)],
+      [CONFIG_ANALYZE_CONFIG_OPENCENSUS,
+       method(:assert_opencensus_metric_value)]
+    ].each do |config, assert_metric_value|
+      create_driver(config)
 
-    # Default plugins, with default config.
-    assert_prometheus_metric_value(
-      :stackdriver_enabled_plugins,
-      1,
-      plugin_name: 'source/syslog/tcp',
-      is_default_plugin: true,
-      has_default_value: true,
-      has_ruby_snippet: false)
-    assert_prometheus_metric_value(
-      :stackdriver_enabled_plugins,
-      1,
-      plugin_name: 'source/tail/apache-access',
-      is_default_plugin: true,
-      has_default_value: true,
-      has_ruby_snippet: false)
-    assert_prometheus_metric_value(
-      :stackdriver_enabled_plugins,
-      1,
-      plugin_name: 'filter/add_insert_ids',
-      is_default_plugin: true,
-      has_default_value: true,
-      has_ruby_snippet: false)
+      # Default plugins, with default config.
+      assert_metric_value.call(
+        :stackdriver_enabled_plugins,
+        1,
+        plugin_name: 'source/syslog/tcp',
+        is_default_plugin: true,
+        has_default_value: true,
+        has_ruby_snippet: false)
+      assert_metric_value.call(
+        :stackdriver_enabled_plugins,
+        1,
+        plugin_name: 'source/tail/apache-access',
+        is_default_plugin: true,
+        has_default_value: true,
+        has_ruby_snippet: false)
+      assert_metric_value.call(
+        :stackdriver_enabled_plugins,
+        1,
+        plugin_name: 'filter/add_insert_ids',
+        is_default_plugin: true,
+        has_default_value: true,
+        has_ruby_snippet: false)
 
-    # Default plugins, with custom config.
-    assert_prometheus_metric_value(
-      :stackdriver_enabled_plugins,
-      1,
-      plugin_name: 'match/google_cloud',
-      is_default_plugin: true,
-      has_default_value: false,
-      has_ruby_snippet: false)
+      # Default plugins, with custom config.
+      assert_metric_value.call(
+        :stackdriver_enabled_plugins,
+        1,
+        plugin_name: 'match/google_cloud',
+        is_default_plugin: true,
+        has_default_value: false,
+        has_ruby_snippet: false)
 
-    # Custom plugins, some with embedded Ruby.
-    assert_prometheus_metric_value(
-      :stackdriver_enabled_plugins,
-      1,
-      plugin_name: 'filter',
-      is_default_plugin: false,
-      has_default_value: false,
-      has_ruby_snippet: false)
-    assert_prometheus_metric_value(
-      :stackdriver_enabled_plugins,
-      1,
-      plugin_name: 'filter/record_transformer',
-      is_default_plugin: false,
-      has_default_value: false,
-      has_ruby_snippet: true)
-    assert_prometheus_metric_value(
-      :stackdriver_enabled_plugins,
-      1,
-      plugin_name: 'match/stdout',
-      is_default_plugin: false,
-      has_default_value: false,
-      has_ruby_snippet: true)
+      # Custom plugins, some with embedded Ruby.
+      assert_metric_value.call(
+        :stackdriver_enabled_plugins,
+        1,
+        plugin_name: 'filter',
+        is_default_plugin: false,
+        has_default_value: false,
+        has_ruby_snippet: false)
+      assert_metric_value.call(
+        :stackdriver_enabled_plugins,
+        1,
+        plugin_name: 'filter/record_transformer',
+        is_default_plugin: false,
+        has_default_value: false,
+        has_ruby_snippet: true)
+      assert_metric_value.call(
+        :stackdriver_enabled_plugins,
+        1,
+        plugin_name: 'match/stdout',
+        is_default_plugin: false,
+        has_default_value: false,
+        has_ruby_snippet: true)
 
-    # For out_google_cloud, 3 params are present.
-    assert_prometheus_metric_value(
-      :stackdriver_config_usage,
-      1,
-      plugin_name: 'google_cloud',
-      param: 'adjust_invalid_timestamps',
-      is_present: true,
-      has_default_value: true)
-    assert_prometheus_metric_value(
-      :stackdriver_config_usage,
-      1,
-      plugin_name: 'google_cloud',
-      param: 'autoformat_stackdriver_trace',
-      is_present: true,
-      has_default_value: false)
-    assert_prometheus_metric_value(
-      :stackdriver_config_usage,
-      1,
-      plugin_name: 'google_cloud',
-      param: 'coerce_to_utf8',
-      is_present: true,
-      has_default_value: false)
-    # The remaining "google_cloud" params are not present.
-    # The are no params for "detect_exceptions".
-    %w(
-      auth_method
-      detect_json
-      enable_monitoring
-      gcm_service_address
-      grpc_compression_algorithm
-      http_request_key
-      insert_id_key
-      label_map
-      labels
-      labels_key
-      logging_api_url
-      monitoring_type
-      non_utf8_replacement_string
-      operation_key
-      private_key_email
-      private_key_passphrase
-      private_key_path
-      project_id
-      source_location_key
-      span_id_key
-      statusz_port
-      trace_key
-      trace_sampled_key
-      use_grpc
-      use_metadata_service
-      vm_id
-      vm_name
-      zone
-    ).each do |p|
-      assert_prometheus_metric_value(
+      # For out_google_cloud, 3 params are present.
+      assert_metric_value.call(
         :stackdriver_config_usage,
         1,
         plugin_name: 'google_cloud',
-        param: p,
-        is_present: false,
+        param: 'adjust_invalid_timestamps',
+        is_present: true,
+        has_default_value: true)
+      assert_metric_value.call(
+        :stackdriver_config_usage,
+        1,
+        plugin_name: 'google_cloud',
+        param: 'autoformat_stackdriver_trace',
+        is_present: true,
         has_default_value: false)
-    end
+      assert_metric_value.call(
+        :stackdriver_config_usage,
+        1,
+        plugin_name: 'google_cloud',
+        param: 'coerce_to_utf8',
+        is_present: true,
+        has_default_value: false)
+      # The remaining "google_cloud" params are not present.
+      # The are no params for "detect_exceptions".
+      %w(
+        auth_method
+        detect_json
+        enable_monitoring
+        gcm_service_address
+        grpc_compression_algorithm
+        http_request_key
+        insert_id_key
+        label_map
+        labels
+        labels_key
+        logging_api_url
+        monitoring_type
+        non_utf8_replacement_string
+        operation_key
+        private_key_email
+        private_key_passphrase
+        private_key_path
+        project_id
+        source_location_key
+        span_id_key
+        statusz_port
+        trace_key
+        trace_sampled_key
+        use_grpc
+        use_metadata_service
+        vm_id
+        vm_name
+        zone
+      ).each do |p|
+        assert_metric_value.call(
+          :stackdriver_config_usage,
+          1,
+          plugin_name: 'google_cloud',
+          param: p,
+          is_present: false,
+          has_default_value: false)
+      end
 
-    # We also export values for the bools.
-    assert_prometheus_metric_value(
-      :stackdriver_config_bool_values,
-      1,
-      plugin_name: 'google_cloud',
-      param: 'adjust_invalid_timestamps',
-      value: true)
-    assert_prometheus_metric_value(
-      :stackdriver_config_bool_values,
-      1,
-      plugin_name: 'google_cloud',
-      param: 'autoformat_stackdriver_trace',
-      value: false)
-    assert_prometheus_metric_value(
-      :stackdriver_config_bool_values,
-      1,
-      plugin_name: 'google_cloud',
-      param: 'coerce_to_utf8',
-      value: true)
+      # We also export values for the bools.
+      assert_metric_value.call(
+        :stackdriver_config_bool_values,
+        1,
+        plugin_name: 'google_cloud',
+        param: 'adjust_invalid_timestamps',
+        value: true)
+      assert_metric_value.call(
+        :stackdriver_config_bool_values,
+        1,
+        plugin_name: 'google_cloud',
+        param: 'autoformat_stackdriver_trace',
+        value: false)
+      assert_metric_value.call(
+        :stackdriver_config_bool_values,
+        1,
+        plugin_name: 'google_cloud',
+        param: 'coerce_to_utf8',
+        value: true)
+    end
   end
 
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG)

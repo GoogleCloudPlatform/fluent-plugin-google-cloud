@@ -472,11 +472,21 @@ module Constants
   ).freeze
 
   # For analyze_config.
-  CONFIG_ANALYZE_CONFIG = %(
+  CONFIG_ANALYZE_CONFIG_PROMETHEUS = %(
     google_fluentd_config_path          \
       test/plugin/data/google-fluentd-custom.conf
     google_fluentd_baseline_config_path \
       test/plugin/data/google-fluentd-baseline.conf
+    use_metadata_service false
+    monitoring_type prometheus
+  ).freeze
+  CONFIG_ANALYZE_CONFIG_OPENCENSUS = %(
+    google_fluentd_config_path          \
+      test/plugin/data/google-fluentd-custom.conf
+    google_fluentd_baseline_config_path \
+      test/plugin/data/google-fluentd-baseline.conf
+    use_metadata_service false
+    monitoring_type opencensus
   ).freeze
 
   # Service configurations for various services.
