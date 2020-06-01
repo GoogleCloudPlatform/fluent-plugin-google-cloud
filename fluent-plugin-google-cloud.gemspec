@@ -24,7 +24,7 @@ eos
   gem.add_runtime_dependency 'googleauth', '0.9.0'
   gem.add_runtime_dependency 'google-api-client', '0.30.8'
   gem.add_runtime_dependency 'google-cloud-logging', '1.6.6'
-  gem.add_runtime_dependency 'google-protobuf', '3.11.4'
+  gem.add_runtime_dependency 'google-protobuf', '3.12.0.rc.1'
   gem.add_runtime_dependency 'grpc', '1.28.0'
   gem.add_runtime_dependency 'json', '2.2.0'
   gem.add_runtime_dependency 'opencensus', '0.5.0'
