@@ -26,7 +26,7 @@ module Common
     }.freeze
     GKE_CONSTANTS = {
       service: 'container.googleapis.com',
-      resource_type: 'container',
+      resource_type: 'gke_container',
       extra_resource_labels: %w(namespace_id pod_id container_name),
       extra_common_labels: %w(namespace_name pod_name),
       metadata_attributes: %w(cluster-name cluster-location),
