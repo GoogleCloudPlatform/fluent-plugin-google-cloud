@@ -15,6 +15,7 @@
 require_relative '../helper'
 require_relative 'asserts'
 require_relative 'constants'
+require_relative 'utils'
 
 require 'fluent/test/driver/filter'
 require 'fluent/plugin/filter_analyze_config'
@@ -24,11 +25,13 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
   include Asserts
   include Constants
   include Fluent::AnalyzeConfigFilter::Constants
+  include Utils
 
   APPLICATION_DEFAULT_CONFIG = ''.freeze
 
   def setup
     Fluent::Test.setup
+    delete_env_vars
   end
 
   def test_config_file_does_not_exist
@@ -39,12 +42,15 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
   end
 
   def test_analyze_config
+    setup_auth_stubs('https://oauth2.googleapis.com/token')
+    setup_gce_metadata_stubs
     [
       [CONFIG_ANALYZE_CONFIG_PROMETHEUS,
        method(:assert_prometheus_metric_value)],
       [CONFIG_ANALYZE_CONFIG_OPENCENSUS,
        method(:assert_opencensus_metric_value)]
     ].each do |config, assert_metric_value|
+      clear_metrics
       create_driver(config)
 
       # Default plugins, with default config.

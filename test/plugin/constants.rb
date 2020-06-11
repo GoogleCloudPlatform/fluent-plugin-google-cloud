@@ -477,7 +477,6 @@ module Constants
       test/plugin/data/google-fluentd-custom.conf
     google_fluentd_baseline_config_path \
       test/plugin/data/google-fluentd-baseline.conf
-    use_metadata_service false
     monitoring_type prometheus
   ).freeze
   CONFIG_ANALYZE_CONFIG_OPENCENSUS = %(
@@ -485,7 +484,6 @@ module Constants
       test/plugin/data/google-fluentd-custom.conf
     google_fluentd_baseline_config_path \
       test/plugin/data/google-fluentd-baseline.conf
-    use_metadata_service false
     monitoring_type opencensus
   ).freeze
 

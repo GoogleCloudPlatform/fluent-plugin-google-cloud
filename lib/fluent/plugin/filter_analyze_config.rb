@@ -137,28 +137,6 @@ module Fluent
                  :string,
                  :default => '/etc/google-fluentd/baseline/google-fluentd.conf'
 
-    # Specify project/instance metadata.
-    #
-    # project_id, zone, and vm_id are required to have valid values, which
-    # can be obtained from the metadata service or set explicitly.
-    # Otherwise, the plugin will fail to initialize.
-    #
-    # Note that while 'project id' properly refers to the alphanumeric name
-    # of the project, the logging service will also accept the project number,
-    # so either one is acceptable in this context.
-    #
-    # Whether to attempt to obtain metadata from the local metadata service.
-    # It is safe to specify 'true' even on platforms with no metadata service.
-    config_param :use_metadata_service, :bool, :default => true
-    # A compatibility option to enable the legacy behavior of setting the AWS
-    # location to the availability zone rather than the region.
-    config_param :use_aws_availability_zone, :bool, :default => true
-    # These parameters override any values obtained from the metadata service.
-    config_param :project_id, :string, :default => nil
-    config_param :zone, :string, :default => nil
-    config_param :vm_id, :string, :default => nil
-    config_param :vm_name, :string, :default => nil
-
     # What system to use when collecting metrics. Possible values are:
     #   - 'prometheus', in this case default registry in the Prometheus
     #     client library is used, without actually exposing the endpoint
@@ -237,26 +215,20 @@ module Fluent
           'google-fluentd Analyzing configuration.')
 
         utils = Common::Utils.new(@log)
-        platform = utils.detect_platform(@use_metadata_service)
-
-        # Set required variables: @project_id, @vm_id, @vm_name and @zone.
-        @project_id = utils.get_project_id(platform, @project_id)
-        @vm_id = utils.get_vm_id(platform, @vm_id)
-        @vm_name = utils.get_vm_name(@vm_name)
-        @zone = utils.get_location(
-          platform, @zone, @use_aws_availability_zone)
+        platform = utils.detect_platform(true)
+        project_id = utils.get_project_id(platform, nil)
+        vm_id = utils.get_vm_id(platform, nil)
+        zone = utils.get_location(platform, nil, true)
 
         # All metadata parameters must now be set.
         utils.check_required_metadata_variables(
-          platform, @project_id, @zone, @vm_id)
+          platform, project_id, zone, vm_id)
 
         # Retrieve monitored resource.
         # Fail over to retrieve monitored resource via the legacy path if we
         # fail to get it from Metadata Agent.
-        subservice_name = nil
-        detect_subservice = false
         resource = utils.determine_agent_level_monitored_resource_via_legacy(
-          platform, subservice_name, detect_subservice, @vm_id, @zone)
+          platform, nil, false, vm_id, zone)
 
         unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
           @monitoring_type)
@@ -264,7 +236,7 @@ module Fluent
                     'there will be no metrics'
         end
         registry = Monitoring::MonitoringRegistryFactory.create(
-          @monitoring_type, @project_id, resource, @gcm_service_address)
+          @monitoring_type, project_id, resource, @gcm_service_address)
 
         plugin_usage = registry.counter(
           :stackdriver_enabled_plugins,
