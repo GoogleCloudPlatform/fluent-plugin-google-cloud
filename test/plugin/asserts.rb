@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'prometheus/client'
+
 # Additional assert functions.
 module Asserts
   # For an optional field with default values, Protobuf omits the field when it

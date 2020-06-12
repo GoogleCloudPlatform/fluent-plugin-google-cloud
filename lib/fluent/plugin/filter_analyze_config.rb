@@ -17,6 +17,7 @@ require 'fluent/config'
 require 'fluent/config/v1_parser'
 require 'set'
 
+require_relative 'common'
 require_relative 'monitoring'
 
 module Fluent
@@ -122,16 +123,33 @@ module Fluent
 
     include self::Constants
 
+    # Disable this warning to conform to fluentd config_param conventions.
+    # rubocop:disable Style/HashSyntax
+
     # The root configuration file of google-fluentd package.
     # This only applies to Linux.
     config_param :google_fluentd_config_path,
                  :string,
-                 default: '/etc/google-fluentd/google-fluentd.conf'
+                 :default => '/etc/google-fluentd/google-fluentd.conf'
     # Baseline configuration for comparing with local
     # customizations.
     config_param :google_fluentd_baseline_config_path,
                  :string,
-                 default: '/etc/google-fluentd/baseline/google-fluentd.conf'
+                 :default => '/etc/google-fluentd/baseline/google-fluentd.conf'
+
+    # What system to use when collecting metrics. Possible values are:
+    #   - 'prometheus', in this case default registry in the Prometheus
+    #     client library is used, without actually exposing the endpoint
+    #     to serve metrics in the Prometheus format.
+    #    - any other value will result in the absence of metrics.
+    config_param :monitoring_type, :string,
+                 :default => Monitoring::PrometheusMonitoringRegistry.name
+
+    # Override for the Google Cloud Monitoring service hostname, or
+    # `nil` to leave as the default.
+    config_param :gcm_service_address, :string, :default => nil
+
+    # rubocop:enable Style/HashSyntax
 
     def start
       super
@@ -196,9 +214,29 @@ module Fluent
           " #{@google_fluentd_baseline_config_path}. " \
           'google-fluentd Analyzing configuration.')
 
-        # TODO: Add OpenCensus support.
+        utils = Common::Utils.new(@log)
+        platform = utils.detect_platform(true)
+        project_id = utils.get_project_id(platform, nil)
+        vm_id = utils.get_vm_id(platform, nil)
+        zone = utils.get_location(platform, nil, true)
+
+        # All metadata parameters must now be set.
+        utils.check_required_metadata_variables(
+          platform, project_id, zone, vm_id)
+
+        # Retrieve monitored resource.
+        # Fail over to retrieve monitored resource via the legacy path if we
+        # fail to get it from Metadata Agent.
+        resource = utils.determine_agent_level_monitored_resource_via_legacy(
+          platform, nil, false, vm_id, zone)
+
+        unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
+          @monitoring_type)
+          @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
+                    'there will be no metrics'
+        end
         registry = Monitoring::MonitoringRegistryFactory.create(
-          Monitoring::PrometheusMonitoringRegistry.name, nil, nil, nil)
+          @monitoring_type, project_id, resource, @gcm_service_address)
 
         plugin_usage = registry.counter(
           :stackdriver_enabled_plugins,
