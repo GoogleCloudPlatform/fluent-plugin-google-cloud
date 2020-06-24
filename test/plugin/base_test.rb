@@ -122,8 +122,8 @@ module BaseTest
 
   def test_configure_ignores_unknown_monitoring_type
     # Verify that driver creation succeeds when monitoring type is not
-    # "prometheus" (in which case, we simply don't record metrics),
-    # and that the counters are set to nil.
+    # "prometheus" or "opencensus" (in which case, we simply don't record
+    # metrics), and that the counters are set to nil.
     setup_gce_metadata_stubs
     create_driver(CONFIG_UNKNOWN_MONITORING_TYPE)
     assert_nil(Prometheus::Client.registry.get(
@@ -136,6 +136,21 @@ module BaseTest
                  :stackdriver_dropped_entries_count))
     assert_nil(Prometheus::Client.registry.get(
                  :stackdriver_retried_entries_count))
+    assert_nil(OpenCensus::Stats::MeasureRegistry.get(
+                 Monitoring::MetricTranslator.new(
+                   :stackdriver_successful_requests_count, {})))
+    assert_nil(OpenCensus::Stats::MeasureRegistry.get(
+                 Monitoring::MetricTranslator.new(
+                   :stackdriver_failed_requests_count, {})))
+    assert_nil(OpenCensus::Stats::MeasureRegistry.get(
+                 Monitoring::MetricTranslator.new(
+                   :stackdriver_ingested_entries_count, {})))
+    assert_nil(OpenCensus::Stats::MeasureRegistry.get(
+                 Monitoring::MetricTranslator.new(
+                   :stackdriver_dropped_entries_count, {})))
+    assert_nil(OpenCensus::Stats::MeasureRegistry.get(
+                 Monitoring::MetricTranslator.new(
+                   :stackdriver_retried_entries_count, {})))
   end
 
   def test_metadata_loading
