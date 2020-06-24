@@ -138,6 +138,52 @@ module BaseTest
                  :stackdriver_retried_entries_count))
   end
 
+  def test_configure_uses_metrics_resource
+    setup_gce_metadata_stubs
+    [CONFIG_METRICS_RESOURCE_JSON,
+     CONFIG_METRICS_RESOURCE_HASH,
+     CONFIG_METRICS_RESOURCE_JSON_HASH
+    ].each_with_index do |config, index|
+      d = create_driver(config)
+      assert_equal 'custom_resource', d.instance.monitoring_resource.type, \
+                   "Index #{index}"
+      assert_equal '123', d.instance.monitoring_resource.labels['label1'], \
+                   "Index #{index}"
+      assert_equal 'abc', d.instance.monitoring_resource.labels['label2'], \
+                   "Index #{index}"
+      assert_true d.instance.instance_variable_get(:@enable_monitoring)
+      registry = d.instance.instance_variable_get(:@registry)
+      assert_not_nil registry
+      exporter = registry.instance_variable_get(:@exporter)
+      assert_equal 'custom_resource', exporter.resource_type, "Index #{index}"
+      assert_equal({ 'label1' => '123', 'label2' => 'abc' },
+                   exporter.resource_labels, "Index #{index}")
+    end
+  end
+
+  def test_configure_metrics_resource_validation
+    setup_gce_metadata_stubs
+    {
+      CONFIG_METRICS_RESOURCE_JSON_NO_TYPE => /type must be a string/,
+      CONFIG_METRICS_RESOURCE_JSON_BAD_LABELS => /labels must be a hash/,
+      CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS =>
+        /unrecognized keys: \[:random\]/,
+      CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS_LABELS =>
+        /unrecognized keys: \[:"labels\.random"\]/,
+      CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS_NO_LABELS =>
+        /unrecognized keys: \[:random\]/
+    }.each_with_index do |(config, pattern), index|
+      begin
+        create_driver(config)
+        assert false,
+               "Invalid config at index #{index} should have raised an error."
+      rescue Fluent::ConfigError => error
+        assert error.message.match?(pattern), \
+               "Index #{index} failed: got #{error.message}."
+      end
+    end
+  end
+
   def test_metadata_loading
     setup_gce_metadata_stubs
     d = create_driver
