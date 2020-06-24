@@ -370,7 +370,9 @@ module Fluent
     #   - 'prometheus', in this case default registry in the Prometheus
     #     client library is used, without actually exposing the endpoint
     #     to serve metrics in the Prometheus format.
-    #    - any other value will result in the absence of metrics.
+    #   - 'opencensus', in this case the OpenCensus implementation is
+    #     used to send metrics directly to Google Cloud Monitoring.
+    #   - any other value will result in the absence of metrics.
     config_param :monitoring_type, :string,
                  :default => Monitoring::PrometheusMonitoringRegistry.name
 
