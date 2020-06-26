@@ -219,6 +219,12 @@ module Common
       @log.error 'Failed to obtain location: ', error: e
     end
 
+    # Create a monitored resource from type and labels.
+    def create_monitored_resource(type, labels)
+      Google::Apis::LoggingV2::MonitoredResource.new(
+        type: type, labels: labels.to_h)
+    end
+
     # Retrieve monitored resource via the legacy way.
     #
     # Note: This is just a failover plan if we fail to get metadata from
@@ -226,13 +232,12 @@ module Common
     # returns.
     def determine_agent_level_monitored_resource_via_legacy(
           platform, subservice_name, detect_subservice, vm_id, zone)
-      resource = Google::Apis::LoggingV2::MonitoredResource.new(
-        labels: {})
-      resource.type = determine_agent_level_monitored_resource_type(
+      resource_type = determine_agent_level_monitored_resource_type(
         platform, subservice_name, detect_subservice)
-      resource.labels = determine_agent_level_monitored_resource_labels(
-        platform, resource.type, vm_id, zone)
-      resource
+      create_monitored_resource(
+        resource_type,
+        determine_agent_level_monitored_resource_labels(
+          platform, resource_type, vm_id, zone))
     end
 
     # Determine agent level monitored resource type.

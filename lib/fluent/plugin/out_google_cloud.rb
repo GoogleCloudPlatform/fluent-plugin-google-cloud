@@ -376,6 +376,14 @@ module Fluent
     config_param :monitoring_type, :string,
                  :default => Monitoring::PrometheusMonitoringRegistry.name
 
+    # The monitored resource to use for OpenCensus metrics. Only valid
+    # when monitoring_type is set to 'opencensus'. This value is a hash in
+    # the form:
+    # {"type":"gce_instance","labels":{"instance_id":"aaa","zone":"bbb"} (JSON)
+    # or type:gce_instance,labels.instance_id:aaa,labels.zone:bbb (Hash)
+    config_param :metrics_resource, :hash,
+                 :symbolize_keys => true, :default => nil
+
     # Whether to call metadata agent to retrieve monitored resource. This flag
     # is kept for backwards compatibility, and is no longer used.
     # TODO: Breaking change. Remove this flag in Logging Agent 2.0.0 release.
@@ -425,6 +433,7 @@ module Fluent
     attr_reader :vm_id
     attr_reader :resource
     attr_reader :common_labels
+    attr_reader :monitoring_resource
 
     def initialize
       super
@@ -495,6 +504,43 @@ module Fluent
       @resource ||= @utils.determine_agent_level_monitored_resource_via_legacy(
         @platform, @subservice_name, @detect_subservice, @vm_id, @zone)
 
+      if @metrics_resource
+        unless @metrics_resource[:type].is_a?(String)
+          raise Fluent::ConfigError,
+                'metrics_resource.type must be a string:' \
+                " #{@metrics_resource}."
+        end
+        if @metrics_resource.key?(:labels)
+          unless @metrics_resource[:labels].is_a?(Hash)
+            raise Fluent::ConfigError,
+                  'metrics_resource.labels must be a hash:' \
+                  " #{@metrics_resource}."
+          end
+          extra_keys = @metrics_resource.reject do |k, _|
+            k == :type || k == :labels
+          end
+          unless extra_keys.empty?
+            raise Fluent::ConfigError,
+                  "metrics_resource has unrecognized keys: #{extra_keys.keys}."
+          end
+        else
+          extra_keys = @metrics_resource.reject do |k, _|
+            k == :type || k.to_s.start_with?('labels.')
+          end
+          unless extra_keys.empty?
+            raise Fluent::ConfigError,
+                  "metrics_resource has unrecognized keys: #{extra_keys.keys}."
+          end
+          # Transform the Hash form of the metrics_resource config if necessary.
+          resource_type = @metrics_resource[:type]
+          resource_labels = @metrics_resource.each_with_object({}) \
+            do |(k, v), h|
+              h[k.to_s.sub('labels.', '')] = v if k.to_s.start_with? 'labels.'
+            end
+          @metrics_resource = { type: resource_type, labels: resource_labels }
+        end
+      end
+
       # If monitoring is enabled, register metrics in the default registry
       # and store metric objects for future use.
       if @enable_monitoring
@@ -503,9 +549,15 @@ module Fluent
           @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
                     'there will be no metrics'
         end
+        if @metrics_resource
+          @monitoring_resource = @utils.create_monitored_resource(
+            @metrics_resource[:type], @metrics_resource[:labels])
+        else
+          @monitoring_resource = @resource
+        end
         @registry = Monitoring::MonitoringRegistryFactory
-                    .create(@monitoring_type, @project_id, @resource,
-                            @gcm_service_address)
+                    .create(@monitoring_type, @project_id,
+                            @monitoring_resource, @gcm_service_address)
         # Export metrics every 60 seconds.
         timer_execute(:export_metrics, 60) { @registry.export }
         # Uptime should be a gauge, but the metric definition is a counter and

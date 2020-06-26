@@ -433,6 +433,56 @@ module Constants
     monitoring_type    not_prometheus
   ).freeze
 
+  # rubocop:disable Metrics/LineLength
+  CONFIG_METRICS_RESOURCE_JSON = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   {"type":"custom_resource","labels":{"label1":"123","label2":"abc"}}
+  ).freeze
+
+  CONFIG_METRICS_RESOURCE_HASH = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   type:custom_resource, labels.label1:123, labels.label2:abc
+  ).freeze
+
+  CONFIG_METRICS_RESOURCE_JSON_HASH = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   {"type":"custom_resource","labels.label1":"123","labels.label2":"abc"}
+  ).freeze
+
+  CONFIG_METRICS_RESOURCE_JSON_NO_TYPE = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   {"labels":{"label1":"123","label2":"abc"}}
+  ).freeze
+
+  CONFIG_METRICS_RESOURCE_JSON_BAD_LABELS = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   {"type":"custom_resource","labels":"123"}
+  ).freeze
+
+  CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   {"type":"custom_resource","labels":{"label1":"123"},"random":"x"}
+  ).freeze
+
+  CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS_LABELS = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   {"type":"custom_resource","labels":{"label1":"123"},"labels.random":"x"}
+  ).freeze
+
+  CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS_NO_LABELS = %(
+    enable_monitoring  true
+    monitoring_type    opencensus
+    metrics_resource   {"type":"custom_resource","labels.label1":"123","random":"x"}
+  ).freeze
+  # rubocop:enable Metrics/LineLength
+
   # For statusz.
   CONFIG_STATUSZ = %(
     statusz_port                  5678
