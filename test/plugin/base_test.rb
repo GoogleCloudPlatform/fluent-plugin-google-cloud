@@ -2018,18 +2018,6 @@ module BaseTest
     }
   end
 
-  def gke_container_log_entry(log)
-    {
-      log: log,
-      LOCAL_RESOURCE_ID_KEY =>
-        "#{CONTAINER_LOCAL_RESOURCE_ID_PREFIX}.#{CONTAINER_NAMESPACE_ID}" \
-        ".#{K8S_POD_NAME}.#{K8S_CONTAINER_NAME}"
-    }
-  end
-
-  # TODO(qingling128): Temporary fallback for metadata agent restarts.
-  # k8s resources.
-
   def k8s_container_log_entry(log,
                               local_resource_id: K8S_LOCAL_RESOURCE_ID)
     {
