@@ -1259,8 +1259,8 @@ module Fluent
       common_labels = group_level_common_labels.dup
 
       case resource.type
-      # GKE container.
-      when GKE_CONSTANTS[:resource_type]
+      # GKE container or k8s container
+      when GKE_CONSTANTS[:resource_type], K8S_CONTAINER_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
           delete_and_extract_labels(
@@ -1283,7 +1283,7 @@ module Fluent
             common_labels.merge!(
               delete_and_extract_labels(
                 record['kubernetes']['labels'], record['kubernetes']['labels']
-                  .map { |key, _| [key, "label/#{key}"] }.to_h))
+                  .map { |key, _| [key, "k8s-pod/#{key}"] }.to_h))
           end
           # We've explicitly consumed all the fields we care about -- don't
           # litter the log entries with the remaining fields that the kubernetes
