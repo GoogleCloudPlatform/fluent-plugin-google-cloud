@@ -59,21 +59,21 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         1,
         plugin_name: 'source/syslog/tcp',
         is_default_plugin: true,
-        has_default_value: true,
+        has_default_config: true,
         has_ruby_snippet: false)
       assert_metric_value.call(
         :stackdriver_enabled_plugins,
         1,
         plugin_name: 'source/tail/apache-access',
         is_default_plugin: true,
-        has_default_value: true,
+        has_default_config: true,
         has_ruby_snippet: false)
       assert_metric_value.call(
         :stackdriver_enabled_plugins,
         1,
         plugin_name: 'filter/add_insert_ids',
         is_default_plugin: true,
-        has_default_value: true,
+        has_default_config: true,
         has_ruby_snippet: false)
 
       # Default plugins, with custom config.
@@ -82,7 +82,7 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         1,
         plugin_name: 'match/google_cloud',
         is_default_plugin: true,
-        has_default_value: false,
+        has_default_config: false,
         has_ruby_snippet: false)
 
       # Custom plugins, some with embedded Ruby.
@@ -91,45 +91,45 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         1,
         plugin_name: 'filter',
         is_default_plugin: false,
-        has_default_value: false,
+        has_default_config: false,
         has_ruby_snippet: false)
       assert_metric_value.call(
         :stackdriver_enabled_plugins,
         1,
         plugin_name: 'filter/record_transformer',
         is_default_plugin: false,
-        has_default_value: false,
+        has_default_config: false,
         has_ruby_snippet: true)
       assert_metric_value.call(
         :stackdriver_enabled_plugins,
         1,
         plugin_name: 'match/stdout',
         is_default_plugin: false,
-        has_default_value: false,
+        has_default_config: false,
         has_ruby_snippet: true)
 
       # For out_google_cloud, 3 params are present.
       assert_metric_value.call(
-        :stackdriver_config_usage,
+        :stackdriver_plugin_config,
         1,
         plugin_name: 'google_cloud',
         param: 'adjust_invalid_timestamps',
         is_present: true,
-        has_default_value: true)
+        has_default_config: true)
       assert_metric_value.call(
-        :stackdriver_config_usage,
+        :stackdriver_plugin_config,
         1,
         plugin_name: 'google_cloud',
         param: 'autoformat_stackdriver_trace',
         is_present: true,
-        has_default_value: false)
+        has_default_config: false)
       assert_metric_value.call(
-        :stackdriver_config_usage,
+        :stackdriver_plugin_config,
         1,
         plugin_name: 'google_cloud',
         param: 'coerce_to_utf8',
         is_present: true,
-        has_default_value: false)
+        has_default_config: false)
       # The remaining "google_cloud" params are not present.
       # The are no params for "detect_exceptions".
       %w(
@@ -163,12 +163,12 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         zone
       ).each do |p|
         assert_metric_value.call(
-          :stackdriver_config_usage,
+          :stackdriver_plugin_config,
           1,
           plugin_name: 'google_cloud',
           param: p,
           is_present: false,
-          has_default_value: false)
+          has_default_config: false)
       end
 
       # We also export values for the bools.
