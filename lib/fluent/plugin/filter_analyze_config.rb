@@ -240,12 +240,12 @@ module Fluent
 
         plugin_usage = registry.counter(
           :stackdriver_enabled_plugins,
-          [:plugin_name, :is_default_plugin, :has_default_value],
+          [:plugin_name, :is_default_plugin, :has_default_config],
           'Enabled plugins')
         config_usage = registry.counter(
-          :stackdriver_config_usage,
-          [:plugin_name, :param, :is_present, :has_default_value],
-          'Parameter usage for Google Cloud plugins')
+          :stackdriver_plugin_config,
+          [:plugin_name, :param, :is_present, :has_default_config],
+          'Configuration parameter usage for plugins relevant to Google Cloud.')
         config_bool_values = registry.counter(
           :stackdriver_config_bool_values,
           [:plugin_name, :param, :value],
@@ -276,17 +276,17 @@ module Fluent
           plugin_name = default_plugin_name(e)
           if baseline_elements.key?(plugin_name)
             is_default_plugin = true
-            has_default_value = (baseline_elements[plugin_name] == e)
+            has_default_config = (baseline_elements[plugin_name] == e)
           else
             plugin_name = custom_plugin_name(e)
             is_default_plugin = false
-            has_default_value = false
+            has_default_config = false
           end
           plugin_usage.increment(
             labels: {
               plugin_name: plugin_name,
               is_default_plugin: is_default_plugin,
-              has_default_value: has_default_value,
+              has_default_config: has_default_config,
               has_ruby_snippet: embedded_ruby?(e)
             },
             by: 1)
@@ -300,7 +300,7 @@ module Fluent
                 plugin_name: e['@type'],
                 param: p,
                 is_present: e.key?(p),
-                has_default_value: (e.key?(p) &&
+                has_default_config: (e.key?(p) &&
                                     baseline_google_element.key?(p) &&
                                     e[p] == baseline_google_element[p])
               },
