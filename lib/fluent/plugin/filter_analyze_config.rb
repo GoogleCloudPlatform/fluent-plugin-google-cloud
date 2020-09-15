@@ -244,17 +244,20 @@ module Fluent
           @monitoring_type, project_id, resource, @gcm_service_address)
 
         plugin_usage = registry.counter(
-          :stackdriver_enabled_plugins,
+          :enabled_plugins,
           [:plugin_name, :is_default_plugin, :has_default_config],
-          'Enabled plugins')
+          'Enabled plugins',
+          'agent.googleapis.com/agent/internal/logging/config')
         config_usage = registry.counter(
-          :stackdriver_plugin_config,
+          :plugin_config,
           [:plugin_name, :param, :is_present, :has_default_config],
-          'Configuration parameter usage for plugins relevant to Google Cloud.')
+          'Configuration parameter usage for plugins relevant to Google Cloud.',
+          'agent.googleapis.com/agent/internal/logging/config')
         config_bool_values = registry.counter(
-          :stackdriver_config_bool_values,
+          :config_bool_values,
           [:plugin_name, :param, :value],
-          'Values for bool parameters in Google Cloud plugins')
+          'Values for bool parameters in Google Cloud plugins',
+          'agent.googleapis.com/agent/internal/logging/config')
 
         config = parse_config(@google_fluentd_config_path)
         baseline_config = parse_config(@google_fluentd_baseline_config_path)

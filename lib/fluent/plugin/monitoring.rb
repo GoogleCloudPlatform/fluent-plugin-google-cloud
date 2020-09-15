@@ -52,7 +52,7 @@ module Monitoring
     def initialize(_project_id, _monitored_resource, _gcm_service_address)
     end
 
-    def counter(_name, _labels, _docstring)
+    def counter(_name, _labels, _docstring, _prefix = None)
       BaseCounter.new
     end
 
@@ -75,7 +75,7 @@ module Monitoring
     end
 
     # Exception-driven behavior to avoid synchronization errors.
-    def counter(name, _labels, docstring)
+    def counter(name, _labels, docstring, _prefix = None)
       # When we upgrade to Prometheus client 0.10.0 or higher, pass the
       # labels in the metric constructor. The 'labels' field in
       # Prometheus client 0.9.0 has a different function and will not
@@ -88,6 +88,8 @@ module Monitoring
 
   # OpenCensus implementation of the monitoring registry.
   class OpenCensusMonitoringRegistry < BaseMonitoringRegistry
+    DEFAULT_PREFIX = 'agent.googleapis.com/agent'.freeze
+
     def self.name
       'opencensus'
     end
@@ -97,21 +99,27 @@ module Monitoring
       require 'opencensus'
       require 'opencensus-stackdriver'
       @log = $log # rubocop:disable Style/GlobalVars
-      @recorder = OpenCensus::Stats.ensure_recorder
-      @exporter = OpenCensus::Stats::Exporters::Stackdriver.new(
-        project_id: project_id,
-        metric_prefix: 'agent.googleapis.com/agent',
-        resource_type: monitored_resource.type,
-        resource_labels: monitored_resource.labels,
-        gcm_service_address: gcm_service_address
-      )
+      @project_id = project_id
+      @monitored_resource = monitored_resource
+      @gcm_service_address = gcm_service_address
+      @recorders = { DEFAULT_PREFIX => OpenCensus::Stats.ensure_recorder }
+      @exporters = {
+        DEFAULT_PREFIX =>
+          OpenCensus::Stats::Exporters::Stackdriver.new(
+            project_id: project_id,
+            metric_prefix: DEFAULT_PREFIX,
+            resource_type: monitored_resource.type,
+            resource_labels: monitored_resource.labels,
+            gcm_service_address: gcm_service_address
+          )
+      }
       OpenCensus.configure do |c|
-        c.stats.exporter = @exporter
+        c.stats.exporter = @exporters[DEFAULT_PREFIX]
       end
       @log.debug "OpenCensus config=#{OpenCensus.config}"
     end
 
-    def counter(name, labels, docstring)
+    def counter(name, labels, docstring, prefix = DEFAULT_PREFIX)
       translator = MetricTranslator.new(name, labels)
       measure = OpenCensus::Stats::MeasureRegistry.get(translator.name)
       if measure.nil?
@@ -121,6 +129,17 @@ module Monitoring
           description: docstring
         )
       end
+      unless @exporters.keys.include?(prefix)
+        @recorders[prefix] = OpenCensus::Stats.ensure_recorder
+        @exporters[prefix] = \
+          OpenCensus::Stats::Exporters::Stackdriver.new(
+            project_id: @project_id,
+            metric_prefix: prefix,
+            resource_type: @monitored_resource.type,
+            resource_labels: @monitored_resource.labels,
+            gcm_service_address: @gcm_service_address
+          )
+      end
       OpenCensus::Stats.create_and_register_view(
         name: translator.name,
         measure: measure,
@@ -128,11 +147,19 @@ module Monitoring
         description: docstring,
         columns: translator.view_labels.map(&:to_s)
       )
-      OpenCensusCounter.new(@recorder, measure, translator)
+      OpenCensusCounter.new(@recorders[prefix], measure, translator)
+    rescue StandardError => e
+      @log.warn "Failed to count metrics for #{name}.", error: e
+      raise e
     end
 
     def export
-      @exporter.export @recorder.views_data
+      @exporters.keys.each do |prefix|
+        @exporters[prefix].export @recorders[prefix].views_data
+      end
+    rescue StandardError => e
+      @log.warn 'Failed to export some metrics.', error: e
+      raise e
     end
   end
 
