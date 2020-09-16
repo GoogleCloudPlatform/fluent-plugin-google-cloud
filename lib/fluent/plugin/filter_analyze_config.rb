@@ -15,6 +15,9 @@
 require 'fileutils'
 require 'fluent/config'
 require 'fluent/config/v1_parser'
+require 'googleauth'
+require 'google/apis/logging_v2'
+require 'open-uri'
 require 'set'
 
 require_relative 'common'
