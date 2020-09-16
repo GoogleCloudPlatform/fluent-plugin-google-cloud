@@ -158,8 +158,8 @@ module Fluent
       super
       @log = $log # rubocop:disable Style/GlobalVars
 
-      # Initialize the insertID.
-      @log.info 'Started the analyze_config plugin to analyze configuration.'
+      @log.info(
+        'analyze_config plugin: Started the plugin to analyze configuration.')
     end
 
     def parse_config(path)
@@ -208,6 +208,7 @@ module Fluent
 
     def configure(conf)
       super
+      @log.info('analyze_config plugin: Starting to configure the plugin.')
       if File.file?(@google_fluentd_config_path) &&
          File.file?(@google_fluentd_baseline_config_path)
         @log.info(
@@ -235,8 +236,9 @@ module Fluent
 
         unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
           @monitoring_type)
-          @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
-                    'there will be no metrics'
+          @log.warn(
+            "analyze_config plugin: monitoring_type #{@monitoring_type} is " \
+            'unknown; there will be no metrics.')
         end
         registry = Monitoring::MonitoringRegistryFactory.create(
           @monitoring_type, project_id, resource, @gcm_service_address)
@@ -320,17 +322,18 @@ module Fluent
         end
       else
         @log.info(
-          'google-fluentd configuration file does not exist at' \
-          " #{@google_fluentd_config_path} or " \
-          'google-fluentd baseline configuration file does not exist at' \
-          " #{@google_fluentd_baseline_config_path} or " \
-          '. Skipping configuration analysis.')
+          'analyze_config plugin: google-fluentd configuration file does not ' \
+          "exist at #{@google_fluentd_config_path} or google-fluentd " \
+          'baseline configuration file does not exist at' \
+          " #{@google_fluentd_baseline_config_path}. Skipping configuration " \
+          'analysis.')
       end
     rescue => e
       # Do not crash the agent due to configuration analysis failures.
       @log.warn(
-        'Failed to optionally analyze the google-fluentd configuration' \
-        " file. Proceeding anyway. Error: #{e}")
+        'analyze_config plugin: Failed to optionally analyze the ' \
+        "google-fluentd configuration file. Proceeding anyway. Error: #{e}. " \
+        "Trace: #{e.backtrace}")
     end
 
     def shutdown
