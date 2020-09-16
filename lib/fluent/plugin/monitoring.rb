@@ -102,21 +102,8 @@ module Monitoring
       @project_id = project_id
       @monitored_resource = monitored_resource
       @gcm_service_address = gcm_service_address
-      @recorders = { DEFAULT_PREFIX => OpenCensus::Stats.ensure_recorder }
-      @exporters = {
-        DEFAULT_PREFIX =>
-          OpenCensus::Stats::Exporters::Stackdriver.new(
-            project_id: project_id,
-            metric_prefix: DEFAULT_PREFIX,
-            resource_type: monitored_resource.type,
-            resource_labels: monitored_resource.labels,
-            gcm_service_address: gcm_service_address
-          )
-      }
-      OpenCensus.configure do |c|
-        c.stats.exporter = @exporters[DEFAULT_PREFIX]
-      end
-      @log.debug "OpenCensus config=#{OpenCensus.config}"
+      @recorders = {}
+      @exporters = {}
     end
 
     def counter(name, labels, docstring, prefix = DEFAULT_PREFIX)
