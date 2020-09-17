@@ -52,7 +52,7 @@ module Monitoring
     def initialize(_project_id, _monitored_resource, _gcm_service_address)
     end
 
-    def counter(_name, _labels, _docstring, _prefix = None)
+    def counter(_name, _labels, _docstring, _prefix)
       BaseCounter.new
     end
 
@@ -75,7 +75,7 @@ module Monitoring
     end
 
     # Exception-driven behavior to avoid synchronization errors.
-    def counter(name, _labels, docstring, _prefix = None)
+    def counter(name, _labels, docstring, _prefix)
       # When we upgrade to Prometheus client 0.10.0 or higher, pass the
       # labels in the metric constructor. The 'labels' field in
       # Prometheus client 0.9.0 has a different function and will not
@@ -88,8 +88,6 @@ module Monitoring
 
   # OpenCensus implementation of the monitoring registry.
   class OpenCensusMonitoringRegistry < BaseMonitoringRegistry
-    DEFAULT_PREFIX = 'agent.googleapis.com/agent'.freeze
-
     def self.name
       'opencensus'
     end
@@ -100,13 +98,13 @@ module Monitoring
       require 'opencensus-stackdriver'
       @log = $log # rubocop:disable Style/GlobalVars
       @project_id = project_id
-      @monitored_resource = monitored_resource
+      @metrics_monitored_resource = monitored_resource
       @gcm_service_address = gcm_service_address
       @recorders = {}
       @exporters = {}
     end
 
-    def counter(name, labels, docstring, prefix = DEFAULT_PREFIX)
+    def counter(name, labels, docstring, prefix)
       translator = MetricTranslator.new(name, labels)
       measure = OpenCensus::Stats::MeasureRegistry.get(translator.name)
       if measure.nil?
@@ -122,8 +120,8 @@ module Monitoring
           OpenCensus::Stats::Exporters::Stackdriver.new(
             project_id: @project_id,
             metric_prefix: prefix,
-            resource_type: @monitored_resource.type,
-            resource_labels: @monitored_resource.labels,
+            resource_type: @metrics_monitored_resource.type,
+            resource_labels: @metrics_monitored_resource.labels,
             gcm_service_address: @gcm_service_address
           )
       end
