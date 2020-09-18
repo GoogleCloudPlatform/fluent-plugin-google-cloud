@@ -169,10 +169,11 @@ module BaseTest
       assert_true d.instance.instance_variable_get(:@enable_monitoring)
       registry = d.instance.instance_variable_get(:@registry)
       assert_not_nil registry
-      exporter = registry.instance_variable_get(:@exporter)
-      assert_equal 'custom_resource', exporter.resource_type, "Index #{index}"
+      monitored_resource = registry.instance_variable_get(
+        :@metrics_monitored_resource)
+      assert_equal('custom_resource', monitored_resource.type, "Index #{index}")
       assert_equal({ 'label1' => '123', 'label2' => 'abc' },
-                   exporter.resource_labels, "Index #{index}")
+                   monitored_resource.labels, "Index #{index}")
     end
   end
 

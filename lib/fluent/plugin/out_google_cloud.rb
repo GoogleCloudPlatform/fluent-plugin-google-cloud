@@ -563,32 +563,38 @@ module Fluent
         # Uptime should be a gauge, but the metric definition is a counter and
         # we can't change it.
         @uptime_metric = @registry.counter(
-          :uptime, [:version], 'Uptime of Logging agent')
+          :uptime, [:version], 'Uptime of Logging agent',
+          'agent.googleapis.com/agent')
         update_uptime
         timer_execute(:update_uptime, 1) { update_uptime }
         @successful_requests_count = @registry.counter(
           :stackdriver_successful_requests_count,
           [:grpc, :code],
-          'A number of successful requests to the Stackdriver Logging API')
+          'A number of successful requests to the Stackdriver Logging API',
+          'agent.googleapis.com/agent')
         @failed_requests_count = @registry.counter(
           :stackdriver_failed_requests_count,
           [:grpc, :code],
           'A number of failed requests to the Stackdriver Logging '\
-          'API, broken down by the error code')
+          'API, broken down by the error code',
+          'agent.googleapis.com/agent')
         @ingested_entries_count = @registry.counter(
           :stackdriver_ingested_entries_count,
           [:grpc, :code],
-          'A number of log entries ingested by Stackdriver Logging')
+          'A number of log entries ingested by Stackdriver Logging',
+          'agent.googleapis.com/agent')
         @dropped_entries_count = @registry.counter(
           :stackdriver_dropped_entries_count,
           [:grpc, :code],
-          'A number of log entries dropped by the Stackdriver output plugin')
+          'A number of log entries dropped by the Stackdriver output plugin',
+          'agent.googleapis.com/agent')
         @retried_entries_count = @registry.counter(
           :stackdriver_retried_entries_count,
           [:grpc, :code],
           'The number of log entries that failed to be ingested by '\
           'the Stackdriver output plugin due to a transient error '\
-          'and were retried')
+          'and were retried',
+          'agent.googleapis.com/agent')
         @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
       end
 
