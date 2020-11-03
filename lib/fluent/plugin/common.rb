@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'net/http'
+
 module Common
   # Constants for service names, resource types and etc.
   module ServiceConstants
@@ -111,15 +113,16 @@ module Common
       end
 
       begin
-        open('http://' + METADATA_SERVICE_ADDR, proxy: false) do |f|
-          if f.meta['metadata-flavor'] == 'Google'
-            @log.info 'Detected GCE platform'
-            return Platform::GCE
-          end
-          if f.meta['server'] == 'EC2ws'
-            @log.info 'Detected EC2 platform'
-            return Platform::EC2
-          end
+        http = Net::HTTP.new(METADATA_SERVICE_ADDR, 80)
+        req = Net::HTTP::Get.new('http://' + METADATA_SERVICE_ADDR)
+        res = http.request(req)
+        if res['metadata-flavor'] == 'Google'
+          @log.info 'Detected GCE platform'
+          return Platform::GCE
+        end
+        if res['server'] == 'EC2ws'
+          @log.info 'Detected EC2 platform'
+          return Platform::EC2
         end
       rescue StandardError => e
         @log.error 'Failed to access metadata service: ', error: e
@@ -145,11 +148,24 @@ module Common
         platform == Platform::EC2
       unless @ec2_metadata
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
-        open('http://' + METADATA_SERVICE_ADDR +
-             '/latest/dynamic/instance-identity/document', proxy: false) do |f|
-          contents = f.read
-          @ec2_metadata = JSON.parse(contents)
-        end
+        http = Net::HTTP.new(METADATA_SERVICE_ADDR, 80)
+
+        token_req = Net::HTTP::Put.new('http://' + METADATA_SERVICE_ADDR +
+                                           '/latest/api/token')
+        token_req['X-aws-ec2-metadata-token-ttl-seconds'] = '21600'
+        token_res = http.request(token_req)
+        raise "Unable to fetch metadata token. code=#{token_res.code}" unless
+            token_res.is_a?(Net::HTTPSuccess)
+
+        info_req = Net::HTTP::Get.new('http://' + METADATA_SERVICE_ADDR +
+                                          '/latest/dynamic' \
+                                          '/instance-identity/document')
+        info_req['X-aws-ec2-metadata-token'] = token_res.body
+        info_res = http.request(info_req)
+        raise "Unable to fetch metadata info. code=#{info_res.code}" unless
+            info_res.is_a?(Net::HTTPSuccess)
+
+        @ec2_metadata = JSON.parse(info_res.body)
       end
 
       @ec2_metadata

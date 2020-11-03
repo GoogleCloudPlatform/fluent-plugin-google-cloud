@@ -74,6 +74,10 @@ module Utils
     stub_request(:get, 'http://169.254.169.254')
       .to_return(status: 200, headers: { 'Server' => 'EC2ws' })
 
+    stub_request(:put, 'http://169.254.169.254/latest/api/token')
+      .with(headers: { 'X-Aws-Ec2-Metadata-Token-Ttl-Seconds' => '21600' })
+      .to_return(status: 200, body: 'fake-token')
+
     # Stub the identity document lookup made by the agent.
     stub_request(:get, 'http://169.254.169.254/latest/dynamic/' \
                  'instance-identity/document')
