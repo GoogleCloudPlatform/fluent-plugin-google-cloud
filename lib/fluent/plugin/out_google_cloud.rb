@@ -1260,7 +1260,8 @@ module Fluent
 
       case resource.type
       # GKE container or k8s container
-      when GKE_CONSTANTS[:resource_type], K8S_CONTAINER_CONSTANTS[:resource_type]
+      when GKE_CONSTANTS[:resource_type],
+          K8S_CONTAINER_CONSTANTS[:resource_type]
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
           delete_and_extract_labels(

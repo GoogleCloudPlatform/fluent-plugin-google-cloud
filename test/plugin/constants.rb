@@ -606,7 +606,7 @@ module Constants
       "#{GKE_CONSTANTS[:service]}/namespace_name" => K8S_NAMESPACE_NAME,
       "#{GKE_CONSTANTS[:service]}/pod_name" => K8S_POD_NAME,
       "#{GKE_CONSTANTS[:service]}/stream" => K8S_STREAM,
-      "label/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
+      "k8s-pod/#{CONTAINER_LABEL_KEY}" => CONTAINER_LABEL_VALUE,
       "#{COMPUTE_CONSTANTS[:service]}/resource_name" => HOSTNAME
     }
   }.freeze
@@ -667,7 +667,9 @@ module Constants
       }
     },
     project_id: PROJECT_ID,
-    labels: {}
+    labels: {
+      "#{GKE_CONSTANTS[:service]}/stream" => K8S_STREAM
+    }
   }.freeze
   K8S_CONTAINER_PARAMS_FROM_LOCAL = K8S_CONTAINER_PARAMS.merge(
     resource: K8S_CONTAINER_PARAMS[:resource].merge(

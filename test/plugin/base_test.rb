@@ -1784,37 +1784,43 @@ module BaseTest
         config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
+        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK,
+        field_size: 2
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK
+        expected_params: K8S_CONTAINER_PARAMS_FROM_FALLBACK,
+        field_size: 2
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
+        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL,
+        field_size: 1
       },
       {
         config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
+        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL,
+        field_size: 1
       },
       {
         config: CUSTOM_K8S_CONFIG,
         setup_k8s_stub: false,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_CUSTOM
+        expected_params: K8S_CONTAINER_PARAMS_CUSTOM,
+        field_size: 1
       },
       {
         config: EMPTY_K8S_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(log_entry(0)),
-        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL
+        expected_params: K8S_CONTAINER_PARAMS_FROM_LOCAL,
+        field_size: 1
       }
     ].each do |test_params|
       new_stub_context do
@@ -1828,9 +1834,8 @@ module BaseTest
         verify_log_entries(1, test_params[:expected_params],
                            'jsonPayload') do |entry|
           fields = entry['jsonPayload']
-          assert_equal 2, fields.size, entry
+          assert_equal test_params[:field_size], fields.size, entry
           assert_equal 'test log entry 0', fields['log'], entry
-          assert_equal K8S_STREAM, fields['stream'], entry
         end
       end
     end
