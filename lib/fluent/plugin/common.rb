@@ -150,20 +150,23 @@ module Common
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
         http = Net::HTTP.new(METADATA_SERVICE_ADDR, 80)
 
-        token_req = Net::HTTP::Put.new('http://' + METADATA_SERVICE_ADDR +
-                                           '/latest/api/token')
-        token_req['X-aws-ec2-metadata-token-ttl-seconds'] = '21600'
-        token_res = http.request(token_req)
-        raise "Unable to fetch metadata token. code=#{token_res.code}" unless
-            token_res.is_a?(Net::HTTPSuccess)
-
         info_req = Net::HTTP::Get.new('http://' + METADATA_SERVICE_ADDR +
                                           '/latest/dynamic' \
                                           '/instance-identity/document')
-        info_req['X-aws-ec2-metadata-token'] = token_res.body
         info_res = http.request(info_req)
-        raise "Unable to fetch metadata info. code=#{info_res.code}" unless
-            info_res.is_a?(Net::HTTPSuccess)
+        if info_res.is_a?(Net::HTTPUnauthorized)
+          token_req = Net::HTTP::Put.new('http://' + METADATA_SERVICE_ADDR +
+                                             '/latest/api/token')
+          token_req['X-aws-ec2-metadata-token-ttl-seconds'] = '21600'
+          token_res = http.request(token_req)
+          raise "Unable to fetch metadata token. code=#{token_res.code}" unless
+              token_res.is_a?(Net::HTTPSuccess)
+
+          info_req['X-aws-ec2-metadata-token'] = token_res.body
+          info_res = http.request(info_req)
+          raise "Unable to fetch metadata info. code=#{info_res.code}" unless
+              info_res.is_a?(Net::HTTPSuccess)
+        end
 
         @ec2_metadata = JSON.parse(info_res.body)
       end
