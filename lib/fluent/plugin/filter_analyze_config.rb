@@ -243,18 +243,18 @@ module Fluent
         registry = Monitoring::MonitoringRegistryFactory.create(
           @monitoring_type, project_id, resource, @gcm_service_address)
 
-        plugin_usage = registry.counter(
+        enabled_plugins_counter = registry.counter(
           :enabled_plugins,
           [:plugin_name, :is_default_plugin,
            :has_default_config, :has_ruby_snippet],
           'Enabled plugins',
           'agent.googleapis.com/agent/internal/logging/config')
-        config_usage = registry.counter(
+        plugin_config_counter = registry.counter(
           :plugin_config,
           [:plugin_name, :param, :is_present, :has_default_config],
           'Configuration parameter usage for plugins relevant to Google Cloud.',
           'agent.googleapis.com/agent/internal/logging/config')
-        config_bool_values = registry.counter(
+        config_bool_values_counter = registry.counter(
           :config_bool_values,
           [:plugin_name, :param, :value],
           'Values for bool parameters in Google Cloud plugins',
@@ -291,7 +291,7 @@ module Fluent
             is_default_plugin = false
             has_default_config = false
           end
-          plugin_usage.increment(
+          enabled_plugins_counter.increment(
             labels: {
               plugin_name: plugin_name,
               is_default_plugin: is_default_plugin,
@@ -304,7 +304,7 @@ module Fluent
           # detect_exceptions).
           next unless GOOGLE_PLUGIN_PARAMS.key?(e['@type'])
           GOOGLE_PLUGIN_PARAMS[e['@type']].each do |p|
-            config_usage.increment(
+            plugin_config_counter.increment(
               labels: {
                 plugin_name: e['@type'],
                 param: p,
@@ -315,7 +315,7 @@ module Fluent
               },
               by: 1)
             next unless e.key?(p) && %w(true false).include?(e[p])
-            config_bool_values.increment(
+            config_bool_values_counter.increment(
               labels: {
                 plugin_name: e['@type'],
                 param: p,
