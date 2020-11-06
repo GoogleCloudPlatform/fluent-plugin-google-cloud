@@ -245,7 +245,8 @@ module Fluent
 
         plugin_usage = registry.counter(
           :enabled_plugins,
-          [:plugin_name, :is_default_plugin, :has_default_config],
+          [:plugin_name, :is_default_plugin,
+           :has_default_config, :has_ruby_snippet],
           'Enabled plugins',
           'agent.googleapis.com/agent/internal/logging/config')
         config_usage = registry.counter(
