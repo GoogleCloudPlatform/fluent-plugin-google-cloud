@@ -102,12 +102,18 @@ module Monitoring
       @gcm_service_address = gcm_service_address
       @recorders = {}
       @exporters = {}
+      @log.info(
+        'monitoring module: Successfully initialized Open Census monitoring ' \
+        'registry.')
     end
 
     def counter(name, labels, docstring, prefix)
       translator = MetricTranslator.new(name, labels)
       measure = OpenCensus::Stats::MeasureRegistry.get(translator.name)
       if measure.nil?
+        @log.debug(
+          'monitoring module: measure registry not found. Registering a new ' \
+          'one.')
         measure = OpenCensus::Stats.create_measure_int(
           name: translator.name,
           unit: OpenCensus::Stats::Measure::UNIT_NONE,
@@ -115,15 +121,20 @@ module Monitoring
         )
       end
       unless @exporters.keys.include?(prefix)
+        @log.debug(
+          "monitoring module: #{prefix} exporter not found. Registering a " \
+          'new one.')
         @recorders[prefix] = OpenCensus::Stats.ensure_recorder
         @exporters[prefix] = \
           OpenCensus::Stats::Exporters::Stackdriver.new(
             project_id: @project_id,
             metric_prefix: prefix,
-            resource_type: @metrics_monitored_resource.type,
             resource_labels: @metrics_monitored_resource.labels,
             gcm_service_address: @gcm_service_address
           )
+        @log.info(
+          'monitoring module: Registered recorders and exporters for ' \
+          "#{prefix}.\n#{@exporters[prefix]}")
       end
       OpenCensus::Stats.create_and_register_view(
         name: translator.name,
@@ -132,7 +143,11 @@ module Monitoring
         description: docstring,
         columns: translator.view_labels.map(&:to_s)
       )
-      OpenCensusCounter.new(@recorders[prefix], measure, translator)
+      counter = OpenCensusCounter.new(@recorders[prefix], measure, translator)
+      @log.info(
+        'monitoring module: Successfully initialized Open Census counter for ' \
+        "#{prefix}/#{name}.")
+      counter
     rescue StandardError => e
       @log.warn "Failed to count metrics for #{name}.", error: e
       raise e
@@ -141,6 +156,8 @@ module Monitoring
     def export
       @exporters.keys.each do |prefix|
         @exporters[prefix].export @recorders[prefix].views_data
+        @log.info(
+          "monitoring module: Successfully exported metrics for #{prefix}.")
       end
     rescue StandardError => e
       @log.warn 'Failed to export some metrics.', error: e

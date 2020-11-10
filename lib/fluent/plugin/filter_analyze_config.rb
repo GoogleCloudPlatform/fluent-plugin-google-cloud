@@ -212,7 +212,7 @@ module Fluent
       if File.file?(@google_fluentd_config_path) &&
          File.file?(@google_fluentd_baseline_config_path)
         @log.info(
-          'google-fluentd configuration file found at' \
+          'analyze_config plugin: google-fluentd configuration file found at' \
           " #{@google_fluentd_config_path}. " \
           'google-fluentd baseline configuration file found at' \
           " #{@google_fluentd_baseline_config_path}. " \
@@ -243,25 +243,40 @@ module Fluent
         registry = Monitoring::MonitoringRegistryFactory.create(
           @monitoring_type, project_id, resource, @gcm_service_address)
 
+        @log.info('analyze_config plugin: Registering counters.')
         enabled_plugins_counter = registry.counter(
           :enabled_plugins,
           [:plugin_name, :is_default_plugin,
            :has_default_config, :has_ruby_snippet],
           'Enabled plugins',
           'agent.googleapis.com/agent/internal/logging/config')
+        @log.info(
+          'analyze_config plugin: registered enable_plugins counter. ' \
+          "#{enabled_plugins_counter}")
         plugin_config_counter = registry.counter(
           :plugin_config,
           [:plugin_name, :param, :is_present, :has_default_config],
           'Configuration parameter usage for plugins relevant to Google Cloud.',
           'agent.googleapis.com/agent/internal/logging/config')
+        @log.info('analyze_config plugin: registered plugin_config counter. ' \
+          "#{plugin_config_counter}")
         config_bool_values_counter = registry.counter(
           :config_bool_values,
           [:plugin_name, :param, :value],
           'Values for bool parameters in Google Cloud plugins',
           'agent.googleapis.com/agent/internal/logging/config')
+        @log.info('analyze_config plugin: registered config_bool_values ' \
+          "counter. #{config_bool_values_counter}")
 
         config = parse_config(@google_fluentd_config_path)
+        @log.debug(
+          'analyze_config plugin: successfully parsed google-fluentd' \
+          " configuration file at #{@google_fluentd_config_path}. #{config}")
         baseline_config = parse_config(@google_fluentd_baseline_config_path)
+        @log.debug(
+          'analyze_config plugin: successfully parsed google-fluentd' \
+          ' baseline configuration file at' \
+          " #{@google_fluentd_baseline_config_path}: #{baseline_config}")
 
         # Create hash of all baseline elements by their plugin names.
         baseline_elements = Hash[baseline_config.elements.collect do |e|
@@ -324,6 +339,8 @@ module Fluent
               by: 1)
           end
         end
+        @log.info(
+          'analyze_config plugin: Successfully finished analyzing config.')
       else
         @log.info(
           'analyze_config plugin: google-fluentd configuration file does not ' \
