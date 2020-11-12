@@ -1976,6 +1976,66 @@ module BaseTest
     end
   end
 
+  def test_metrics
+    setup_gce_metadata_stubs
+    [
+      [ENABLE_PROMETHEUS_CONFIG, method(:assert_prometheus_metric_value)],
+      [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
+    ].each do |config, assert_metric_value|
+      [
+        # Single successful request.
+        [ok_status_code, 1, 1, [1, 0, 1, 0, 0]],
+        # Several successful requests.
+        [ok_status_code, 2, 1, [2, 0, 2, 0, 0]],
+        # Single successful request with several entries.
+        [ok_status_code, 1, 2, [1, 0, 2, 0, 0]],
+        # Single failed request that causes logs to be dropped.
+        [client_error_status_code, 1, 1, [0, 1, 0, 1, 0]],
+        # Single failed request that escalates without logs being dropped with
+        # several entries.
+        [server_error_status_code, 1, 2, [0, 0, 0, 0, 2]]
+      ].each do |code, request_count, entry_count, metric_values|
+        clear_metrics
+        setup_logging_stubs(nil, code, 'SomeMessage') do
+          (1..request_count).each do
+            d = create_driver(config)
+            (1..entry_count).each do |i|
+              d.emit('message' => log_entry(i.to_s))
+            end
+            # rubocop:disable Lint/HandleExceptions
+            begin
+              d.run
+            rescue mock_error_type
+            end
+            # rubocop:enable Lint/HandleExceptions
+          end
+        end
+        successful_requests_count, failed_requests_count,
+        ingested_entries_count, dropped_entries_count,
+        retried_entries_count = metric_values
+        assert_metric_value.call(:stackdriver_successful_requests_count,
+                                 successful_requests_count,
+                                 grpc: use_grpc, code: ok_status_code)
+        assert_metric_value.call(:stackdriver_ingested_entries_count,
+                                 ingested_entries_count,
+                                 grpc: use_grpc, code: ok_status_code)
+        assert_metric_value.call(:stackdriver_retried_entries_count,
+                                 retried_entries_count,
+                                 grpc: use_grpc, code: code)
+        # Skip failure assertions when code indicates success, because the
+        # assertion will fail in the case when a single metric contains time
+        # series with success and failure events.
+        next if code == ok_status_code
+        assert_metric_value.call(:stackdriver_failed_requests_count,
+                                 failed_requests_count,
+                                 grpc: use_grpc, code: code)
+        assert_metric_value.call(:stackdriver_dropped_entries_count,
+                                 dropped_entries_count,
+                                 grpc: use_grpc, code: code)
+      end
+    end
+  end
+
   private
 
   # Provide a stub context that initializes @logs_sent, executes the block and
@@ -2456,7 +2516,32 @@ module BaseTest
   end
 
   # Set up http or grpc stubs to mock the external calls.
-  def setup_logging_stubs
+  def setup_logging_stubs(_error = nil, _code = nil, _message = nil)
+    _undefined
+  end
+
+  # Whether this is the grpc path
+  def use_grpc
+    _undefined
+  end
+
+  # The OK status code.
+  def ok_status_code
+    _undefined
+  end
+
+  # A client side error status code.
+  def client_error_status_code
+    _undefined
+  end
+
+  # A server side error status code.
+  def server_error_status_code
+    _undefined
+  end
+
+  # The parent error type to expect in the mock
+  def mock_error_type
     _undefined
   end
 
