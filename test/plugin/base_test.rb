@@ -2025,6 +2025,7 @@ module BaseTest
               if code != ok_status_code
                 0
               elsif config == ENABLE_OPENCENSUS_CONFIG
+                # TODO(b/173215689) Improve the Open Census side of testing.
                 # The test driver instance variables can not survive between
                 # test driver runs. So the open cencensus side counter gets
                 # reset as expected.
@@ -2037,6 +2038,7 @@ module BaseTest
               if code != ok_status_code
                 0
               elsif config == ENABLE_OPENCENSUS_CONFIG
+                # TODO(b/173215689) Improve the Open Census side of testing.
                 # The test driver instance variables can not survive between
                 # test driver runs. So the open cencensus side counter gets
                 # reset as expected.
