@@ -138,71 +138,6 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_equal 1, exception_count
   end
 
-  # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
-  # Refactor and remove duplication.
-  # TODO: Use status codes instead of int literals.
-  def test_metrics
-    setup_gce_metadata_stubs
-    [
-      [ENABLE_PROMETHEUS_CONFIG, method(:assert_prometheus_metric_value)],
-      [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
-    ].each do |config, assert_metric_value|
-      [
-        # Single successful request.
-        [200, 1, 1, [1, 0, 1, 0, 0]],
-        # Several successful requests.
-        [200, 2, 1, [2, 0, 2, 0, 0]],
-        # Single successful request with several entries.
-        [200, 1, 2, [1, 0, 2, 0, 0]],
-        # Single failed request that causes logs to be dropped.
-        [401, 1, 1, [0, 1, 0, 1, 0]],
-        # Single failed request that escalates without logs being dropped with
-        # several entries.
-        [500, 1, 2, [0, 0, 0, 0, 2]]
-      ].each do |code, request_count, entry_count, metric_values|
-        clear_metrics
-        # TODO: Do this as part of setup_logging_stubs.
-        stub_request(:post, WRITE_LOG_ENTRIES_URI)
-          .to_return(status: code, body: 'Some Message')
-        (1..request_count).each do
-          d = create_driver(config)
-          (1..entry_count).each do |i|
-            d.emit('message' => log_entry(i.to_s))
-          end
-          # rubocop:disable Lint/HandleExceptions
-          begin
-            d.run
-          rescue Google::Apis::AuthorizationError
-          rescue Google::Apis::ServerError
-          end
-          # rubocop:enable Lint/HandleExceptions
-        end
-        successful_requests_count, failed_requests_count,
-        ingested_entries_count, dropped_entries_count,
-        retried_entries_count = metric_values
-        assert_metric_value.call(:stackdriver_successful_requests_count,
-                                 successful_requests_count,
-                                 grpc: false, code: 200)
-        assert_metric_value.call(:stackdriver_ingested_entries_count,
-                                 ingested_entries_count,
-                                 grpc: false, code: 200)
-        assert_metric_value.call(:stackdriver_retried_entries_count,
-                                 retried_entries_count,
-                                 grpc: false, code: code)
-        # Skip failure assertions when code indicates success, because the
-        # assertion will fail in the case when a single metric contains time
-        # series with success and failure events.
-        next if code == 200
-        assert_metric_value.call(:stackdriver_failed_requests_count,
-                                 failed_requests_count,
-                                 grpc: false, code: code)
-        assert_metric_value.call(:stackdriver_dropped_entries_count,
-                                 dropped_entries_count,
-                                 grpc: false, code: code)
-      end
-    end
-  end
-
   # This test looks similar between the grpc and non-grpc paths except that when
   # parsing "105", the grpc path responds with "DEBUG", while the non-grpc path
   # responds with "100".
@@ -400,12 +335,37 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # Set up http stubs to mock the external calls.
-  def setup_logging_stubs
+  def setup_logging_stubs(_error = nil, code = nil, message = 'some message')
     stub_request(:post, WRITE_LOG_ENTRIES_URI).to_return do |request|
       @logs_sent << JSON.parse(request.body)
-      { body: '' }
+      { status: code, body: message }
     end
     yield
+  end
+
+  # Whether this is the grpc path
+  def use_grpc
+    false
+  end
+
+  # The OK status code for the grpc path.
+  def ok_status_code
+    200
+  end
+
+  # A client side error status code for the grpc path.
+  def client_error_status_code
+    401
+  end
+
+  # A server side error status code for the grpc path.
+  def server_error_status_code
+    500
+  end
+
+  # The parent error type to expect in the mock
+  def mock_error_type
+    Google::Apis::Error
   end
 
   # The conversions from user input to output.

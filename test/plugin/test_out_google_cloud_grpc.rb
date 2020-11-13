@@ -60,8 +60,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       GRPC::Core::StatusCodes::ABORTED => 'Aborted',
       GRPC::Core::StatusCodes::UNAUTHENTICATED => 'Unauthenticated'
     }.each_with_index do |(code, message), index|
-      setup_logging_stubs(
-        GRPC::BadStatus.new_status_exception(code, message)) do
+      setup_logging_stubs(nil, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test')
         # The API Client should not retry this and the plugin should consume the
         # exception.
@@ -99,19 +98,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       d.run
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 0,
-        grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 2,
-        grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
     end
   end
 
@@ -128,16 +127,16 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       d.run
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 0,
-        grpc: true, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 0,
-        grpc: true, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
-        grpc: true, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
     end
   end
 
@@ -150,8 +149,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       GRPC::Core::StatusCodes::UNAVAILABLE => 'Unavailable'
     }.each_with_index do |(code, message), index|
       exception_count = 0
-      setup_logging_stubs(
-        GRPC::BadStatus.new_status_exception(code, message)) do
+      setup_logging_stubs(nil, code, message) do
         d = create_driver(USE_GRPC_CONFIG, 'test')
         # The API client should retry this once, then throw an exception which
         # gets propagated through the plugin
@@ -165,72 +163,6 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       end
       assert_equal 1, @failed_attempts.size, "Index #{index} failed."
       assert_equal 1, exception_count, "Index #{index} failed."
-    end
-  end
-
-  # TODO: The code in the non-gRPC and gRPC tests is nearly identical.
-  # Refactor and remove duplication.
-  # TODO: Use status codes instead of int literals.
-  def test_metrics
-    setup_gce_metadata_stubs
-    [
-      [ENABLE_PROMETHEUS_CONFIG, method(:assert_prometheus_metric_value)],
-      [ENABLE_OPENCENSUS_CONFIG, method(:assert_opencensus_metric_value)]
-    ].each do |config, assert_metric_value|
-      [
-        # Single successful request.
-        [false, 0, 1, 1, [1, 0, 1, 0, 0]],
-        # Several successful requests.
-        [false, 0, 2, 1, [2, 0, 2, 0, 0]],
-        # Single successful request with several entries.
-        [false, 0, 1, 2, [1, 0, 2, 0, 0]],
-        # Single failed request that causes logs to be dropped.
-        [true, 16, 1, 1, [0, 1, 0, 1, 0]],
-        # Single failed request that escalates without logs being dropped with
-        # several entries.
-        [true, 13, 1, 2, [0, 0, 0, 0, 2]]
-      ].each do |should_fail, code, request_count, entry_count, metric_values|
-        clear_metrics
-        (1..request_count).each do
-          setup_logging_stubs(
-            if should_fail
-              GRPC::BadStatus.new_status_exception(code, 'SomeMessage')
-            end) do
-            d = create_driver(USE_GRPC_CONFIG + config, 'test')
-            (1..entry_count).each do |i|
-              d.emit('message' => log_entry(i.to_s))
-            end
-            # rubocop:disable Lint/HandleExceptions
-            begin
-              d.run
-            rescue GRPC::BadStatus
-            end
-            # rubocop:enable Lint/HandleExceptions
-          end
-        end
-        successful_requests_count, failed_requests_count,
-        ingested_entries_count, dropped_entries_count,
-        retried_entries_count = metric_values
-        assert_metric_value.call(:stackdriver_successful_requests_count,
-                                 successful_requests_count,
-                                 grpc: true, code: 0)
-        assert_metric_value.call(:stackdriver_ingested_entries_count,
-                                 ingested_entries_count,
-                                 grpc: true, code: 0)
-        assert_metric_value.call(:stackdriver_retried_entries_count,
-                                 retried_entries_count,
-                                 grpc: true, code: code)
-        # Skip failure assertions when code indicates success, because the
-        # assertion will fail in the case when a single metric contains time
-        # series with success and failure events.
-        next if code == 0
-        assert_metric_value.call(:stackdriver_failed_requests_count,
-                                 failed_requests_count,
-                                 grpc: true, code: code)
-        assert_metric_value.call(:stackdriver_dropped_entries_count,
-                                 dropped_entries_count,
-                                 grpc: true, code: code)
-      end
     end
   end
 
@@ -428,15 +360,43 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
   end
 
   # Set up grpc stubs to mock the external calls.
-  def setup_logging_stubs(error = nil)
-    if error.nil?
+  def setup_logging_stubs(error = nil, code = nil, message = 'some message')
+    if error.nil? && (code.nil? || code == 0)
       @requests_sent = []
       @grpc_stub = GRPCLoggingMockService.new(@requests_sent)
     else
       @failed_attempts = []
+      # Only fall back to constructing an error with code and message if no
+      # error is passed in.
+      error ||= GRPC::BadStatus.new_status_exception(code, message)
       @grpc_stub = GRPCLoggingMockFailingService.new(error, @failed_attempts)
     end
     yield
+  end
+
+  # Whether this is the grpc path
+  def use_grpc
+    true
+  end
+
+  # The OK status code for the grpc path.
+  def ok_status_code
+    0
+  end
+
+  # A client side error status code for the grpc path.
+  def client_error_status_code
+    16
+  end
+
+  # A server side error status code for the grpc path.
+  def server_error_status_code
+    13
+  end
+
+  # The parent error type to expect in the mock
+  def mock_error_type
+    GRPC::BadStatus
   end
 
   # Verify the number and the content of the log entries match the expectation.
