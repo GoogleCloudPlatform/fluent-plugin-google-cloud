@@ -98,18 +98,23 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       d.run
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 1,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 0,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 1,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 2,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
     end
   end
@@ -127,15 +132,19 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       d.run
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 0,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 1,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 0,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
+        'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
         grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
     end
   end
