@@ -37,7 +37,10 @@ module Asserts
     assert_in_delta expected_ts.tv_nsec, ts_nanos, 600, entry
   end
 
-  def assert_prometheus_metric_value(metric_name, expected_value, labels = {})
+  # rubocop:disable Metrics/ParameterLists
+  def assert_prometheus_metric_value(metric_name, expected_value, _prefix,
+                                     _aggregation, _test_driver, labels = {})
+    # rubocop:enable Metrics/ParameterLists
     metric = Prometheus::Client.registry.get(metric_name)
     assert_not_nil(metric)
     metric_value = if labels == :aggregate
@@ -49,7 +52,10 @@ module Asserts
     assert_equal(expected_value, metric_value)
   end
 
-  def assert_opencensus_metric_value(metric_name, expected_value, labels = {})
+  # rubocop:disable Metrics/ParameterLists
+  def assert_opencensus_metric_value(metric_name, expected_value, prefix,
+                                     aggregation, test_driver, labels = {})
+    # rubocop:enable Metrics/ParameterLists
     translator = Monitoring::MetricTranslator.new(metric_name, labels)
     metric_name = translator.name
     labels = translator.translate_labels(labels)
@@ -60,18 +66,22 @@ module Asserts
     # label that never changes during runtime.
     labels.select! { |k, _| translator.view_labels.include? k }
     labels = labels.map { |k, v| [k.to_s, v.to_s] }.to_h
-    stats_recorder = OpenCensus::Stats.ensure_recorder
-    view_data = stats_recorder.view_data metric_name
-    assert_not_nil(view_data)
+
+    registry = test_driver.instance.instance_variable_get(:@registry)
+    recorder = registry.instance_variable_get(:@recorders)[prefix]
+    view_data = recorder.measure_views_data[metric_name][0].data
+    view = recorder.instance_variable_get(:@views)[metric_name]
+
+    # Assert values in the view.
+    assert_kind_of(aggregation, view.aggregation)
+    assert_equal(labels.keys, view.columns)
+    assert_equal(metric_name, view.measure.name)
+    assert_equal('INT64', view.measure.type)
+
     # For now assume all metrics are counters.
-    assert_kind_of(OpenCensus::Stats::Aggregation::Sum,
-                   view_data.view.aggregation)
-    assert_true(view_data.view.measure.int64?)
-    tag_values = view_data.view.columns.map { |column| labels[column] }
+    tag_values = view.columns.map { |column| labels[column] }
     metric_value = 0
-    if view_data.data.key? tag_values
-      metric_value = view_data.data[tag_values].value
-    end
+    metric_value = view_data[tag_values].value if view_data.key? tag_values
     assert_equal(expected_value, metric_value)
   end
 end

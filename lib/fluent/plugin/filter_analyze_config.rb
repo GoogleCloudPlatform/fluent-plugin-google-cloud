@@ -15,6 +15,7 @@
 require 'fileutils'
 require 'fluent/config'
 require 'fluent/config/v1_parser'
+require 'fluent/plugin_helper'
 require 'googleauth'
 require 'google/apis/logging_v2'
 require 'open-uri'
@@ -31,6 +32,10 @@ module Fluent
   class AnalyzeConfigFilter < Filter
     include Fluent::Config
     Fluent::Plugin.register_filter('analyze_config', self)
+
+    # Required for the timer_execute method below
+    include PluginHelper::Mixin
+    helpers :timer
 
     module Constants
       # Built-in plugins that are ok to reference in metrics.
@@ -240,31 +245,37 @@ module Fluent
             "analyze_config plugin: monitoring_type #{@monitoring_type} is " \
             'unknown; there will be no metrics.')
         end
-        registry = Monitoring::MonitoringRegistryFactory.create(
+
+        @registry = Monitoring::MonitoringRegistryFactory.create(
           @monitoring_type, project_id, resource, @gcm_service_address)
+        # Export metrics every 60 seconds.
+        timer_execute(:export_config_analysis_metrics, 60) { @registry.export }
 
         @log.info('analyze_config plugin: Registering counters.')
-        enabled_plugins_counter = registry.counter(
+        enabled_plugins_counter = @registry.counter(
           :enabled_plugins,
           [:plugin_name, :is_default_plugin,
            :has_default_config, :has_ruby_snippet],
           'Enabled plugins',
-          'agent.googleapis.com/agent/internal/logging/config')
+          'agent.googleapis.com/agent/internal/logging/config',
+          'GAUGE')
         @log.info(
           'analyze_config plugin: registered enable_plugins counter. ' \
           "#{enabled_plugins_counter}")
-        plugin_config_counter = registry.counter(
+        plugin_config_counter = @registry.counter(
           :plugin_config,
           [:plugin_name, :param, :is_present, :has_default_config],
           'Configuration parameter usage for plugins relevant to Google Cloud.',
-          'agent.googleapis.com/agent/internal/logging/config')
+          'agent.googleapis.com/agent/internal/logging/config',
+          'GAUGE')
         @log.info('analyze_config plugin: registered plugin_config counter. ' \
           "#{plugin_config_counter}")
-        config_bool_values_counter = registry.counter(
+        config_bool_values_counter = @registry.counter(
           :config_bool_values,
           [:plugin_name, :param, :value],
           'Values for bool parameters in Google Cloud plugins',
-          'agent.googleapis.com/agent/internal/logging/config')
+          'agent.googleapis.com/agent/internal/logging/config',
+          'GAUGE')
         @log.info('analyze_config plugin: registered config_bool_values ' \
           "counter. #{config_bool_values_counter}")
 
@@ -359,6 +370,9 @@ module Fluent
 
     def shutdown
       super
+      # Export metrics on shutdown. This is a best-effort attempt, and it might
+      # fail, for instance if there was a recent write to the same time series.
+      @registry.export unless @registry.nil?
     end
 
     # rubocop:disable Lint/UnusedMethodArgument

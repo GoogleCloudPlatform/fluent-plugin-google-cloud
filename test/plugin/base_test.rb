@@ -943,22 +943,30 @@ module BaseTest
           d.emit("tag#{i}", 'message' => log_entry(i))
         end
         d.run
+        @logs_sent.zip(request_log_names).each do |request, log_name|
+          assert_equal log_name, request['logName']
+        end
+        verify_log_entries(log_entry_count, COMPUTE_PARAMS_NO_LOG_NAME,
+                           'textPayload') do |entry, entry_index|
+          verify_default_log_entry_text(entry['textPayload'], entry_index,
+                                        entry)
+          assert_equal entry_log_names[entry_index], entry['logName']
+        end
+        # Verify the number of requests is different based on whether the
+        # 'split_logs_by_tag' flag is enabled.
+        assert_prometheus_metric_value(
+          :stackdriver_successful_requests_count,
+          request_count,
+          'agent.googleapis.com/agent',
+          OpenCensus::Stats::Aggregation::Sum, d,
+          :aggregate)
+        assert_prometheus_metric_value(
+          :stackdriver_ingested_entries_count,
+          log_entry_count,
+          'agent.googleapis.com/agent',
+          OpenCensus::Stats::Aggregation::Sum, d,
+          :aggregate)
       end
-      @logs_sent.zip(request_log_names).each do |request, log_name|
-        assert_equal log_name, request['logName']
-      end
-      verify_log_entries(log_entry_count, COMPUTE_PARAMS_NO_LOG_NAME,
-                         'textPayload') do |entry, entry_index|
-        verify_default_log_entry_text(entry['textPayload'], entry_index,
-                                      entry)
-        assert_equal entry_log_names[entry_index], entry['logName']
-      end
-      # Verify the number of requests is different based on whether the
-      # 'split_logs_by_tag' flag is enabled.
-      assert_prometheus_metric_value(:stackdriver_successful_requests_count,
-                                     request_count, :aggregate)
-      assert_prometheus_metric_value(:stackdriver_ingested_entries_count,
-                                     log_entry_count, :aggregate)
     end
   end
 
@@ -1968,7 +1976,9 @@ module BaseTest
         expected = Time.now.to_i - start_time
         d.instance.update_uptime
         assert_metric_value.call(
-          :uptime, expected, version: Fluent::GoogleCloudOutput.version_string)
+          :uptime, expected, 'agent.googleapis.com/agent',
+          OpenCensus::Stats::Aggregation::Sum, d,
+          version: Fluent::GoogleCloudOutput.version_string)
       rescue Test::Unit::AssertionFailedError
         retry if (retries += 1) < 3
       end
@@ -1984,23 +1994,23 @@ module BaseTest
     ].each do |config, assert_metric_value|
       [
         # Single successful request.
-        [ok_status_code, 1, 1, [1, 0, 1, 0, 0]],
+        [ok_status_code, 1, 1, [0, 0, 0]],
         # Several successful requests.
-        [ok_status_code, 2, 1, [2, 0, 2, 0, 0]],
+        [ok_status_code, 2, 1, [0, 0, 0]],
         # Single successful request with several entries.
-        [ok_status_code, 1, 2, [1, 0, 2, 0, 0]],
+        [ok_status_code, 1, 2, [0, 0, 0]],
         # Single failed request that causes logs to be dropped.
-        [client_error_status_code, 1, 1, [0, 1, 0, 1, 0]],
+        [client_error_status_code, 1, 1, [1, 1, 0]],
         # Single failed request that escalates without logs being dropped with
         # several entries.
-        [server_error_status_code, 1, 2, [0, 0, 0, 0, 2]]
+        [server_error_status_code, 1, 2, [0, 0, 2]]
       ].each do |code, request_count, entry_count, metric_values|
         clear_metrics
         setup_logging_stubs(nil, code, 'SomeMessage') do
-          (1..request_count).each do
+          (1..request_count).each do |request_index|
             d = create_driver(config)
-            (1..entry_count).each do |i|
-              d.emit('message' => log_entry(i.to_s))
+            (1..entry_count).each do |entry_index|
+              d.emit('message' => log_entry(entry_index.to_s))
             end
             # rubocop:disable Lint/HandleExceptions
             begin
@@ -2008,30 +2018,66 @@ module BaseTest
             rescue mock_error_type
             end
             # rubocop:enable Lint/HandleExceptions
+            failed_requests_count, dropped_entries_count,
+            retried_entries_count = metric_values
+
+            successful_requests_count = \
+              if code != ok_status_code
+                0
+              elsif config == ENABLE_OPENCENSUS_CONFIG
+                # TODO(b/173215689) Improve the Open Census side of testing.
+                # The test driver instance variables can not survive between
+                # test driver runs. So the open cencensus side counter gets
+                # reset as expected.
+                1
+              else
+                request_index
+              end
+
+            ingested_entries_count = \
+              if code != ok_status_code
+                0
+              elsif config == ENABLE_OPENCENSUS_CONFIG
+                # TODO(b/173215689) Improve the Open Census side of testing.
+                # The test driver instance variables can not survive between
+                # test driver runs. So the open cencensus side counter gets
+                # reset as expected.
+                entry_count
+              else
+                request_index * entry_count
+              end
+
+            assert_metric_value.call(:stackdriver_successful_requests_count,
+                                     successful_requests_count,
+                                     'agent.googleapis.com/agent',
+                                     OpenCensus::Stats::Aggregation::Sum, d,
+                                     grpc: use_grpc, code: ok_status_code)
+            assert_metric_value.call(:stackdriver_ingested_entries_count,
+                                     ingested_entries_count,
+                                     'agent.googleapis.com/agent',
+                                     OpenCensus::Stats::Aggregation::Sum, d,
+                                     grpc: use_grpc, code: ok_status_code)
+            assert_metric_value.call(:stackdriver_retried_entries_count,
+                                     retried_entries_count,
+                                     'agent.googleapis.com/agent',
+                                     OpenCensus::Stats::Aggregation::Sum, d,
+                                     grpc: use_grpc, code: code)
+            # Skip failure assertions when code indicates success, because the
+            # assertion will fail in the case when a single metric contains time
+            # series with success and failure events.
+            next if code == ok_status_code
+            assert_metric_value.call(:stackdriver_failed_requests_count,
+                                     failed_requests_count,
+                                     'agent.googleapis.com/agent',
+                                     OpenCensus::Stats::Aggregation::Sum, d,
+                                     grpc: use_grpc, code: code)
+            assert_metric_value.call(:stackdriver_dropped_entries_count,
+                                     dropped_entries_count,
+                                     'agent.googleapis.com/agent',
+                                     OpenCensus::Stats::Aggregation::Sum, d,
+                                     grpc: use_grpc, code: code)
           end
         end
-        successful_requests_count, failed_requests_count,
-        ingested_entries_count, dropped_entries_count,
-        retried_entries_count = metric_values
-        assert_metric_value.call(:stackdriver_successful_requests_count,
-                                 successful_requests_count,
-                                 grpc: use_grpc, code: ok_status_code)
-        assert_metric_value.call(:stackdriver_ingested_entries_count,
-                                 ingested_entries_count,
-                                 grpc: use_grpc, code: ok_status_code)
-        assert_metric_value.call(:stackdriver_retried_entries_count,
-                                 retried_entries_count,
-                                 grpc: use_grpc, code: code)
-        # Skip failure assertions when code indicates success, because the
-        # assertion will fail in the case when a single metric contains time
-        # series with success and failure events.
-        next if code == ok_status_code
-        assert_metric_value.call(:stackdriver_failed_requests_count,
-                                 failed_requests_count,
-                                 grpc: use_grpc, code: code)
-        assert_metric_value.call(:stackdriver_dropped_entries_count,
-                                 dropped_entries_count,
-                                 grpc: use_grpc, code: code)
       end
     end
   end
