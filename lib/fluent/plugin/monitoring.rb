@@ -52,7 +52,7 @@ module Monitoring
     def initialize(_project_id, _monitored_resource, _gcm_service_address)
     end
 
-    def counter(_name, _labels, _docstring, _prefix)
+    def counter(_name, _labels, _docstring, _prefix, _aggregation)
       BaseCounter.new
     end
 
@@ -75,7 +75,7 @@ module Monitoring
     end
 
     # Exception-driven behavior to avoid synchronization errors.
-    def counter(name, _labels, docstring, _prefix)
+    def counter(name, _labels, docstring, _prefix, _aggregation)
       # When we upgrade to Prometheus client 0.10.0 or higher, pass the
       # labels in the metric constructor. The 'labels' field in
       # Prometheus client 0.9.0 has a different function and will not
@@ -107,13 +107,13 @@ module Monitoring
         'registry.')
     end
 
-    def counter(name, labels, docstring, prefix)
+    def counter(name, labels, docstring, prefix, aggregation)
       translator = MetricTranslator.new(name, labels)
       measure = OpenCensus::Stats::MeasureRegistry.get(translator.name)
       if measure.nil?
-        @log.debug(
-          'monitoring module: measure registry not found. Registering a new ' \
-          'one.')
+        @log.info(
+          'monitoring module: Registering a new measure registry for ' \
+          "#{translator.name}")
         measure = OpenCensus::Stats.create_measure_int(
           name: translator.name,
           unit: OpenCensus::Stats::Measure::UNIT_NONE,
@@ -121,14 +121,15 @@ module Monitoring
         )
       end
       unless @exporters.keys.include?(prefix)
-        @log.debug(
-          "monitoring module: #{prefix} exporter not found. Registering a " \
-          'new one.')
-        @recorders[prefix] = OpenCensus::Stats.ensure_recorder
+        @log.info(
+          'monitoring module: Registering a new exporter for ' \
+          "#{prefix}")
+        @recorders[prefix] = OpenCensus::Stats::Recorder.new
         @exporters[prefix] = \
           OpenCensus::Stats::Exporters::Stackdriver.new(
             project_id: @project_id,
             metric_prefix: prefix,
+            resource_type: @metrics_monitored_resource.type,
             resource_labels: @metrics_monitored_resource.labels,
             gcm_service_address: @gcm_service_address
           )
@@ -136,12 +137,19 @@ module Monitoring
           'monitoring module: Registered recorders and exporters for ' \
           "#{prefix}.\n#{@exporters[prefix]}")
       end
-      OpenCensus::Stats.create_and_register_view(
-        name: translator.name,
-        measure: measure,
-        aggregation: OpenCensus::Stats.create_sum_aggregation,
-        description: docstring,
-        columns: translator.view_labels.map(&:to_s)
+      if aggregation == 'GAUGE'
+        stats_aggregation = OpenCensus::Stats.create_last_value_aggregation
+      else
+        stats_aggregation = OpenCensus::Stats.create_sum_aggregation
+      end
+      @recorders[prefix].register_view(
+        OpenCensus::Stats::View.new(
+          name: translator.name,
+          measure: measure,
+          aggregation: stats_aggregation,
+          description: docstring,
+          columns: translator.view_labels.map(&:to_s)
+        )
       )
       counter = OpenCensusCounter.new(@recorders[prefix], measure, translator)
       @log.info(
@@ -154,12 +162,18 @@ module Monitoring
     end
 
     def export
+      @log.debug(
+        "monitoring module: Exporting metrics for #{@exporters.keys}.")
       @exporters.keys.each do |prefix|
+        @log.debug(
+          "monitoring module: Exporting metrics for #{prefix}. " \
+          "#{@recorders[prefix].views_data}")
         @exporters[prefix].export @recorders[prefix].views_data
-        @log.info(
-          "monitoring module: Successfully exported metrics for #{prefix}.")
       end
     rescue StandardError => e
+      # TODO(lingshi): Fix the error handling here. Seems like the export is
+      # done asynchronously. So any failure happens silently. More details at
+      # https://github.com/census-ecosystem/opencensus-ruby-exporter-stackdriver/blob/f8de506204972548ca535eff6010d15f328df6c3/lib/opencensus/stats/exporters/stackdriver.rb#L156
       @log.warn 'Failed to export some metrics.', error: e
       raise e
     end

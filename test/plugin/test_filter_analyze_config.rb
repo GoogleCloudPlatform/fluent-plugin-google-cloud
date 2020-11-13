@@ -51,12 +51,15 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
        method(:assert_opencensus_metric_value)]
     ].each do |config, assert_metric_value|
       clear_metrics
-      create_driver(config)
+      d = create_driver(config)
 
       # Default plugins, with default config.
       assert_metric_value.call(
         :enabled_plugins,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'source/syslog/tcp',
         is_default_plugin: true,
         has_default_config: true,
@@ -64,6 +67,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :enabled_plugins,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'source/tail/apache-access',
         is_default_plugin: true,
         has_default_config: true,
@@ -71,6 +77,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :enabled_plugins,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'filter/add_insert_ids',
         is_default_plugin: true,
         has_default_config: true,
@@ -80,6 +89,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :enabled_plugins,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'match/google_cloud',
         is_default_plugin: true,
         has_default_config: false,
@@ -89,6 +101,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :enabled_plugins,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'filter',
         is_default_plugin: false,
         has_default_config: false,
@@ -96,6 +111,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :enabled_plugins,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'filter/record_transformer',
         is_default_plugin: false,
         has_default_config: false,
@@ -103,6 +121,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :enabled_plugins,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'match/stdout',
         is_default_plugin: false,
         has_default_config: false,
@@ -112,6 +133,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :plugin_config,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'google_cloud',
         param: 'adjust_invalid_timestamps',
         is_present: true,
@@ -119,6 +143,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :plugin_config,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'google_cloud',
         param: 'autoformat_stackdriver_trace',
         is_present: true,
@@ -126,6 +153,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :plugin_config,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'google_cloud',
         param: 'coerce_to_utf8',
         is_present: true,
@@ -165,6 +195,9 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         assert_metric_value.call(
           :plugin_config,
           1,
+          'agent.googleapis.com/agent/internal/logging/config',
+          OpenCensus::Stats::Aggregation::LastValue,
+          d,
           plugin_name: 'google_cloud',
           param: p,
           is_present: false,
@@ -175,18 +208,27 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
       assert_metric_value.call(
         :config_bool_values,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'google_cloud',
         param: 'adjust_invalid_timestamps',
         value: true)
       assert_metric_value.call(
         :config_bool_values,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'google_cloud',
         param: 'autoformat_stackdriver_trace',
         value: false)
       assert_metric_value.call(
         :config_bool_values,
         1,
+        'agent.googleapis.com/agent/internal/logging/config',
+        OpenCensus::Stats::Aggregation::LastValue,
+        d,
         plugin_name: 'google_cloud',
         param: 'coerce_to_utf8',
         value: true)

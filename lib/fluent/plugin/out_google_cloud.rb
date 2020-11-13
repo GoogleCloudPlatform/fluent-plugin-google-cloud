@@ -564,37 +564,37 @@ module Fluent
         # we can't change it.
         @uptime_metric = @registry.counter(
           :uptime, [:version], 'Uptime of Logging agent',
-          'agent.googleapis.com/agent')
+          'agent.googleapis.com/agent', 'CUMULATIVE')
         update_uptime
         timer_execute(:update_uptime, 1) { update_uptime }
         @successful_requests_count = @registry.counter(
           :stackdriver_successful_requests_count,
           [:grpc, :code],
           'A number of successful requests to the Stackdriver Logging API',
-          'agent.googleapis.com/agent')
+          'agent.googleapis.com/agent', 'CUMULATIVE')
         @failed_requests_count = @registry.counter(
           :stackdriver_failed_requests_count,
           [:grpc, :code],
           'A number of failed requests to the Stackdriver Logging '\
           'API, broken down by the error code',
-          'agent.googleapis.com/agent')
+          'agent.googleapis.com/agent', 'CUMULATIVE')
         @ingested_entries_count = @registry.counter(
           :stackdriver_ingested_entries_count,
           [:grpc, :code],
           'A number of log entries ingested by Stackdriver Logging',
-          'agent.googleapis.com/agent')
+          'agent.googleapis.com/agent', 'CUMULATIVE')
         @dropped_entries_count = @registry.counter(
           :stackdriver_dropped_entries_count,
           [:grpc, :code],
           'A number of log entries dropped by the Stackdriver output plugin',
-          'agent.googleapis.com/agent')
+          'agent.googleapis.com/agent', 'CUMULATIVE')
         @retried_entries_count = @registry.counter(
           :stackdriver_retried_entries_count,
           [:grpc, :code],
           'The number of log entries that failed to be ingested by '\
           'the Stackdriver output plugin due to a transient error '\
           'and were retried',
-          'agent.googleapis.com/agent')
+          'agent.googleapis.com/agent', 'CUMULATIVE')
         @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
       end
 
