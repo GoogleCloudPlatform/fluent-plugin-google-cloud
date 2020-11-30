@@ -63,6 +63,7 @@ module Utils
     # Used by 'googleauth' to fetch the default service account credentials.
     stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' \
                  'instance/service-accounts/default/token')
+      .with(query: hash_including('scopes'))
       .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
                  status: 200,
                  headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
