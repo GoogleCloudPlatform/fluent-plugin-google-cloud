@@ -13,7 +13,7 @@ eos
   gem.version       = '0.10.5'
   gem.authors       = ['Stackdriver Agents Team']
   gem.email         = ['stackdriver-agents@google.com']
-  gem.required_ruby_version = Gem::Requirement.new('>= 2.2')
+  gem.required_ruby_version = Gem::Requirement.new('>= 2.4.0')
 
   gem.files         = Dir['**/*'].keep_if { |file| File.file?(file) }
   gem.test_files    = gem.files.grep(/^(test)/)
@@ -21,8 +21,8 @@ eos
 
   gem.add_runtime_dependency 'fluentd', '1.11.2'
   gem.add_runtime_dependency 'googleapis-common-protos', '1.3.9'
-  gem.add_runtime_dependency 'googleauth', '0.9.0'
-  gem.add_runtime_dependency 'google-api-client', '0.30.8'
+  gem.add_runtime_dependency 'googleauth', '0.14.0'
+  gem.add_runtime_dependency 'google-api-client', '0.50.0'
   gem.add_runtime_dependency 'google-cloud-logging', '1.6.6'
   gem.add_runtime_dependency 'google-protobuf', '3.12.2'
   gem.add_runtime_dependency 'grpc', '1.31.1'
