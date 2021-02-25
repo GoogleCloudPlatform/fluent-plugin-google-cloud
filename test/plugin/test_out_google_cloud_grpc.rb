@@ -273,7 +273,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       '32s' => '32s',
       '0.32s' => '0.320s',
       ' 123 s ' => '123s',
-      '1.3442 s' => '1.34420s',
+      '1.3442 s' => '1.344200s',
 
       # Test whitespace.
       # \t: tab. \r: carriage return. \n: line break.
