@@ -278,12 +278,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       # Test whitespace.
       # \t: tab. \r: carriage return. \n: line break.
       # \v: vertical whitespace. \f: form feed.
-      "\t123.5\ts\t" => '123.50s',
-      "\r123.5\rs\r" => '123.50s',
-      "\n123.5\ns\n" => '123.50s',
-      "\v123.5\vs\v" => '123.50s',
-      "\f123.5\fs\f" => '123.50s',
-      "\r123.5\ts\f" => '123.50s'
+      "\t123.5\ts\t" => '123.500s',
+      "\r123.5\rs\r" => '123.500s',
+      "\n123.5\ns\n" => '123.500s',
+      "\v123.5\vs\v" => '123.500s',
+      "\f123.5\fs\f" => '123.500s',
+      "\r123.5\ts\f" => '123.500s'
     }
   end
 
