@@ -29,7 +29,7 @@ eos
   gem.add_runtime_dependency 'google-cloud-logging', '1.6.6'
   gem.add_runtime_dependency 'google-protobuf', '3.15.8'
   gem.add_runtime_dependency 'grpc', '1.31.1'
-  gem.add_runtime_dependency 'json', '2.2.0'
+  gem.add_runtime_dependency 'json', '2.4.1'
   gem.add_runtime_dependency 'opencensus', '0.5.0'
   gem.add_runtime_dependency 'opencensus-stackdriver', '0.3.2'
 
