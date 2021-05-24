@@ -19,7 +19,9 @@ eos
   gem.test_files    = gem.files.grep(/^(test)/)
   gem.require_paths = ['lib']
 
-  gem.add_runtime_dependency 'fluentd', '1.12.3'
+  # Note: In order to update the Fluentd version, please update both here and also the fluentd version in
+  # https://github.com/GoogleCloudPlatform/google-fluentd/blob/master/config/software/fluentd.rb.
+  gem.add_runtime_dependency 'fluentd', '1.11.2'
   gem.add_runtime_dependency 'googleapis-common-protos', '1.3.10'
   gem.add_runtime_dependency 'googleauth', '0.9.0'
   gem.add_runtime_dependency 'google-api-client', '0.30.8'
