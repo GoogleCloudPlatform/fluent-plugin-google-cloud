@@ -10,7 +10,7 @@ eos
   gem.homepage      =
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache-2.0'
-  gem.version       = '0.11.2'
+  gem.version       = '0.12.0'
   gem.authors       = ['Stackdriver Agents Team']
   gem.email         = ['stackdriver-agents@google.com']
   gem.required_ruby_version = Gem::Requirement.new('>= 2.2')
@@ -22,7 +22,7 @@ eos
   # Note: In order to update the Fluentd version, please update both here and
   # also the fluentd version in
   # https://github.com/GoogleCloudPlatform/google-fluentd/blob/master/config/software/fluentd.rb.
-  gem.add_runtime_dependency 'fluentd', '1.11.2'
+  gem.add_runtime_dependency 'fluentd', '1.13.3'
   gem.add_runtime_dependency 'googleapis-common-protos', '1.3.10'
   gem.add_runtime_dependency 'googleauth', '0.9.0'
   gem.add_runtime_dependency 'google-api-client', '0.30.8'
