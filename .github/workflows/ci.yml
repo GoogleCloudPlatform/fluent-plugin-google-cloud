@@ -13,11 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: ruby/setup-ruby@v1
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/Gemfile
         with:
           ruby-version: ${{ matrix.rvm }}
           bundler-cache: true
+          # Run bundle install outside the workspace to keep gems out of the
+          # repo checkout.
+          working-directory: ${{ runner.temp }}
       - run: |
-          gem update bundler
           bundle exec rake
       # TODO: notifications
 
