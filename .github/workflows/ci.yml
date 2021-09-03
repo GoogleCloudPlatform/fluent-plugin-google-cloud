@@ -1,0 +1,23 @@
+on: [push, pull_request]
+name: Test
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        rvm:
+          - 2.6
+          - 2.5
+          - 2.4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.rvm }}
+          bundler-cache: true
+      - run: |
+          gem update bundler
+          bundle exec rake
+      # TODO: notifications
+
