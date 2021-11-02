@@ -38,6 +38,8 @@ module Fluent
     helpers :timer
 
     module Constants
+      PREFIX = 'agent.googleapis.com/agent/internal/logging/config'.freeze
+
       # Built-in plugins that are ok to reference in metrics.
       KNOWN_PLUGINS = {
         'filter' => Set[
@@ -249,7 +251,10 @@ module Fluent
         @registry = Monitoring::MonitoringRegistryFactory.create(
           @monitoring_type, project_id, resource, @gcm_service_address)
         # Export metrics every 60 seconds.
-        timer_execute(:export_config_analysis_metrics, 60) { @registry.export }
+        timer_execute(:export_config_analysis_metrics, 60) {
+          @registry.update_timestamps(PREFIX) if @registry.respond_to? :update_timestamps
+          @registry.export
+        }
 
         @log.info('analyze_config plugin: Registering counters.')
         enabled_plugins_counter = @registry.counter(
@@ -257,7 +262,7 @@ module Fluent
           [:plugin_name, :is_default_plugin,
            :has_default_config, :has_ruby_snippet],
           'Enabled plugins',
-          'agent.googleapis.com/agent/internal/logging/config',
+          PREFIX,
           'GAUGE')
         @log.info(
           'analyze_config plugin: registered enable_plugins counter. ' \
@@ -266,7 +271,7 @@ module Fluent
           :plugin_config,
           [:plugin_name, :param, :is_present, :has_default_config],
           'Configuration parameter usage for plugins relevant to Google Cloud.',
-          'agent.googleapis.com/agent/internal/logging/config',
+          PREFIX,
           'GAUGE')
         @log.info('analyze_config plugin: registered plugin_config counter. ' \
           "#{plugin_config_counter}")
@@ -274,7 +279,7 @@ module Fluent
           :config_bool_values,
           [:plugin_name, :param, :value],
           'Values for bool parameters in Google Cloud plugins',
-          'agent.googleapis.com/agent/internal/logging/config',
+          PREFIX,
           'GAUGE')
         @log.info('analyze_config plugin: registered config_bool_values ' \
           "counter. #{config_bool_values_counter}")
