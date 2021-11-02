@@ -161,6 +161,24 @@ module Monitoring
       raise e
     end
 
+    # Update timestamps for each existing AggregationData without altering tags
+    # or values.
+    # This is currently only used for config analysis metrics, because we want
+    # to repeatedly send the exact same metrics as created at start-up.
+    def update_timestamps(prefix)
+      new_time = Time.now.utc
+      recorder = @recorders[prefix]
+      recorder.views_data.each do |view_data|
+        view_data.data.each_value do |aggr_data|
+          # Apply this only to GAUGE metrics. This could fail if the metric uses
+          # Distribution or other fancier aggregators.
+          if aggr_data.is_a? OpenCensus::Stats::AggregationData::LastValue
+            aggr_data.add aggr_data.value, new_time
+          end
+        end
+      end
+    end
+
     def export
       @log.debug(
         "monitoring module: Exporting metrics for #{@exporters.keys}.")
