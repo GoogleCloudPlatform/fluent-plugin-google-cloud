@@ -251,10 +251,12 @@ module Fluent
         @registry = Monitoring::MonitoringRegistryFactory.create(
           @monitoring_type, project_id, resource, @gcm_service_address)
         # Export metrics every 60 seconds.
-        timer_execute(:export_config_analysis_metrics, 60) {
-          @registry.update_timestamps(PREFIX) if @registry.respond_to? :update_timestamps
+        timer_execute(:export_config_analysis_metrics, 60) do
+          if @registry.respond_to? :update_timestamps
+            @registry.update_timestamps(PREFIX)
+          end
           @registry.export
-        }
+        end
 
         @log.info('analyze_config plugin: Registering counters.')
         enabled_plugins_counter = @registry.counter(

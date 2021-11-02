@@ -169,11 +169,12 @@ module Monitoring
       new_time = Time.now.utc
       recorder = @recorders[prefix]
       recorder.views_data.each do |view_data|
-        view_data.data.each_value do |aggregation_data|
-          # Apply this only to GAUGE metrics. (This could fail if the metric uses
-          # Distribution or other fancier aggregators.)
-          next unless aggregation_data.is_a? OpenCensus::Stats::AggregationData::LastValue
-          aggregation_data.add aggregation_data.value, new_time
+        view_data.data.each_value do |aggr_data|
+          # Apply this only to GAUGE metrics. This could fail if the metric uses
+          # Distribution or other fancier aggregators.
+          if aggr_data.is_a? OpenCensus::Stats::AggregationData::LastValue
+            aggr_data.add aggr_data.value, new_time
+          end
         end
       end
     end
