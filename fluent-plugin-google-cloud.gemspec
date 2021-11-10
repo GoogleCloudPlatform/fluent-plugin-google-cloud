@@ -10,7 +10,7 @@ eos
   gem.homepage      =
     'https://github.com/GoogleCloudPlatform/fluent-plugin-google-cloud'
   gem.license       = 'Apache-2.0'
-  gem.version       = '0.12.3'
+  gem.version       = '0.13.0'
   gem.authors       = ['Stackdriver Agents Team']
   gem.email         = ['stackdriver-agents@google.com']
   gem.required_ruby_version = Gem::Requirement.new('>= 2.2')
@@ -22,14 +22,14 @@ eos
   # Note: In order to update the Fluentd version, please update both here and
   # also the fluentd version in
   # https://github.com/GoogleCloudPlatform/google-fluentd/blob/master/config/software/fluentd.rb.
-  gem.add_runtime_dependency 'fluentd', '1.13.3'
+  gem.add_runtime_dependency 'fluentd', '~> 1.14.0'
   gem.add_runtime_dependency 'googleapis-common-protos', '1.3.10'
   gem.add_runtime_dependency 'googleauth', '0.9.0'
   gem.add_runtime_dependency 'google-api-client', '0.30.8'
-  gem.add_runtime_dependency 'google-cloud-logging', '1.6.6'
-  gem.add_runtime_dependency 'google-protobuf', '3.15.8'
+  gem.add_runtime_dependency 'google-cloud-logging', '1.7.0'
+  gem.add_runtime_dependency 'google-protobuf', '3.17.3'
   gem.add_runtime_dependency 'grpc', '1.31.1'
-  gem.add_runtime_dependency 'json', '2.2.0'
+  gem.add_runtime_dependency 'json', '2.5.1'
   gem.add_runtime_dependency 'opencensus', '0.5.0'
   gem.add_runtime_dependency 'opencensus-stackdriver', '0.4.1'
 
