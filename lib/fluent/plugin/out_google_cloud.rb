@@ -1526,6 +1526,7 @@ module Fluent
       'C' => 'CRITICAL',
       'A' => 'ALERT',
       # other misc. translations.
+      'INFORMATION' => 'INFO',
       'ERR' => 'ERROR',
       'F' => 'CRITICAL'
     }.freeze
