@@ -132,10 +132,10 @@ module Common
     def fetch_gce_metadata(platform, metadata_path)
       raise "Called fetch_gce_metadata with platform=#{platform}" unless
         platform == Platform::GCE
-        # See https://cloud.google.com/compute/docs/metadata
-        URI.open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
-                 metadata_path, 'Metadata-Flavor' => 'Google', :proxy => false,
-                 &:read)
+      # See https://cloud.google.com/compute/docs/metadata
+      URI.open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
+               metadata_path, 'Metadata-Flavor' => 'Google', :proxy => false,
+               &:read)
     end
 
     # EC2 Metadata server returns everything in one call. Store it after the
