@@ -21,6 +21,7 @@ require 'helper'
 require 'mocha/test_unit'
 require 'prometheus/client'
 require 'webmock/test_unit'
+require 'cgi'
 
 require_relative 'asserts'
 require_relative 'constants'
@@ -823,7 +824,7 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
           "#{GKE_CONSTANTS[:service]}/container_name" =>
-            URI.decode(encoded_name)),
+            CGI.unescape(encoded_name)),
         log_name: encoded_name)
       verify_log_entries(0, params, 'textPayload')
     end
@@ -906,7 +907,7 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
           labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
-            'container_name' => URI.decode(encoded_container_name))),
+            'container_name' => CGI.unescape(encoded_container_name))),
         log_name: encoded_container_name)
       verify_log_entries(1, params, 'textPayload')
     end
