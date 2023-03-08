@@ -29,7 +29,7 @@ eos
   gem.add_runtime_dependency 'google-cloud-logging', '1.6.6'
   gem.add_runtime_dependency 'google-protobuf', '3.20.0'
   gem.add_runtime_dependency 'grpc', '1.45.0'
-  gem.add_runtime_dependency 'json', '2.2.0'
+  gem.add_runtime_dependency 'json', '2.6.3'
   gem.add_runtime_dependency 'opencensus', '0.5.0'
   gem.add_runtime_dependency 'opencensus-stackdriver', '0.4.1'
 
@@ -43,7 +43,7 @@ eos
   # https://github.com/googleapis/google-auth-library-ruby/issues/227
   # https://github.com/farcaller/rly/issues/2
   gem.add_development_dependency 'rake', '10.5.0'
-  gem.add_development_dependency 'rubocop', '0.39.0'
+  gem.add_development_dependency 'rubocop', '1.48.1'
   gem.add_development_dependency 'test-unit', '3.3.3'
   gem.add_development_dependency 'webmock', '3.6.2'
   gem.add_development_dependency 'coveralls', '0.8.23'
