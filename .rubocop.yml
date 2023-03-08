@@ -5,6 +5,11 @@ AllCops:
   Exclude:
     # Generated files.
     - 'lib/google/**/*'
+  NewCops: disable
+
+# Rakefile doesn't need to be executable.
+Lint/ScriptPermission:
+  Enabled: false
 
 # TODO: Re-enable this and fix frozen strings.
 Style/FrozenStringLiteralComment:
