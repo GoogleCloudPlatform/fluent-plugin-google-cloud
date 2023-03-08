@@ -28,11 +28,11 @@ task :fix_perms do
   end
 
   files.each do |file|
-    mode = File.stat(file).mode & 0777
-    next unless mode & 0444 != 0444
+    mode = File.stat(file).mode & 0o777
+    next unless mode & 0o444 != 0o444
     puts "Changing mode of #{file} from #{mode.to_s(8)} to "\
-         "#{(mode | 0444).to_s(8)}"
-    chmod mode | 0444, file
+         "#{(mode | 0o444).to_s(8)}"
+    chmod mode | 0o444, file
   end
 end
 
