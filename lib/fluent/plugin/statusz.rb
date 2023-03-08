@@ -70,7 +70,6 @@ CONFIG_KEYS = %w(
   zone
 ).freeze
 
-# rubocop:disable LineLength
 STATUSZ_TMPL = %(\
 <!DOCTYPE html>
 <html>
@@ -121,4 +120,3 @@ STATUSZ_TMPL = %(\
   </body>
 </html>
 ).freeze
-# rubocop:enable LineLength

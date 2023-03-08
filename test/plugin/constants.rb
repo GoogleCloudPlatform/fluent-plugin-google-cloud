@@ -228,13 +228,11 @@ module Constants
     detect_json true
   ).freeze
 
-  # rubocop:disable Metrics/LineLength
   PRIVATE_KEY_CONFIG = %(
      auth_method private_key
      private_key_email 271661262351-ft99kc9kjro9rrihq3k2n3s2inbplu0q@developer.gserviceaccount.com
      private_key_path test/plugin/data/c31e573fd7f62ed495c9ca3821a5a85cb036dee1-privatekey.p12
   ).freeze
-  # rubocop:enable Metrics/LineLength
 
   REQUIRE_VALID_TAGS_CONFIG = %(
     require_valid_tags true
@@ -433,7 +431,6 @@ module Constants
     monitoring_type    not_prometheus
   ).freeze
 
-  # rubocop:disable Metrics/LineLength
   CONFIG_METRICS_RESOURCE_JSON = %(
     enable_monitoring  true
     monitoring_type    opencensus
@@ -481,7 +478,6 @@ module Constants
     monitoring_type    opencensus
     metrics_resource   {"type":"custom_resource","labels.label1":"123","random":"x"}
   ).freeze
-  # rubocop:enable Metrics/LineLength
 
   # For statusz.
   CONFIG_STATUSZ = %(
