@@ -118,7 +118,7 @@ module Utils
       stub_metadata_request('instance/attributes/cluster-name',
                             K8S_CLUSTER_NAME)
     else
-      ['cluster-location', 'cluster-name'].each do |metadata_name|
+      %w[cluster-location cluster-name].each do |metadata_name|
         stub_request(:get, %r{.*instance/attributes/#{metadata_name}.*})
           .to_return(status: 404,
                      body: 'The requested URL /computeMetadata/v1/instance/' \

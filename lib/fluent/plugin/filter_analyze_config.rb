@@ -261,8 +261,7 @@ module Fluent
         @log.info('analyze_config plugin: Registering counters.')
         enabled_plugins_counter = @registry.counter(
           :enabled_plugins,
-          [:plugin_name, :is_default_plugin,
-           :has_default_config, :has_ruby_snippet],
+          %i[plugin_name is_default_plugin has_default_config has_ruby_snippet],
           'Enabled plugins',
           PREFIX,
           'GAUGE')
@@ -271,7 +270,7 @@ module Fluent
           "#{enabled_plugins_counter}")
         plugin_config_counter = @registry.counter(
           :plugin_config,
-          [:plugin_name, :param, :is_present, :has_default_config],
+          %i[plugin_name param is_present has_default_config],
           'Configuration parameter usage for plugins relevant to Google Cloud.',
           PREFIX,
           'GAUGE')
@@ -279,7 +278,7 @@ module Fluent
           "#{plugin_config_counter}")
         config_bool_values_counter = @registry.counter(
           :config_bool_values,
-          [:plugin_name, :param, :value],
+          %i[plugin_name param value],
           'Values for bool parameters in Google Cloud plugins',
           PREFIX,
           'GAUGE')

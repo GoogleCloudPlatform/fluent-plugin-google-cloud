@@ -323,7 +323,7 @@ module Fluent
     # Whether to enable gRPC compression when communicating with the Stackdriver
     # Logging API. Only used if 'use_grpc' is set to true.
     config_param :grpc_compression_algorithm, :enum,
-                 list: [:none, :gzip],
+                 list: %i[none gzip],
                  :default => nil
 
     # Whether valid entries should be written even if some other entries fail
@@ -569,28 +569,28 @@ module Fluent
         timer_execute(:update_uptime, 1) { update_uptime }
         @successful_requests_count = @registry.counter(
           :stackdriver_successful_requests_count,
-          [:grpc, :code],
+          %i[grpc code],
           'A number of successful requests to the Stackdriver Logging API',
           'agent.googleapis.com/agent', 'CUMULATIVE')
         @failed_requests_count = @registry.counter(
           :stackdriver_failed_requests_count,
-          [:grpc, :code],
+          %i[grpc code],
           'A number of failed requests to the Stackdriver Logging '\
           'API, broken down by the error code',
           'agent.googleapis.com/agent', 'CUMULATIVE')
         @ingested_entries_count = @registry.counter(
           :stackdriver_ingested_entries_count,
-          [:grpc, :code],
+          %i[grpc code],
           'A number of log entries ingested by Stackdriver Logging',
           'agent.googleapis.com/agent', 'CUMULATIVE')
         @dropped_entries_count = @registry.counter(
           :stackdriver_dropped_entries_count,
-          [:grpc, :code],
+          %i[grpc code],
           'A number of log entries dropped by the Stackdriver output plugin',
           'agent.googleapis.com/agent', 'CUMULATIVE')
         @retried_entries_count = @registry.counter(
           :stackdriver_retried_entries_count,
-          [:grpc, :code],
+          %i[grpc code],
           'The number of log entries that failed to be ingested by '\
           'the Stackdriver output plugin due to a transient error '\
           'and were retried',
