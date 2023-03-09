@@ -130,22 +130,22 @@ module Fluent
           # Map from subfields' names to their types.
           [
             # subfield key in the payload, destination key, cast lambda (opt)
-            %w(cacheFillBytes cache_fill_bytes parse_int),
-            %w(cacheHit cache_hit parse_bool),
-            %w(cacheLookup cache_lookup parse_bool),
-            %w(cacheValidatedWithOriginServer
-               cache_validated_with_origin_server parse_bool),
-            %w(latency latency parse_latency),
-            %w(protocol protocol parse_string),
-            %w(referer referer parse_string),
-            %w(remoteIp remote_ip parse_string),
-            %w(responseSize response_size parse_int),
-            %w(requestMethod request_method parse_string),
-            %w(requestSize request_size parse_int),
-            %w(requestUrl request_url parse_string),
-            %w(serverIp server_ip parse_string),
-            %w(status status parse_int),
-            %w(userAgent user_agent parse_string)
+            %w[cacheFillBytes cache_fill_bytes parse_int],
+            %w[cacheHit cache_hit parse_bool],
+            %w[cacheLookup cache_lookup parse_bool],
+            %w[cacheValidatedWithOriginServer
+               cache_validated_with_origin_server parse_bool],
+            %w[latency latency parse_latency],
+            %w[protocol protocol parse_string],
+            %w[referer referer parse_string],
+            %w[remoteIp remote_ip parse_string],
+            %w[responseSize response_size parse_int],
+            %w[requestMethod request_method parse_string],
+            %w[requestSize request_size parse_int],
+            %w[requestUrl request_url parse_string],
+            %w[serverIp server_ip parse_string],
+            %w[status status parse_int],
+            %w[userAgent user_agent parse_string]
           ],
           # The grpc version class name.
           'Google::Logging::Type::HttpRequest',
@@ -155,10 +155,10 @@ module Fluent
         'operation' => [
           '@operation_key',
           [
-            %w(id id parse_string),
-            %w(producer producer parse_string),
-            %w(first first parse_bool),
-            %w(last last parse_bool)
+            %w[id id parse_string],
+            %w[producer producer parse_string],
+            %w[first first parse_bool],
+            %w[last last parse_bool]
           ],
           'Google::Logging::V2::LogEntryOperation',
           'Google::Apis::LoggingV2::LogEntryOperation'
@@ -166,9 +166,9 @@ module Fluent
         'source_location' => [
           '@source_location_key',
           [
-            %w(file file parse_string),
-            %w(function function parse_string),
-            %w(line line parse_int)
+            %w[file file parse_string],
+            %w[function function parse_string],
+            %w[line line parse_int]
           ],
           'Google::Logging::V2::LogEntrySourceLocation',
           'Google::Apis::LoggingV2::LogEntrySourceLocation'
@@ -703,7 +703,7 @@ module Fluent
             # unless there is additional metadata that would be lost.
             record_json = nil
             if (record.keys - preserved_keys).length == 1
-              %w(log message msg).each do |field|
+              %w[log message msg].each do |field|
                 if record.key?(field)
                   record_json = parse_json_or_nil(record[field])
                 end
@@ -1498,7 +1498,7 @@ module Fluent
 
     # Values permitted by the API for 'severity' (which is an enum).
     VALID_SEVERITIES = Set.new(
-      %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY)
+      %w[DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY]
     ).freeze
 
     # Translates other severity strings to one of the valid values above.

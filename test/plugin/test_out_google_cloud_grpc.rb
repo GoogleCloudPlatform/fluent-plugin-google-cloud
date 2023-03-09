@@ -189,8 +189,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_logging_stubs do
       d = create_driver
       # Array of pairs of [parsed_severity, expected_severity]
-      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
-       %w(105 DEBUG), ['', 'DEFAULT']].each do |sev|
+      [%w[INFO INFO], %w[warn WARNING], %w[E ERROR], %w[BLAH DEFAULT],
+       %w[105 DEBUG], ['', 'DEFAULT']].each do |sev|
         d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
         expected_severity.push(sev[1])
         emit_index += 1

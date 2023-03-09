@@ -286,7 +286,7 @@ module BaseTest
   end
 
   def test_project_id_from_credentials
-    %w(gce ec2).each do |platform|
+    %w[gce ec2].each do |platform|
       send("setup_#{platform}_metadata_stubs")
       [IAM_CREDENTIALS, NEW_STYLE_CREDENTIALS, LEGACY_CREDENTIALS].each \
       do |creds|
@@ -321,7 +321,7 @@ module BaseTest
   end
 
   def test_invalid_json_credentials
-    %w(gce_metadata ec2_metadata no_metadata_service).each do |platform|
+    %w[gce_metadata ec2_metadata no_metadata_service].each do |platform|
       send("setup_#{platform}_stubs")
       exception_count = 0
       ENV[CREDENTIALS_PATH_ENV_VAR] = INVALID_CREDENTIALS[:path]
@@ -498,9 +498,9 @@ module BaseTest
       d.emit(
         'int_key' => { 1 => message },
         'int_array_key' => { [1, 2, 3, 4] => message },
-        'string_array_key' => { %w(a b c) => message },
+        'string_array_key' => { %w[a b c] => message },
         'hash_key' => { { 'some_key' => 'some_value' } => message },
-        'mixed_key' => { { 'some_key' => %w(a b c) } => message },
+        'mixed_key' => { { 'some_key' => %w[a b c] } => message },
         'symbol_key' => { some_symbol: message },
         'nil_key' => { nil => message }
       )
@@ -543,7 +543,7 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG)
-      %w(log msg).each do |field|
+      %w[log msg].each do |field|
         d.emit(field => 'notJSON ' + json_string)
         d.emit(field => json_string)
         d.emit(field => "  \r\n \t" + json_string)
@@ -578,7 +578,7 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
-      %w(log msg).each do |field|
+      %w[log msg].each do |field|
         d.emit(field => 'notJSON ' + json_string)
       end
       d.run
@@ -668,7 +668,7 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
-      %w(message log msg).each do |field|
+      %w[message log msg].each do |field|
         d.emit(field => json_string)
         d.emit(field => "  \r\n \t" + json_string)
       end
@@ -749,7 +749,7 @@ module BaseTest
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(DETECT_JSON_CONFIG)
-        %w(message log msg).each do |field|
+        %w[message log msg].each do |field|
           d.emit(PRESERVED_KEYS_MAP.merge(
             field => json_string).merge(timestamp_fields))
         end

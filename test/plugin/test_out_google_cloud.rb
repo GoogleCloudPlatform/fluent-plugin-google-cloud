@@ -168,7 +168,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_logging_stubs do
       d = create_driver
       # Array of pairs of [parsed_severity, expected_severity]
-      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
+      [%w[INFO INFO], %w[warn WARNING], %w[E ERROR], %w[BLAH DEFAULT],
        ['105', 100], ['', 'DEFAULT']].each do |sev|
         d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
         expected_severity.push(sev[1])
@@ -188,7 +188,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     test_obj = Fluent::GoogleCloudOutput.new
 
     # known severities should translate to themselves, regardless of case
-    %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY).each \
+    %w[DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY].each \
       do |severity|
       assert_equal(severity, test_obj.parse_severity(severity))
       assert_equal(severity, test_obj.parse_severity(severity.downcase))

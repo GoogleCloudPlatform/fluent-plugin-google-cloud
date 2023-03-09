@@ -162,7 +162,7 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         has_default_config: false)
       # The remaining "google_cloud" params are not present.
       # The are no params for "detect_exceptions".
-      %w(
+      %w[
         auth_method
         detect_json
         enable_monitoring
@@ -191,7 +191,7 @@ class FilterAnalyzeConfigTest < Test::Unit::TestCase
         vm_id
         vm_name
         zone
-      ).each do |p|
+      ].each do |p|
         assert_metric_value.call(
           :plugin_config,
           1,

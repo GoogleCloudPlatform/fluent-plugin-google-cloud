@@ -34,7 +34,7 @@ SERVER_START = Time.now
 
 # Does not include the following deprecated config params:
 # auth_method, private_key_email, private_key_passphrase, private_key_path
-CONFIG_KEYS = %w(
+CONFIG_KEYS = %w[
   adjust_invalid_timestamps
   autoformat_stackdriver_trace
   coerce_to_utf8
@@ -68,7 +68,7 @@ CONFIG_KEYS = %w(
   vm_id
   vm_name
   zone
-).freeze
+].freeze
 
 STATUSZ_TMPL = %(\
 <!DOCTYPE html>

@@ -18,7 +18,7 @@ module Common
     APPENGINE_CONSTANTS = {
       service: 'appengine.googleapis.com',
       resource_type: 'gae_app',
-      metadata_attributes: %w(gae_backend_name gae_backend_version)
+      metadata_attributes: %w[gae_backend_name gae_backend_version]
     }.freeze
     COMPUTE_CONSTANTS = {
       service: 'compute.googleapis.com',
@@ -27,9 +27,9 @@ module Common
     GKE_CONSTANTS = {
       service: 'container.googleapis.com',
       resource_type: 'gke_container',
-      extra_resource_labels: %w(namespace_id pod_id container_name),
-      extra_common_labels: %w(namespace_name pod_name),
-      metadata_attributes: %w(cluster-name cluster-location),
+      extra_resource_labels: %w[namespace_id pod_id container_name],
+      extra_common_labels: %w[namespace_name pod_name],
+      metadata_attributes: %w[cluster-name cluster-location],
       stream_severity_map: {
         'stdout' => 'INFO',
         'stderr' => 'ERROR'
@@ -47,12 +47,12 @@ module Common
     DATAFLOW_CONSTANTS = {
       service: 'dataflow.googleapis.com',
       resource_type: 'dataflow_step',
-      extra_resource_labels: %w(region job_name job_id step_id)
+      extra_resource_labels: %w[region job_name job_id step_id]
     }.freeze
     DATAPROC_CONSTANTS = {
       service: 'cluster.dataproc.googleapis.com',
       resource_type: 'cloud_dataproc_cluster',
-      metadata_attributes: %w(dataproc-cluster-uuid dataproc-cluster-name)
+      metadata_attributes: %w[dataproc-cluster-uuid dataproc-cluster-name]
     }.freeze
     EC2_CONSTANTS = {
       service: 'ec2.amazonaws.com',
@@ -61,7 +61,7 @@ module Common
     ML_CONSTANTS = {
       service: 'ml.googleapis.com',
       resource_type: 'ml_job',
-      extra_resource_labels: %w(job_id task_name)
+      extra_resource_labels: %w[job_id task_name]
     }.freeze
 
     # The map between a subservice name and a resource type.

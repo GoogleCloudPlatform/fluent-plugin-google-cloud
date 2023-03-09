@@ -86,7 +86,7 @@ module Fluent
 
       # For Google plugins, we collect metrics on the params listed here.
       GOOGLE_PLUGIN_PARAMS = {
-        'google_cloud' => %w(
+        'google_cloud' => %w[
           adjust_invalid_timestamps
           auth_method
           autoformat_stackdriver_trace
@@ -118,8 +118,8 @@ module Fluent
           vm_id
           vm_name
           zone
-        ),
-        'detect_exceptions' => %w(
+        ],
+        'detect_exceptions' => %w[
           languages
           max_bytes
           max_lines
@@ -127,7 +127,7 @@ module Fluent
           multiline_flush_interval
           remove_tag_prefix
           stream
-        )
+        ]
       }.freeze
     end
 
@@ -346,7 +346,7 @@ module Fluent
                                     e[p] == baseline_google_element[p])
               },
               by: 1)
-            next unless e.key?(p) && %w(true false).include?(e[p])
+            next unless e.key?(p) && %w[true false].include?(e[p])
             config_bool_values_counter.increment(
               labels: {
                 plugin_name: e['@type'],
