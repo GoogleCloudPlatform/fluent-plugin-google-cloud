@@ -527,9 +527,9 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG)
-      d.emit('message' => 'notJSON ' + json_string)
+      d.emit('message' => "notJSON #{json_string}")
       d.emit('message' => json_string)
-      d.emit('message' => "  \r\n \t" + json_string)
+      d.emit('message' => "  \r\n \t#{json_string}")
       d.run
     end
     verify_log_entries(3, COMPUTE_PARAMS, 'textPayload') do
@@ -544,9 +544,9 @@ module BaseTest
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG)
       %w[log msg].each do |field|
-        d.emit(field => 'notJSON ' + json_string)
+        d.emit(field => "notJSON #{json_string}")
         d.emit(field => json_string)
-        d.emit(field => "  \r\n \t" + json_string)
+        d.emit(field => "  \r\n \t#{json_string}")
       end
       d.run
     end
@@ -564,7 +564,7 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
-      d.emit('message' => 'notJSON ' + json_string)
+      d.emit('message' => "notJSON #{json_string}")
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'textPayload') do
@@ -579,7 +579,7 @@ module BaseTest
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
       %w[log msg].each do |field|
-        d.emit(field => 'notJSON ' + json_string)
+        d.emit(field => "notJSON #{json_string}")
       end
       d.run
     end
@@ -670,7 +670,7 @@ module BaseTest
       d = create_driver(DETECT_JSON_CONFIG)
       %w[message log msg].each do |field|
         d.emit(field => json_string)
-        d.emit(field => "  \r\n \t" + json_string)
+        d.emit(field => "  \r\n \t#{json_string}")
       end
       d.run
     end
@@ -691,9 +691,9 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry_with_metadata('notJSON' + json_string))
+      d.emit(container_log_entry_with_metadata("notJSON#{json_string}"))
       d.emit(container_log_entry_with_metadata(json_string))
-      d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
+      d.emit(container_log_entry_with_metadata("  \r\n \t#{json_string}"))
       d.run
     end
     verify_log_entries(3, CONTAINER_FROM_METADATA_PARAMS, 'textPayload') do
@@ -708,7 +708,7 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry_with_metadata('notJSON' + json_string))
+      d.emit(container_log_entry_with_metadata("notJSON#{json_string}"))
       d.run
     end
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS, 'textPayload') do
@@ -724,7 +724,7 @@ module BaseTest
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
       d.emit(container_log_entry_with_metadata(json_string))
-      d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
+      d.emit(container_log_entry_with_metadata("  \r\n \t#{json_string}"))
       d.run
     end
     verify_log_entries(2, CONTAINER_FROM_METADATA_PARAMS, 'jsonPayload') \
