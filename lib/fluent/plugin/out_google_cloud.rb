@@ -195,7 +195,8 @@ module Fluent
     PLUGIN_VERSION = begin
       # Extract plugin version from file path.
       match_data = __FILE__.match(
-        %r{fluent-plugin-google-cloud-(?<version>[^/]*)/})
+        %r{fluent-plugin-google-cloud-(?<version>[^/]*)/}
+      )
       if match_data
         match_data['version']
       else
@@ -203,7 +204,8 @@ module Fluent
         dependency = Gem::Dependency.new('fluent-plugin-google-cloud')
         all_specs, = Gem::SpecFetcher.fetcher.spec_for_dependency(dependency)
         matching_version, = all_specs.grep(
-          proc { |spec,| __FILE__.include?(spec.full_gem_path) }) do |spec,|
+          proc { |spec,| __FILE__.include?(spec.full_gem_path) }
+        ) do |spec,|
             spec.version.to_s
           end
         # If no matching version was found, return a valid but obviously wrong
@@ -496,13 +498,15 @@ module Fluent
 
       # All metadata parameters must now be set.
       @utils.check_required_metadata_variables(
-        @platform, @project_id, @zone, @vm_id)
+        @platform, @project_id, @zone, @vm_id
+      )
 
       # Retrieve monitored resource.
       # Fail over to retrieve monitored resource via the legacy path if we fail
       # to get it from Metadata Agent.
       @resource ||= @utils.determine_agent_level_monitored_resource_via_legacy(
-        @platform, @subservice_name, @detect_subservice, @vm_id, @zone)
+        @platform, @subservice_name, @detect_subservice, @vm_id, @zone
+      )
 
       if @metrics_resource
         unless @metrics_resource[:type].is_a?(String)
@@ -545,13 +549,15 @@ module Fluent
       # and store metric objects for future use.
       if @enable_monitoring
         unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
-          @monitoring_type)
+          @monitoring_type
+        )
           @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
                     'there will be no metrics'
         end
         if @metrics_resource
           @monitoring_resource = @utils.create_monitored_resource(
-            @metrics_resource[:type], @metrics_resource[:labels])
+            @metrics_resource[:type], @metrics_resource[:labels]
+          )
         else
           @monitoring_resource = @resource
         end
@@ -564,37 +570,43 @@ module Fluent
         # we can't change it.
         @uptime_metric = @registry.counter(
           :uptime, [:version], 'Uptime of Logging agent',
-          'agent.googleapis.com/agent', 'CUMULATIVE')
+          'agent.googleapis.com/agent', 'CUMULATIVE'
+        )
         update_uptime
         timer_execute(:update_uptime, 1) { update_uptime }
         @successful_requests_count = @registry.counter(
           :stackdriver_successful_requests_count,
           %i[grpc code],
           'A number of successful requests to the Stackdriver Logging API',
-          'agent.googleapis.com/agent', 'CUMULATIVE')
+          'agent.googleapis.com/agent', 'CUMULATIVE'
+        )
         @failed_requests_count = @registry.counter(
           :stackdriver_failed_requests_count,
           %i[grpc code],
           'A number of failed requests to the Stackdriver Logging '\
           'API, broken down by the error code',
-          'agent.googleapis.com/agent', 'CUMULATIVE')
+          'agent.googleapis.com/agent', 'CUMULATIVE'
+        )
         @ingested_entries_count = @registry.counter(
           :stackdriver_ingested_entries_count,
           %i[grpc code],
           'A number of log entries ingested by Stackdriver Logging',
-          'agent.googleapis.com/agent', 'CUMULATIVE')
+          'agent.googleapis.com/agent', 'CUMULATIVE'
+        )
         @dropped_entries_count = @registry.counter(
           :stackdriver_dropped_entries_count,
           %i[grpc code],
           'A number of log entries dropped by the Stackdriver output plugin',
-          'agent.googleapis.com/agent', 'CUMULATIVE')
+          'agent.googleapis.com/agent', 'CUMULATIVE'
+        )
         @retried_entries_count = @registry.counter(
           :stackdriver_retried_entries_count,
           %i[grpc code],
           'The number of log entries that failed to be ingested by '\
           'the Stackdriver output plugin due to a transient error '\
           'and were retried',
-          'agent.googleapis.com/agent', 'CUMULATIVE')
+          'agent.googleapis.com/agent', 'CUMULATIVE'
+        )
         @ok_code = @use_grpc ? GRPC::Core::StatusCodes::OK : 200
       end
 
@@ -668,12 +680,14 @@ module Fluent
         entries = []
         group_level_resource, group_level_common_labels =
           determine_group_level_monitored_resource_and_labels(
-            tag, local_resource_id)
+            tag, local_resource_id
+          )
 
         arr.each do |time, record|
           entry_level_resource, entry_level_common_labels =
             determine_entry_level_monitored_resource_and_labels(
-              group_level_resource, group_level_common_labels, record)
+              group_level_resource, group_level_common_labels, record
+            )
 
           is_json = false
           if @detect_json
@@ -727,12 +741,14 @@ module Fluent
             if @adjust_invalid_timestamps && timestamp
 
           severity = compute_severity(
-            entry_level_resource.type, record, entry_level_common_labels)
+            entry_level_resource.type, record, entry_level_common_labels
+          )
 
           dynamic_labels_from_payload = parse_labels(record)
 
           entry_level_common_labels = entry_level_common_labels.merge!(
-            dynamic_labels_from_payload) if dynamic_labels_from_payload
+            dynamic_labels_from_payload
+          ) if dynamic_labels_from_payload
 
           entry = @construct_log_entry.call(entry_level_common_labels,
                                             entry_level_resource,
@@ -759,7 +775,8 @@ module Fluent
         next if entries.empty?
 
         log_name = "projects/#{@project_id}/logs/#{log_name(
-          tag, group_level_resource)}"
+          tag, group_level_resource
+        )}"
 
         requests_to_send << {
           entries: entries,
@@ -803,7 +820,8 @@ module Fluent
       now = Time.now.to_i
       @uptime_metric.increment(
         by: now - @uptime_update_time,
-        labels: { version: Fluent::GoogleCloudOutput.version_string })
+        labels: { version: Fluent::GoogleCloudOutput.version_string }
+      )
       @uptime_update_time = now
     end
 
@@ -823,6 +841,7 @@ module Fluent
     def compute_trace(trace)
       return trace unless @autoformat_stackdriver_trace &&
                           STACKDRIVER_TRACE_ID_REGEXP.match(trace)
+
       "projects/#{@project_id}/traces/#{trace}"
     end
 
@@ -901,7 +920,6 @@ module Fluent
         @successful_call = true
         @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
       end
-
     rescue Google::Gax::GaxError => gax_error
       # GRPC::BadStatus is wrapped in error.cause.
       error = gax_error.cause
@@ -1029,14 +1047,12 @@ module Fluent
         @successful_call = true
         @log.info 'Successfully sent to Stackdriver Logging API.'
       end
-
     rescue Google::Apis::ServerError => error
       # 5xx server errors. Retry via re-raising the error.
       increment_retried_entries_count(entries_count, error.status_code)
       @log.debug "Retrying #{entries_count} log message(s) later.",
                  error: error.to_s, error_code: error.status_code.to_s
       raise error
-
     rescue Google::Apis::AuthorizationError => error
       # 401 authorization error.
       # These are usually solved via a `gcloud auth` call, or by modifying
@@ -1045,7 +1061,6 @@ module Fluent
       increment_dropped_entries_count(entries_count, error.status_code)
       @log.warn "Dropping #{entries_count} log message(s)",
                 error: error.to_s, error_code: error.status_code.to_s
-
     rescue Google::Apis::ClientError => error
       # 4xx client errors. Most client errors indicate a problem with the
       # request itself and should not be retried.
@@ -1191,7 +1206,8 @@ module Fluent
       # "k8s_container.<namespace_name>.<pod_name>.<container_name>"
       if local_resource_id
         converted_resource = monitored_resource_from_local_resource_id(
-          local_resource_id)
+          local_resource_id
+        )
         resource = converted_resource if converted_resource
       end
 
@@ -1213,13 +1229,17 @@ module Fluent
               # constants like GKE_CONSTANTS[:extra_resource_labels].
               'container_name' => 'container_name',
               'namespace_name' => 'namespace_id',
-              'pod_name' => 'pod_id'))
+              'pod_name' => 'pod_id'
+            )
+          )
 
           common_labels.merge!(
             delete_and_extract_labels(
               common_labels_candidates,
               GKE_CONSTANTS[:extra_common_labels]
-                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
+                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h
+            )
+          )
         end
 
       # TODO(qingling128): Temporary fallback for metadata agent restarts.
@@ -1237,10 +1257,13 @@ module Fluent
       # e.g. "dataflow.googleapis.com/job_id" => "job_id"
       [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
         next unless resource.type == service_constants[:resource_type]
+
         resource.labels.merge!(
           delete_and_extract_labels(
             common_labels, service_constants[:extra_resource_labels]
-              .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h))
+              .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h
+          )
+        )
       end
 
       resource.freeze
@@ -1253,7 +1276,8 @@ module Fluent
     # Extract entry level monitored resource and common labels that should be
     # applied to individual entries.
     def determine_entry_level_monitored_resource_and_labels(
-      group_level_resource, group_level_common_labels, record)
+      group_level_resource, group_level_common_labels, record
+    )
       resource = group_level_resource.dup
       resource.labels = group_level_resource.labels.dup
       common_labels = group_level_common_labels.dup
@@ -1264,7 +1288,9 @@ module Fluent
         # Move the stdout/stderr annotation from the record into a label.
         common_labels.merge!(
           delete_and_extract_labels(
-            record, 'stream' => "#{GKE_CONSTANTS[:service]}/stream"))
+            record, 'stream' => "#{GKE_CONSTANTS[:service]}/stream"
+          )
+        )
 
         # If the record has been annotated by the kubernetes_metadata_filter
         # plugin, then use that metadata. Otherwise, rely on commonLabels
@@ -1273,17 +1299,23 @@ module Fluent
           resource.labels.merge!(
             delete_and_extract_labels(
               record['kubernetes'], GKE_CONSTANTS[:extra_resource_labels]
-                .map { |l| [l, l] }.to_h))
+                .map { |l| [l, l] }.to_h
+            )
+          )
           common_labels.merge!(
             delete_and_extract_labels(
               record['kubernetes'], GKE_CONSTANTS[:extra_common_labels]
-                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h))
+                .map { |l| [l, "#{GKE_CONSTANTS[:service]}/#{l}"] }.to_h
+            )
+          )
           # Prepend label/ to all user-defined labels' keys.
           if record['kubernetes'].key?('labels')
             common_labels.merge!(
               delete_and_extract_labels(
                 record['kubernetes']['labels'], record['kubernetes']['labels']
-                  .map { |key, _| [key, "label/#{key}"] }.to_h))
+                  .map { |key, _| [key, "label/#{key}"] }.to_h
+              )
+            )
           end
           # We've explicitly consumed all the fields we care about -- don't
           # litter the log entries with the remaining fields that the kubernetes
@@ -1304,10 +1336,13 @@ module Fluent
       # e.g. "dataflow.googleapis.com/job_id" => "job_id"
       [DATAFLOW_CONSTANTS, ML_CONSTANTS].each do |service_constants|
         next unless resource.type == service_constants[:resource_type]
+
         resource.labels.merge!(
           delete_and_extract_labels(
             common_labels, service_constants[:extra_resource_labels]
-              .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h))
+              .map { |l| ["#{service_constants[:service]}/#{l}", l] }.to_h
+          )
+        )
       end
 
       [resource, common_labels]
@@ -1420,6 +1455,7 @@ module Fluent
         stream = entry_level_common_labels["#{GKE_CONSTANTS[:service]}/stream"]
         return GKE_CONSTANTS[:stream_severity_map].fetch(stream, 'DEFAULT')
       end
+
       'DEFAULT'
     end
 
@@ -1440,6 +1476,7 @@ module Fluent
             do |(original_key, destination_key, cast_fn), extracted_fields|
             value = fields.delete(original_key)
             next if value.nil?
+
             begin
               casted_value = send(cast_fn, value)
             rescue TypeError
@@ -1448,6 +1485,7 @@ module Fluent
               next
             end
             next if casted_value.nil?
+
             extracted_fields[destination_key] = casted_value
           end
 
@@ -1475,6 +1513,7 @@ module Fluent
     def parse_labels(record)
       payload_labels = record.delete(@labels_key)
       return nil unless payload_labels
+
       unless payload_labels.is_a?(Hash)
         @log.error "Invalid value of '#{@labels_key}' in the payload: " \
                    "#{payload_labels}. Labels need to be a JSON object."
@@ -1594,6 +1633,7 @@ module Fluent
       if GRPC_SEVERITY_MAPPING.key?(severity)
         return GRPC_SEVERITY_MAPPING[severity]
       end
+
       severity
     end
 
@@ -1653,6 +1693,7 @@ module Fluent
          (!tag.is_a?(String) || tag == '' || convert_to_utf8(tag) != tag)
         return nil
       end
+
       tag = convert_to_utf8(tag.to_s)
       tag = '_' if tag == ''
       tag
@@ -1664,6 +1705,7 @@ module Fluent
     def delete_and_extract_labels(hash, label_map)
       return {} if label_map.nil? || !label_map.is_a?(Hash) ||
                    hash.nil? || !hash.is_a?(Hash)
+
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
         value = hash.delete(original_label)
@@ -1781,7 +1823,8 @@ module Fluent
         if @grpc_compression_algorithm
           compression_options =
             GRPC::Core::CompressionOptions.new(
-              default_algorithm: @grpc_compression_algorithm)
+              default_algorithm: @grpc_compression_algorithm
+            )
           compression_channel_args = compression_options.to_channel_arg_hash
         else
           compression_channel_args = {}
@@ -1802,14 +1845,17 @@ module Fluent
                        .merge!(compression_channel_args)
         @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
           credentials: GRPC::Core::Channel.new(
-            "#{host}#{port}", channel_args, creds))
+            "#{host}#{port}", channel_args, creds
+          )
+        )
       else
         # TODO: Use a non-default ClientOptions object.
         Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
         Google::Apis::ClientOptions.default.application_version = PLUGIN_VERSION
         @client = Google::Apis::LoggingV2::LoggingService.new
         @client.authorization = Google::Auth.get_application_default(
-          Common::LOGGING_SCOPE)
+          Common::LOGGING_SCOPE
+        )
       end
     end
 
@@ -1839,7 +1885,8 @@ module Fluent
           'utf-8',
           invalid: :replace,
           undef: :replace,
-          replace: @non_utf8_replacement_string)
+          replace: @non_utf8_replacement_string
+        )
       else
         begin
           input.encode('utf-8')
@@ -1932,14 +1979,16 @@ module Fluent
       error_details_map = Hash.new { |h, k| h[k] = [] }
 
       error_details = ensure_array(
-        ensure_hash(ensure_hash(JSON.parse(error.body))['error'])['details'])
+        ensure_hash(ensure_hash(JSON.parse(error.body))['error'])['details']
+      )
       partial_errors = error_details.detect(
         -> { raise JSON::ParserError, "No type #{PARTIAL_ERROR_FIELD}." }
       ) do |error_detail|
         ensure_hash(error_detail)['@type'] == PARTIAL_ERROR_FIELD
       end
       log_entry_errors = ensure_hash(
-        ensure_hash(partial_errors)['logEntryErrors'])
+        ensure_hash(partial_errors)['logEntryErrors']
+      )
       log_entry_errors.each do |index, log_entry_error|
         error_hash = ensure_hash(log_entry_error)
         raise JSON::ParserError,
@@ -2003,7 +2052,9 @@ module Fluent
         error_details.empty?
       raise JSON::ParserError, 'No partial error info in error details.' unless
         error_details[0].is_a?(
-          Google::Logging::V2::WriteLogEntriesPartialErrors)
+          Google::Logging::V2::WriteLogEntriesPartialErrors
+        )
+
       log_entry_errors = ensure_hash(error_details[0].log_entry_errors)
       log_entry_errors.each do |index, log_entry_error|
         error_key = [log_entry_error[:code], log_entry_error[:message]].freeze
@@ -2039,9 +2090,11 @@ module Fluent
 
       begin
         @k8s_cluster_name ||= @utils.fetch_gce_metadata(
-          @platform, 'instance/attributes/cluster-name')
+          @platform, 'instance/attributes/cluster-name'
+        )
         @k8s_cluster_location ||= @utils.fetch_gce_metadata(
-          @platform, 'instance/attributes/cluster-location')
+          @platform, 'instance/attributes/cluster-location'
+        )
       rescue StandardError => e
         @log.error 'Failed to retrieve k8s cluster name and location.', \
                    error: e
@@ -2080,7 +2133,8 @@ module Fluent
       end
       constructed_resource = Google::Apis::LoggingV2::MonitoredResource.new(
         type: resource_type,
-        labels: labels)
+        labels: labels
+      )
       @log.debug("Constructed #{resource_type} resource locally: " \
                  "#{constructed_resource.inspect}")
       constructed_resource
@@ -2099,40 +2153,50 @@ module Fluent
     # Increment the metric for the number of successful requests.
     def increment_successful_requests_count
       return unless @successful_requests_count
+
       @successful_requests_count.increment(
-        labels: { grpc: @use_grpc, code: @ok_code })
+        labels: { grpc: @use_grpc, code: @ok_code }
+      )
     end
 
     # Increment the metric for the number of failed requests, labeled by
     # the provided status code.
     def increment_failed_requests_count(code)
       return unless @failed_requests_count
+
       @failed_requests_count.increment(
-        labels: { grpc: @use_grpc, code: code })
+        labels: { grpc: @use_grpc, code: code }
+      )
     end
 
     # Increment the metric for the number of log entries, successfully
     # ingested by the Stackdriver Logging API.
     def increment_ingested_entries_count(count)
       return unless @ingested_entries_count
+
       @ingested_entries_count.increment(
-        labels: { grpc: @use_grpc, code: @ok_code }, by: count)
+        labels: { grpc: @use_grpc, code: @ok_code }, by: count
+      )
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
     def increment_dropped_entries_count(count, code)
       return unless @dropped_entries_count
+
       @dropped_entries_count.increment(
-        labels: { grpc: @use_grpc, code: code }, by: count)
+        labels: { grpc: @use_grpc, code: code }, by: count
+      )
     end
 
     # Increment the metric for the number of log entries that were dropped
     # and not ingested by the Stackdriver Logging API.
     def increment_retried_entries_count(count, code)
       return unless @retried_entries_count
+
       @retried_entries_count.increment(
-        labels: { grpc: @use_grpc, code: code }, by: count)
+        labels: { grpc: @use_grpc, code: code }, by: count
+      )
     end
   end
 end

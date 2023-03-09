@@ -88,7 +88,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     clear_metrics
     setup_logging_stubs(
       GRPC::PermissionDenied.new('User not authorized.',
-                                 PARTIAL_SUCCESS_GRPC_METADATA)) do
+                                 PARTIAL_SUCCESS_GRPC_METADATA)
+    ) do
       # The API Client should not retry this and the plugin should consume
       # the exception.
       d = create_driver(ENABLE_PROMETHEUS_CONFIG)
@@ -99,23 +100,28 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 0,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED
+      )
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 2,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT
+      )
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED
+      )
     end
   end
 
@@ -124,7 +130,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     clear_metrics
     setup_logging_stubs(
       GRPC::InvalidArgument.new('internal client error',
-                                PARSE_ERROR_GRPC_METADATA)) do
+                                PARSE_ERROR_GRPC_METADATA)
+    ) do
       # The API Client should not retry this and the plugin should consume
       # the exception.
       d = create_driver(ENABLE_PROMETHEUS_CONFIG)
@@ -133,19 +140,23 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 0,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT
+      )
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 0,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT
+      )
     end
   end
 
@@ -297,10 +308,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     conf += USE_GRPC_CONFIG
     driver = if multi_tags
                Fluent::Test::MultiTagBufferedOutputTestDriver.new(
-                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub))
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub)
+               )
              else
                Fluent::Test::BufferedOutputTestDriver.new(
-                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag)
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag
+               )
              end
     driver.configure(conf, true)
   end

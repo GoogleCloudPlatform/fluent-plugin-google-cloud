@@ -86,7 +86,8 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
 
   def test_insert_ids_not_added_if_present
     log_entry_with_empty_insert_id = log_entry(0).merge(
-      DEFAULT_INSERT_ID_KEY => '')
+      DEFAULT_INSERT_ID_KEY => ''
+    )
     {
       log_entry(0).merge(DEFAULT_INSERT_ID_KEY => INSERT_ID) => true,
       # Still generate insertId if it's an empty string
@@ -123,7 +124,8 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
 
   def create_driver(conf = APPLICATION_DEFAULT_CONFIG)
     Fluent::Test::FilterTestDriver.new(
-      Fluent::AddInsertIdsFilter).configure(conf, true)
+      Fluent::AddInsertIdsFilter
+    ).configure(conf, true)
   end
 
   def log_entry(index)

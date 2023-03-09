@@ -166,7 +166,8 @@ module Fluent
       @log = $log # rubocop:disable Style/GlobalVars
 
       @log.info(
-        'analyze_config plugin: Started the plugin to analyze configuration.')
+        'analyze_config plugin: Started the plugin to analyze configuration.'
+      )
     end
 
     def parse_config(path)
@@ -223,7 +224,8 @@ module Fluent
           " #{@google_fluentd_config_path}. " \
           'google-fluentd baseline configuration file found at' \
           " #{@google_fluentd_baseline_config_path}. " \
-          'google-fluentd Analyzing configuration.')
+          'google-fluentd Analyzing configuration.'
+        )
 
         utils = Common::Utils.new(@log)
         platform = utils.detect_platform(true)
@@ -233,23 +235,28 @@ module Fluent
 
         # All metadata parameters must now be set.
         utils.check_required_metadata_variables(
-          platform, project_id, zone, vm_id)
+          platform, project_id, zone, vm_id
+        )
 
         # Retrieve monitored resource.
         # Fail over to retrieve monitored resource via the legacy path if we
         # fail to get it from Metadata Agent.
         resource = utils.determine_agent_level_monitored_resource_via_legacy(
-          platform, nil, false, vm_id, zone)
+          platform, nil, false, vm_id, zone
+        )
 
         unless Monitoring::MonitoringRegistryFactory.supports_monitoring_type(
-          @monitoring_type)
+          @monitoring_type
+        )
           @log.warn(
             "analyze_config plugin: monitoring_type #{@monitoring_type} is " \
-            'unknown; there will be no metrics.')
+            'unknown; there will be no metrics.'
+          )
         end
 
         @registry = Monitoring::MonitoringRegistryFactory.create(
-          @monitoring_type, project_id, resource, @gcm_service_address)
+          @monitoring_type, project_id, resource, @gcm_service_address
+        )
         # Export metrics every 60 seconds.
         timer_execute(:export_config_analysis_metrics, 60) do
           if @registry.respond_to? :update_timestamps
@@ -264,16 +271,19 @@ module Fluent
           %i[plugin_name is_default_plugin has_default_config has_ruby_snippet],
           'Enabled plugins',
           PREFIX,
-          'GAUGE')
+          'GAUGE'
+        )
         @log.info(
           'analyze_config plugin: registered enable_plugins counter. ' \
-          "#{enabled_plugins_counter}")
+          "#{enabled_plugins_counter}"
+        )
         plugin_config_counter = @registry.counter(
           :plugin_config,
           %i[plugin_name param is_present has_default_config],
           'Configuration parameter usage for plugins relevant to Google Cloud.',
           PREFIX,
-          'GAUGE')
+          'GAUGE'
+        )
         @log.info('analyze_config plugin: registered plugin_config counter. ' \
           "#{plugin_config_counter}")
         config_bool_values_counter = @registry.counter(
@@ -281,19 +291,22 @@ module Fluent
           %i[plugin_name param value],
           'Values for bool parameters in Google Cloud plugins',
           PREFIX,
-          'GAUGE')
+          'GAUGE'
+        )
         @log.info('analyze_config plugin: registered config_bool_values ' \
           "counter. #{config_bool_values_counter}")
 
         config = parse_config(@google_fluentd_config_path)
         @log.debug(
           'analyze_config plugin: successfully parsed google-fluentd' \
-          " configuration file at #{@google_fluentd_config_path}. #{config}")
+          " configuration file at #{@google_fluentd_config_path}. #{config}"
+        )
         baseline_config = parse_config(@google_fluentd_baseline_config_path)
         @log.debug(
           'analyze_config plugin: successfully parsed google-fluentd' \
           ' baseline configuration file at' \
-          " #{@google_fluentd_baseline_config_path}: #{baseline_config}")
+          " #{@google_fluentd_baseline_config_path}: #{baseline_config}"
+        )
 
         # Create hash of all baseline elements by their plugin names.
         baseline_elements = Hash[baseline_config.elements.collect do |e|
@@ -330,11 +343,13 @@ module Fluent
               has_default_config: has_default_config,
               has_ruby_snippet: embedded_ruby?(e)
             },
-            by: 1)
+            by: 1
+          )
 
           # Additional metric for Google plugins (google_cloud and
           # detect_exceptions).
           next unless GOOGLE_PLUGIN_PARAMS.key?(e['@type'])
+
           GOOGLE_PLUGIN_PARAMS[e['@type']].each do |p|
             plugin_config_counter.increment(
               labels: {
@@ -345,33 +360,39 @@ module Fluent
                                     baseline_google_element.key?(p) &&
                                     e[p] == baseline_google_element[p])
               },
-              by: 1)
+              by: 1
+            )
             next unless e.key?(p) && %w[true false].include?(e[p])
+
             config_bool_values_counter.increment(
               labels: {
                 plugin_name: e['@type'],
                 param: p,
                 value: e[p] == 'true'
               },
-              by: 1)
+              by: 1
+            )
           end
         end
         @log.info(
-          'analyze_config plugin: Successfully finished analyzing config.')
+          'analyze_config plugin: Successfully finished analyzing config.'
+        )
       else
         @log.info(
           'analyze_config plugin: google-fluentd configuration file does not ' \
           "exist at #{@google_fluentd_config_path} or google-fluentd " \
           'baseline configuration file does not exist at' \
           " #{@google_fluentd_baseline_config_path}. Skipping configuration " \
-          'analysis.')
+          'analysis.'
+        )
       end
     rescue => e
       # Do not crash the agent due to configuration analysis failures.
       @log.warn(
         'analyze_config plugin: Failed to optionally analyze the ' \
         "google-fluentd configuration file. Proceeding anyway. Error: #{e}. " \
-        "Trace: #{e.backtrace}")
+        "Trace: #{e.backtrace}"
+      )
     end
 
     def shutdown

@@ -100,10 +100,11 @@ module BaseTest
   def test_configure_metadata_missing_parts_on_other_platforms
     setup_no_metadata_service_stubs
     Common::Utils::CredentialsInfo.stubs(:project_id).returns(nil)
-    [[CONFIG_MISSING_METADATA_PROJECT_ID, ['project_id'], false],
-     [CONFIG_MISSING_METADATA_ZONE, [], true],
-     [CONFIG_MISSING_METADATA_VM_ID, [], true],
-     [CONFIG_MISSING_METADATA_ALL, ['project_id'], false]
+    [
+      [CONFIG_MISSING_METADATA_PROJECT_ID, ['project_id'], false],
+      [CONFIG_MISSING_METADATA_ZONE, [], true],
+      [CONFIG_MISSING_METADATA_VM_ID, [], true],
+      [CONFIG_MISSING_METADATA_ALL, ['project_id'], false]
     ].each_with_index do |(config, missing_parts, is_valid_config), index|
       begin
         create_driver(config)
@@ -128,38 +129,52 @@ module BaseTest
     setup_gce_metadata_stubs
     create_driver(CONFIG_UNKNOWN_MONITORING_TYPE)
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_successful_requests_count))
+                 :stackdriver_successful_requests_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_failed_requests_count))
+                 :stackdriver_failed_requests_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_ingested_entries_count))
+                 :stackdriver_ingested_entries_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_dropped_entries_count))
+                 :stackdriver_dropped_entries_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_retried_entries_count))
+                 :stackdriver_retried_entries_count
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_successful_requests_count, {})))
+                   :stackdriver_successful_requests_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_failed_requests_count, {})))
+                   :stackdriver_failed_requests_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_ingested_entries_count, {})))
+                   :stackdriver_ingested_entries_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_dropped_entries_count, {})))
+                   :stackdriver_dropped_entries_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_retried_entries_count, {})))
+                   :stackdriver_retried_entries_count, {}
+                 )
+               ))
   end
 
   def test_configure_uses_metrics_resource
     setup_gce_metadata_stubs
     [CONFIG_METRICS_RESOURCE_JSON,
      CONFIG_METRICS_RESOURCE_HASH,
-     CONFIG_METRICS_RESOURCE_JSON_HASH
-    ].each_with_index do |config, index|
+     CONFIG_METRICS_RESOURCE_JSON_HASH].each_with_index do |config, index|
       d = create_driver(config)
       assert_equal 'custom_resource', d.instance.monitoring_resource.type, \
                    "Index #{index}"
@@ -171,7 +186,8 @@ module BaseTest
       registry = d.instance.instance_variable_get(:@registry)
       assert_not_nil registry
       monitored_resource = registry.instance_variable_get(
-        :@metrics_monitored_resource)
+        :@metrics_monitored_resource
+      )
       assert_equal('custom_resource', monitored_resource.type, "Index #{index}")
       assert_equal({ 'label1' => '123', 'label2' => 'abc' },
                    monitored_resource.labels, "Index #{index}")
@@ -317,7 +333,8 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS.merge(
-                            project_id: IAM_CREDENTIALS[:project_id]))
+                            project_id: IAM_CREDENTIALS[:project_id]
+                          ))
   end
 
   def test_invalid_json_credentials
@@ -751,12 +768,14 @@ module BaseTest
         d = create_driver(DETECT_JSON_CONFIG)
         %w[message log msg].each do |field|
           d.emit(PRESERVED_KEYS_MAP.merge(
-            field => json_string).merge(timestamp_fields))
+            field => json_string
+          ).merge(timestamp_fields))
         end
         d.run
       end
       expected_params = COMPUTE_PARAMS.merge(
-        labels: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE))
+        labels: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)
+      )
       verify_log_entries(3, expected_params, 'jsonPayload') do |entry|
         fields = entry['jsonPayload']
         assert_equal 4, fields.size, entry
@@ -800,8 +819,11 @@ module BaseTest
     params = CONTAINER_FROM_METADATA_PARAMS.merge(
       resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
         labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
-          'container_name' => container_name)),
-      log_name: tag)
+          'container_name' => container_name
+        )
+      ),
+      log_name: tag
+    )
     verify_log_entries(1, params, 'textPayload')
   end
 
@@ -824,8 +846,10 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
           "#{GKE_CONSTANTS[:service]}/container_name" =>
-            CGI.unescape(encoded_name)),
-        log_name: encoded_name)
+            CGI.unescape(encoded_name)
+        ),
+        log_name: encoded_name
+      )
       verify_log_entries(0, params, 'textPayload')
     end
   end
@@ -861,8 +885,11 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
           labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
-            'container_name' => tag)),
-        log_name: encoded_tag)
+            'container_name' => tag
+          )
+        ),
+        log_name: encoded_tag
+      )
       verify_log_entries(1, params, 'textPayload')
     end
   end
@@ -907,8 +934,11 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
           labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
-            'container_name' => CGI.unescape(encoded_container_name))),
-        log_name: encoded_container_name)
+            'container_name' => CGI.unescape(encoded_container_name)
+          )
+        ),
+        log_name: encoded_container_name
+      )
       verify_log_entries(1, params, 'textPayload')
     end
   end
@@ -960,13 +990,15 @@ module BaseTest
           request_count,
           'agent.googleapis.com/agent',
           OpenCensus::Stats::Aggregation::Sum, d,
-          :aggregate)
+          :aggregate
+        )
         assert_prometheus_metric_value(
           :stackdriver_ingested_entries_count,
           log_entry_count,
           'agent.googleapis.com/agent',
           OpenCensus::Stats::Aggregation::Sum, d,
-          :aggregate)
+          :aggregate
+        )
       end
     end
   end
@@ -1607,7 +1639,8 @@ module BaseTest
                      custom_key: 'custom_labels_key',
                      custom_key_config: CONFIG_CUSTOM_LABELS_KEY_SPECIFIED,
                      sample_value: COMPUTE_PARAMS[:labels].merge(
-                       LABELS_MESSAGE),
+                       LABELS_MESSAGE
+                     ),
                      default_value: COMPUTE_PARAMS[:labels])
   end
 
@@ -1659,7 +1692,8 @@ module BaseTest
     verify_cascading_json_detection_with_log_entry_fields(
       'insertId', DEFAULT_INSERT_ID_KEY,
       root_level_value: INSERT_ID,
-      nested_level_value: INSERT_ID2)
+      nested_level_value: INSERT_ID2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_labels_field
@@ -1669,7 +1703,9 @@ module BaseTest
       nested_level_value: LABELS_MESSAGE2,
       expected_value_from_root: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE),
       expected_value_from_nested: COMPUTE_PARAMS[:labels].merge(
-        LABELS_MESSAGE2))
+        LABELS_MESSAGE2
+      )
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_operation_field
@@ -1677,28 +1713,32 @@ module BaseTest
       'operation', DEFAULT_OPERATION_KEY,
       root_level_value: OPERATION_MESSAGE,
       nested_level_value: OPERATION_MESSAGE2,
-      expected_value_from_nested: expected_operation_message2)
+      expected_value_from_nested: expected_operation_message2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_source_location_field
     verify_cascading_json_detection_with_log_entry_fields(
       'sourceLocation', DEFAULT_SOURCE_LOCATION_KEY,
       root_level_value: SOURCE_LOCATION_MESSAGE,
-      nested_level_value: SOURCE_LOCATION_MESSAGE2)
+      nested_level_value: SOURCE_LOCATION_MESSAGE2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_span_id_field
     verify_cascading_json_detection_with_log_entry_fields(
       'spanId', DEFAULT_SPAN_ID_KEY,
       root_level_value: SPAN_ID,
-      nested_level_value: SPAN_ID2)
+      nested_level_value: SPAN_ID2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_trace_field
     verify_cascading_json_detection_with_log_entry_fields(
       'trace', DEFAULT_TRACE_KEY,
       root_level_value: TRACE,
-      nested_level_value: TRACE2)
+      nested_level_value: TRACE2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_trace_sampled_field
@@ -1707,7 +1747,8 @@ module BaseTest
       root_level_value: TRACE_SAMPLED,
       nested_level_value: TRACE_SAMPLED2,
       default_value_from_root: false,
-      default_value_from_nested: false)
+      default_value_from_nested: false
+    )
   end
 
   # Verify that labels present in multiple inputs respect the expected priority
@@ -1739,9 +1780,11 @@ module BaseTest
       {
         config: CONFIG_LABLES_AND_LABLE_MAP,
         emitted_log: PAYLOAD_FOR_LABEL_MAP.merge(
-          DEFAULT_LABELS_KEY => LABELS_MESSAGE),
+          DEFAULT_LABELS_KEY => LABELS_MESSAGE
+        ),
         expected_labels: LABELS_MESSAGE.merge(LABELS_FROM_LABELS_CONFIG).merge(
-          LABELS_FROM_LABEL_MAP_CONFIG)
+          LABELS_FROM_LABEL_MAP_CONFIG
+        )
       },
       # labels from the config "labels" and "label_map" conflict.
       {
@@ -1761,14 +1804,16 @@ module BaseTest
       {
         config: CONFIG_LABEL_MAP_CONFLICTING,
         emitted_log: PAYLOAD_FOR_LABEL_MAP_CONFLICTING.merge(
-          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING),
+          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING
+        ),
         expected_labels: LABELS_FROM_PAYLOAD_CONFLICTING
       },
       # All three types of labels conflict.
       {
         config: CONFIG_LABLES_AND_LABLE_MAP_CONFLICTING,
         emitted_log: PAYLOAD_FOR_LABEL_MAP_CONFLICTING.merge(
-          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING),
+          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING
+        ),
         expected_labels: LABELS_FROM_PAYLOAD_CONFLICTING
       }
     ].each do |test_params|
@@ -1780,7 +1825,8 @@ module BaseTest
           d.run
         end
         expected_params = COMPUTE_PARAMS.merge(
-          labels: COMPUTE_PARAMS[:labels].merge(test_params[:expected_labels]))
+          labels: COMPUTE_PARAMS[:labels].merge(test_params[:expected_labels])
+        )
         verify_log_entries(1, expected_params)
       end
     end
@@ -1852,7 +1898,8 @@ module BaseTest
         config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
-          log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
+          log_entry(0)
+        ).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
         expected_params: CONTAINER_FROM_TAG_PARAMS
       },
       {
@@ -1860,7 +1907,8 @@ module BaseTest
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0),
-          local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
+          local_resource_id: RANDOM_LOCAL_RESOURCE_ID
+        ),
         expected_params: CONTAINER_FROM_TAG_PARAMS
       }
     ].each do |test_params|
@@ -1979,7 +2027,8 @@ module BaseTest
         assert_metric_value.call(
           :uptime, expected, 'agent.googleapis.com/agent',
           OpenCensus::Stats::Aggregation::Sum, d,
-          version: Fluent::GoogleCloudOutput.version_string)
+          version: Fluent::GoogleCloudOutput.version_string
+        )
       rescue Test::Unit::AssertionFailedError
         retry if (retries += 1) < 3
       end
@@ -2067,6 +2116,7 @@ module BaseTest
             # assertion will fail in the case when a single metric contains time
             # series with success and failure events.
             next if code == ok_status_code
+
             assert_metric_value.call(:stackdriver_failed_requests_count,
                                      failed_requests_count,
                                      'agent.googleapis.com/agent',
@@ -2100,7 +2150,8 @@ module BaseTest
   end
 
   def container_log_entry_with_metadata(
-      log, container_name = K8S_CONTAINER_NAME)
+      log, container_name = K8S_CONTAINER_NAME
+    )
     {
       log: log,
       stream: K8S_STREAM,
@@ -2198,6 +2249,7 @@ module BaseTest
   # 'expected_labels'.
   def check_labels(expected_labels, labels, check_exact_labels = true)
     return if expected_labels.empty? && labels.empty?
+
     expected_labels.each do |expected_key, expected_value|
       assert labels.key?(expected_key), "Expected label #{expected_key} not" \
              " found. Got labels: #{labels}."
@@ -2291,13 +2343,17 @@ module BaseTest
       # LogEntry info from. The values are lists of two elements: the name of
       # the subfield in LogEntry object and the expected value of that field.
       DEFAULT_HTTP_REQUEST_KEY => [
-        'httpRequest', HTTP_REQUEST_MESSAGE],
+        'httpRequest', HTTP_REQUEST_MESSAGE
+      ],
       DEFAULT_LABELS_KEY => [
-        'labels', COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)],
+        'labels', COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)
+      ],
       DEFAULT_OPERATION_KEY => [
-        'operation', OPERATION_MESSAGE],
+        'operation', OPERATION_MESSAGE
+      ],
       DEFAULT_SOURCE_LOCATION_KEY => [
-        'sourceLocation', SOURCE_LOCATION_MESSAGE]
+        'sourceLocation', SOURCE_LOCATION_MESSAGE
+      ]
     }
   end
 
@@ -2397,17 +2453,22 @@ module BaseTest
   # left with name "log", "message" or "msg". This test verifies additional
   # LogEntry fields like spanId and traceId do not disable that by accident.
   def verify_cascading_json_detection_with_log_entry_fields(
-      log_entry_field, default_key, expectation)
+      log_entry_field, default_key, expectation
+    )
     root_level_value = expectation[:root_level_value]
     nested_level_value = expectation[:nested_level_value]
     expected_value_from_root = expectation.fetch(
-      :expected_value_from_root, root_level_value)
+      :expected_value_from_root, root_level_value
+    )
     expected_value_from_nested = expectation.fetch(
-      :expected_value_from_nested, nested_level_value)
+      :expected_value_from_nested, nested_level_value
+    )
     default_value_from_root = expectation.fetch(
-      :default_value_from_root, nil)
+      :default_value_from_root, nil
+    )
     default_value_from_nested = expectation.fetch(
-      :default_value_from_nested, nil)
+      :default_value_from_nested, nil
+    )
 
     setup_gce_metadata_stubs
 
@@ -2443,7 +2504,8 @@ module BaseTest
     #   }
     # }
     log_entry_with_both_level_fields = log_entry_with_nested_level_field.merge(
-      default_key => root_level_value)
+      default_key => root_level_value
+    )
 
     [
       [

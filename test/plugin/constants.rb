@@ -1,4 +1,5 @@
 # coding: utf-8
+
 # Copyright 2017 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -1024,29 +1025,36 @@ module Constants
         0 => Google::Rpc::Status.new(
           code: GRPC::Core::StatusCodes::PERMISSION_DENIED,
           message: 'User not authorized.',
-          details: []),
+          details: []
+        ),
         1 => Google::Rpc::Status.new(
           code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
           message: 'Log name contains illegal character :',
-          details: []),
+          details: []
+        ),
         3 => Google::Rpc::Status.new(
           code: GRPC::Core::StatusCodes::INVALID_ARGUMENT,
           message: 'Log name contains illegal character :',
-          details: [])
-      })
+          details: []
+        )
+      }
+    )
     status = Google::Rpc::Status.new(
       message: 'User not authorized.',
-      details: [Google::Protobuf::Any.pack(partial_errors)])
+      details: [Google::Protobuf::Any.pack(partial_errors)]
+    )
     debug_info = Google::Rpc::DebugInfo.new(
       detail: '[ORIGINAL ERROR] generic::permission_denied: User not' \
         ' authorized. [google.rpc.error_details_ext] { message:' \
         " #{status.message.inspect} details { type_url:" \
         " #{status.details[0].type_url.inspect} value:" \
-        " #{status.details[0].value.inspect_octal} } }")
+        " #{status.details[0].value.inspect_octal} } }"
+    )
     status_details = Google::Rpc::Status.new(
       code: 7, message: 'User not authorized.',
       details: [Google::Protobuf::Any.pack(partial_errors),
-                Google::Protobuf::Any.pack(debug_info)])
+                Google::Protobuf::Any.pack(debug_info)]
+    )
     {
       'google.logging.v2.writelogentriespartialerrors-bin' =>
         partial_errors.to_proto,
@@ -1074,10 +1082,12 @@ module Constants
   PARSE_ERROR_GRPC_METADATA = begin
     debug_info = Google::Rpc::DebugInfo.new(
       detail: '[ORIGINAL ERROR] RPC::CLIENT_ERROR: server could not parse' \
-        " request sent by client; initialization error is: ''")
+        " request sent by client; initialization error is: ''"
+    )
     status_details = Google::Rpc::Status.new(
       code: 3, message: 'internal client error',
-      details: [Google::Protobuf::Any.pack(debug_info)])
+      details: [Google::Protobuf::Any.pack(debug_info)]
+    )
     {
       'google.rpc.debuginfo-bin' => debug_info.to_proto,
       'grpc-status-details-bin' => status_details.to_proto

@@ -100,7 +100,8 @@ module Utils
   def setup_managed_vm_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
-      "attribute1\ngae_backend_name\ngae_backend_version\nlast_attribute")
+      "attribute1\ngae_backend_name\ngae_backend_version\nlast_attribute"
+    )
     stub_metadata_request('instance/attributes/gae_backend_name',
                           MANAGED_VM_BACKEND_NAME)
     stub_metadata_request('instance/attributes/gae_backend_version',
@@ -111,7 +112,8 @@ module Utils
     if should_respond
       stub_metadata_request(
         'instance/attributes/',
-        "attribute1\ncluster-location\ncluster-name\nlast_attribute")
+        "attribute1\ncluster-location\ncluster-name\nlast_attribute"
+      )
       stub_metadata_request('instance/attributes/cluster-location',
                             K8S_LOCATION2)
       stub_metadata_request('instance/attributes/cluster-name',
@@ -130,7 +132,8 @@ module Utils
   def setup_dataproc_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
-      "attribute1\ndataproc-cluster-uuid\ndataproc-cluster-name")
+      "attribute1\ndataproc-cluster-uuid\ndataproc-cluster-name"
+    )
     stub_metadata_request('instance/attributes/dataproc-cluster-name',
                           DATAPROC_CLUSTER_NAME)
     stub_metadata_request('instance/attributes/dataproc-cluster-uuid',

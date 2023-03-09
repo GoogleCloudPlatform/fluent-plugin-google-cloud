@@ -132,6 +132,7 @@ module Common
     def fetch_gce_metadata(platform, metadata_path)
       raise "Called fetch_gce_metadata with platform=#{platform}" unless
         platform == Platform::GCE
+
       # See https://cloud.google.com/compute/docs/metadata
       open("http://#{METADATA_SERVICE_ADDR}/computeMetadata/v1/#{metadata_path}",
            'Metadata-Flavor' => 'Google', :proxy => false, &:read)
@@ -142,6 +143,7 @@ module Common
     def ec2_metadata(platform)
       raise "Called ec2_metadata with platform=#{platform}" unless
         platform == Platform::EC2
+
       unless @ec2_metadata
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
         open("http://#{METADATA_SERVICE_ADDR}/latest/dynamic/instance-identity/document", proxy: false) do |f|
@@ -162,6 +164,7 @@ module Common
         missing << 'vm_id' unless vm_id
       end
       return if missing.empty?
+
       raise Fluent::ConfigError,
             "Unable to obtain metadata parameters: #{missing.join(' ')}"
     end
@@ -220,7 +223,8 @@ module Common
     # Create a monitored resource from type and labels.
     def create_monitored_resource(type, labels)
       Google::Apis::LoggingV2::MonitoredResource.new(
-        type: type, labels: labels.to_h)
+        type: type, labels: labels.to_h
+      )
     end
 
     # Retrieve monitored resource via the legacy way.
@@ -229,18 +233,23 @@ module Common
     # Metadata Agent. Thus it should be equivalent to what Metadata Agent
     # returns.
     def determine_agent_level_monitored_resource_via_legacy(
-          platform, subservice_name, detect_subservice, vm_id, zone)
+          platform, subservice_name, detect_subservice, vm_id, zone
+        )
       resource_type = determine_agent_level_monitored_resource_type(
-        platform, subservice_name, detect_subservice)
+        platform, subservice_name, detect_subservice
+      )
       create_monitored_resource(
         resource_type,
         determine_agent_level_monitored_resource_labels(
-          platform, resource_type, vm_id, zone))
+          platform, resource_type, vm_id, zone
+        )
+      )
     end
 
     # Determine agent level monitored resource type.
     def determine_agent_level_monitored_resource_type(
-          platform, subservice_name, detect_subservice)
+          platform, subservice_name, detect_subservice
+        )
       case platform
       when Platform::OTHER
         # Unknown platform will be defaulted to GCE instance.
@@ -274,7 +283,8 @@ module Common
     # Determine agent level monitored resource labels based on the resource
     # type. Each resource type has its own labels that need to be filled in.
     def determine_agent_level_monitored_resource_labels(
-          platform, type, vm_id, zone)
+          platform, type, vm_id, zone
+        )
       case type
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]
@@ -291,6 +301,7 @@ module Common
       when COMPUTE_CONSTANTS[:resource_type]
         raise "Cannot construct a #{type} resource without vm_id and zone" \
           unless vm_id && zone
+
         return {
           'instance_id' => vm_id,
           'zone' => zone
@@ -300,6 +311,7 @@ module Common
       when GKE_CONSTANTS[:resource_type]
         raise "Cannot construct a #{type} resource without vm_id and zone" \
           unless vm_id && zone
+
         return {
           'instance_id' => vm_id,
           'zone' => zone,
@@ -325,6 +337,7 @@ module Common
       when EC2_CONSTANTS[:resource_type]
         raise "Cannot construct a #{type} resource without vm_id and zone" \
           unless vm_id && zone
+
         labels = {
           'instance_id' => vm_id,
           'region' => zone

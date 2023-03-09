@@ -34,6 +34,7 @@ module Monitoring
   class OpenCensusCounter < BaseCounter
     def initialize(recorder, measure, translator)
       raise ArgumentError, 'measure must not be nil' if measure.nil?
+
       @recorder = recorder
       @measure = measure
       @translator = translator
@@ -42,7 +43,8 @@ module Monitoring
     def increment(by: 1, labels: {})
       labels = @translator.translate_labels(labels)
       tag_map = OpenCensus::Tags::TagMap.new(
-        labels.map { |k, v| [k.to_s, v.to_s] }.to_h)
+        labels.map { |k, v| [k.to_s, v.to_s] }.to_h
+      )
       @recorder.record(@measure.create_measurement(value: by, tags: tag_map))
     end
   end
@@ -104,7 +106,8 @@ module Monitoring
       @exporters = {}
       @log.info(
         'monitoring module: Successfully initialized Open Census monitoring ' \
-        'registry.')
+        'registry.'
+      )
     end
 
     def counter(name, labels, docstring, prefix, aggregation)
@@ -113,7 +116,8 @@ module Monitoring
       if measure.nil?
         @log.info(
           'monitoring module: Registering a new measure registry for ' \
-          "#{translator.name}")
+          "#{translator.name}"
+        )
         measure = OpenCensus::Stats.create_measure_int(
           name: translator.name,
           unit: OpenCensus::Stats::Measure::UNIT_NONE,
@@ -123,7 +127,8 @@ module Monitoring
       unless @exporters.keys.include?(prefix)
         @log.info(
           'monitoring module: Registering a new exporter for ' \
-          "#{prefix}")
+          "#{prefix}"
+        )
         @recorders[prefix] = OpenCensus::Stats::Recorder.new
         @exporters[prefix] = \
           OpenCensus::Stats::Exporters::Stackdriver.new(
@@ -135,7 +140,8 @@ module Monitoring
           )
         @log.info(
           'monitoring module: Registered recorders and exporters for ' \
-          "#{prefix}.\n#{@exporters[prefix]}")
+          "#{prefix}.\n#{@exporters[prefix]}"
+        )
       end
       if aggregation == 'GAUGE'
         stats_aggregation = OpenCensus::Stats.create_last_value_aggregation
@@ -154,7 +160,8 @@ module Monitoring
       counter = OpenCensusCounter.new(@recorders[prefix], measure, translator)
       @log.info(
         'monitoring module: Successfully initialized Open Census counter for ' \
-        "#{prefix}/#{name}.")
+        "#{prefix}/#{name}."
+      )
       counter
     rescue StandardError => e
       @log.warn "Failed to count metrics for #{name}.", error: e
@@ -181,11 +188,13 @@ module Monitoring
 
     def export
       @log.debug(
-        "monitoring module: Exporting metrics for #{@exporters.keys}.")
+        "monitoring module: Exporting metrics for #{@exporters.keys}."
+      )
       @exporters.keys.each do |prefix|
         @log.debug(
           "monitoring module: Exporting metrics for #{prefix}. " \
-          "#{@recorders[prefix].views_data}")
+          "#{@recorders[prefix].views_data}"
+        )
         @exporters[prefix].export @recorders[prefix].views_data
       end
     rescue StandardError => e
@@ -247,6 +256,7 @@ module Monitoring
 
     def translate_labels(labels)
       return labels unless @legacy
+
       translation = { code: :response_code, grpc: :grpc }
       labels.map { |k, v| [translation[k], v] }.to_h
     end

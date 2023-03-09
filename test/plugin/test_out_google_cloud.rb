@@ -88,19 +88,23 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_prometheus_metric_value(
       :stackdriver_successful_requests_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_ingested_entries_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 2,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 3)
+      grpc: false, code: 3
+    )
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 7)
+      grpc: false, code: 7
+    )
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
@@ -119,19 +123,23 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_prometheus_metric_value(
       :stackdriver_successful_requests_count, 0,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_failed_requests_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 400)
+      grpc: false, code: 400
+    )
     assert_prometheus_metric_value(
       :stackdriver_ingested_entries_count, 0,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 400)
+      grpc: false, code: 400
+    )
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
@@ -411,10 +419,12 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                     multi_tags = false)
     driver = if multi_tags
                Fluent::Test::MultiTagBufferedOutputTestDriver.new(
-                 Fluent::GoogleCloudOutput)
+                 Fluent::GoogleCloudOutput
+               )
              else
                Fluent::Test::BufferedOutputTestDriver.new(
-                 Fluent::GoogleCloudOutput, tag)
+                 Fluent::GoogleCloudOutput, tag
+               )
              end
     driver.configure(conf, true)
   end
