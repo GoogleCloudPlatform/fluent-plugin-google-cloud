@@ -746,7 +746,7 @@ module Fluent
 
           dynamic_labels_from_payload = parse_labels(record)
 
-          entry_level_common_labels = entry_level_common_labels.merge!(
+          entry_level_common_labels.merge!(
             dynamic_labels_from_payload
           ) if dynamic_labels_from_payload
 
