@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'uri'
+
 module Common
   # Constants for service names, resource types and etc.
   module ServiceConstants
@@ -111,7 +113,7 @@ module Common
       end
 
       begin
-        open("http://#{METADATA_SERVICE_ADDR}", proxy: false) do |f|
+        URI.open("http://#{METADATA_SERVICE_ADDR}", proxy: false) do |f|
           if f.meta['metadata-flavor'] == 'Google'
             @log.info 'Detected GCE platform'
             return Platform::GCE
@@ -134,8 +136,8 @@ module Common
         platform == Platform::GCE
 
       # See https://cloud.google.com/compute/docs/metadata
-      open("http://#{METADATA_SERVICE_ADDR}/computeMetadata/v1/#{metadata_path}",
-           'Metadata-Flavor' => 'Google', :proxy => false, &:read)
+      URI.open("http://#{METADATA_SERVICE_ADDR}/computeMetadata/v1/#{metadata_path}",
+               'Metadata-Flavor' => 'Google', :proxy => false, &:read)
     end
 
     # EC2 Metadata server returns everything in one call. Store it after the
@@ -146,7 +148,7 @@ module Common
 
       unless @ec2_metadata
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
-        open("http://#{METADATA_SERVICE_ADDR}/latest/dynamic/instance-identity/document", proxy: false) do |f|
+        URI.open("http://#{METADATA_SERVICE_ADDR}/latest/dynamic/instance-identity/document", proxy: false) do |f|
           contents = f.read
           @ec2_metadata = JSON.parse(contents)
         end
