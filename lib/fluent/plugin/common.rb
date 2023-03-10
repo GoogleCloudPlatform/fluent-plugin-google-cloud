@@ -233,8 +233,8 @@ module Common
     # Metadata Agent. Thus it should be equivalent to what Metadata Agent
     # returns.
     def determine_agent_level_monitored_resource_via_legacy(
-          platform, subservice_name, detect_subservice, vm_id, zone
-        )
+      platform, subservice_name, detect_subservice, vm_id, zone
+    )
       resource_type = determine_agent_level_monitored_resource_type(
         platform, subservice_name, detect_subservice
       )
@@ -248,8 +248,8 @@ module Common
 
     # Determine agent level monitored resource type.
     def determine_agent_level_monitored_resource_type(
-          platform, subservice_name, detect_subservice
-        )
+      platform, subservice_name, detect_subservice
+    )
       case platform
       when Platform::OTHER
         # Unknown platform will be defaulted to GCE instance.
@@ -283,8 +283,8 @@ module Common
     # Determine agent level monitored resource labels based on the resource
     # type. Each resource type has its own labels that need to be filled in.
     def determine_agent_level_monitored_resource_labels(
-          platform, type, vm_id, zone
-        )
+      platform, type, vm_id, zone
+    )
       case type
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]

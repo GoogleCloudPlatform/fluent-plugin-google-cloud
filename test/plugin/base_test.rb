@@ -2150,8 +2150,8 @@ module BaseTest
   end
 
   def container_log_entry_with_metadata(
-      log, container_name = K8S_CONTAINER_NAME
-    )
+    log, container_name = K8S_CONTAINER_NAME
+  )
     {
       log: log,
       stream: K8S_STREAM,
@@ -2453,8 +2453,8 @@ module BaseTest
   # left with name "log", "message" or "msg". This test verifies additional
   # LogEntry fields like spanId and traceId do not disable that by accident.
   def verify_cascading_json_detection_with_log_entry_fields(
-      log_entry_field, default_key, expectation
-    )
+    log_entry_field, default_key, expectation
+  )
     root_level_value = expectation[:root_level_value]
     nested_level_value = expectation[:nested_level_value]
     expected_value_from_root = expectation.fetch(
