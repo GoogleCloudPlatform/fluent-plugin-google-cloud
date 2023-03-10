@@ -206,8 +206,8 @@ module Fluent
         matching_version, = all_specs.grep(
           proc { |spec,| __FILE__.include?(spec.full_gem_path) }
         ) do |spec,|
-            spec.version.to_s
-          end
+          spec.version.to_s
+        end
         # If no matching version was found, return a valid but obviously wrong
         # value.
         matching_version || '0.0.0-unknown'
@@ -1396,15 +1396,15 @@ module Fluent
         ts_nanos = timestamp.tv_nsec
       end
       ts_secs = begin
-                  Integer ts_secs
-                rescue ArgumentError, TypeError
-                  ts_secs
-                end
+        Integer ts_secs
+      rescue ArgumentError, TypeError
+        ts_secs
+      end
       ts_nanos = begin
-                   Integer ts_nanos
-                 rescue ArgumentError, TypeError
-                   ts_nanos
-                 end
+        Integer ts_nanos
+      rescue ArgumentError, TypeError
+        ts_nanos
+      end
 
       [ts_secs, ts_nanos, timestamp]
     end
