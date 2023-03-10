@@ -1076,13 +1076,13 @@ module BaseTest
                            current_time)
     end
 
-    december_29 = Time.new(2019, 12, 29, 10, 23, 35, '-08:00')
-    december_31 = Time.new(2019, 12, 31, 10, 23, 35, '-08:00')
-    january_1 = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
+    december29 = Time.new(2019, 12, 29, 10, 23, 35, '-08:00')
+    december31 = Time.new(2019, 12, 31, 10, 23, 35, '-08:00')
+    january1 = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
 
     {
       # December 29, 2019 (normal operation).
-      december_29 => begin
+      december29 => begin
         one_day_later = Time.new(2019, 12, 30, 10, 23, 35, '-08:00')
         one_day_a_year_earlier = Time.new(2018, 12, 30, 10, 23, 35, '-08:00')
         just_under_one_day_later = Time.new(2019, 12, 30, 10, 23, 34, '-08:00')
@@ -1096,7 +1096,7 @@ module BaseTest
         {
           Time.at(123_456.789) => Time.at(123_456.789),
           Time.at(0) => Time.at(0),
-          december_29 => december_29,
+          december29 => december29,
           one_day_later => one_day_a_year_earlier,
           just_under_one_day_later => just_under_one_day_later,
           one_second_before_next_year => one_second_before_this_year,
@@ -1106,7 +1106,7 @@ module BaseTest
         }
       end,
       # January 1, 2020 (normal operation).
-      january_1 => begin
+      january1 => begin
         one_day_later = Time.new(2020, 1, 2, 10, 23, 35, '-08:00')
         one_day_a_year_earlier = Time.new(2019, 1, 2, 10, 23, 35, '-08:00')
         just_under_one_day_later = Time.new(2020, 1, 2, 10, 23, 34, '-08:00')
@@ -1120,7 +1120,7 @@ module BaseTest
         {
           Time.at(123_456.789) => Time.at(123_456.789),
           Time.at(0) => Time.at(0),
-          january_1 => january_1,
+          january1 => january1,
           one_day_later => one_day_a_year_earlier,
           just_under_one_day_later => just_under_one_day_later,
           one_second_before_next_year => one_second_before_this_year,
@@ -1130,7 +1130,7 @@ module BaseTest
         }
       end,
       # December 31, 2019 (next day overlaps new year).
-      december_31 => begin
+      december31 => begin
         one_day_later = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
         just_under_one_day_later = Time.new(2020, 1, 1, 10, 23, 34, '-08:00')
         next_year = Time.new(2020, 1, 1, 0, 0, 0, '-08:00')
@@ -1141,7 +1141,7 @@ module BaseTest
         {
           Time.at(123_456.789) => Time.at(123_456.789),
           Time.at(0) => Time.at(0),
-          december_31 => december_31,
+          december31 => december31,
           one_day_later => Time.at(0), # Falls into the next year.
           just_under_one_day_later => just_under_one_day_later,
           one_second_before_next_year => one_second_before_next_year,
@@ -2210,10 +2210,10 @@ module BaseTest
     }
   end
 
-  def dataflow_log_entry(i)
+  def dataflow_log_entry(index)
     {
       step: DATAFLOW_STEP_ID,
-      message: log_entry(i)
+      message: log_entry(index)
     }
   end
 
@@ -2226,10 +2226,10 @@ module BaseTest
     }
   end
 
-  def ml_log_entry(i)
+  def ml_log_entry(index)
     {
       name: ML_LOG_AREA,
-      message: log_entry(i)
+      message: log_entry(index)
     }
   end
 
@@ -2240,8 +2240,8 @@ module BaseTest
     }
   end
 
-  def log_entry(i)
-    "test log entry #{i}"
+  def log_entry(index)
+    "test log entry #{index}"
   end
 
   # If check_exact_labels is true, assert 'labels' and 'expected_labels' match
@@ -2266,13 +2266,14 @@ module BaseTest
     end
   end
 
-  def verify_default_log_entry_text(text, i, entry)
-    assert_equal "test log entry #{i}", text,
-                 "Entry ##{i} had unexpected text: #{entry}"
+  def verify_default_log_entry_text(text, index, entry)
+    assert_equal "test log entry #{index}", text,
+                 "Entry ##{index} had unexpected text: #{entry}"
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_json_log_entries(n, params, payload_type = 'textPayload',
+  def verify_json_log_entries(expected_count, params,
+                              payload_type = 'textPayload',
                               check_exact_entry_labels = true)
     entry_count = 0
     @logs_sent.each do |request|
@@ -2310,11 +2311,11 @@ module BaseTest
                                         entry)
         end
         entry_count += 1
-        assert entry_count <= n,
-               "Number of entries #{entry_count} exceeds expected number #{n}."
+        assert entry_count <= expected_count,
+               "Number of entries #{entry_count} exceeds expected number #{expected_count}."
       end
     end
-    assert_equal n, entry_count
+    assert_equal expected_count, entry_count
   end
 
   def verify_container_logs(log_entry_factory, expected_params)
@@ -2656,7 +2657,8 @@ module BaseTest
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(_n, _params, _payload_type = 'textPayload',
+  def verify_log_entries(_expected_count, _params,
+                         _payload_type = 'textPayload',
                          _check_exact_entry_labels = true, &_block)
     _undefined
   end

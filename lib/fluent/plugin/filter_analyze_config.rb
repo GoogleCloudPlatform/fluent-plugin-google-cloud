@@ -186,32 +186,32 @@ module Fluent
     end
 
     # Returns a name for identifying plugins we ship by default.
-    def default_plugin_name(e)
-      case e['@type']
+    def default_plugin_name(conf_element)
+      case conf_element['@type']
       when 'syslog'
-        "#{e.name}/syslog/#{e['protocol_type']}"
+        "#{conf_element.name}/syslog/#{conf_element['protocol_type']}"
       when 'tail'
-        "#{e.name}/tail/#{File.basename(e['pos_file'], '.pos')}"
+        "#{conf_element.name}/tail/#{File.basename(conf_element['pos_file'], '.pos')}"
       else
-        "#{e.name}/#{e['@type']}"
+        "#{conf_element.name}/#{conf_element['@type']}"
       end
     end
 
     # Returns a name for identifying plugins not in our default
     # config.  This should not contain arbitrary user-supplied data.
-    def custom_plugin_name(e)
-      if KNOWN_PLUGINS.key?(e.name) &&
-         KNOWN_PLUGINS[e.name].include?(e['@type'])
-        "#{e.name}/#{e['@type']}"
+    def custom_plugin_name(conf_element)
+      if KNOWN_PLUGINS.key?(conf_element.name) &&
+         KNOWN_PLUGINS[conf_element.name].include?(conf_element['@type'])
+        "#{conf_element.name}/#{conf_element['@type']}"
       else
-        e.name.to_s
+        conf_element.name.to_s
       end
     end
 
-    def embedded_ruby?(e)
-      (e.arg.include?('#{') ||
-       e.any? { |_, v| v.include?('#{') } ||
-       e.elements.any? { |ee| embedded_ruby?(ee) })
+    def embedded_ruby?(conf_element)
+      (conf_element.arg.include?('#{') ||
+       conf_element.any? { |_, v| v.include?('#{') } ||
+       conf_element.elements.any? { |e| embedded_ruby?(e) })
     end
 
     def configure(conf)

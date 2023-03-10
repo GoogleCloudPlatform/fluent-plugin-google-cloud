@@ -44,7 +44,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                  user_agent
   end
 
-  def test_client_400
+  def test_client_status400
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
@@ -57,7 +57,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # All credentials errors resolve to a 401.
-  def test_client_401
+  def test_client_status401
     setup_gce_metadata_stubs
     stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 401, body: 'Unauthorized')
@@ -431,10 +431,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload',
+  def verify_log_entries(expected_count, params, payload_type = 'textPayload',
                          check_exact_entry_labels = true, &block)
-    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
-                            &block)
+    verify_json_log_entries(expected_count, params, payload_type,
+                            check_exact_entry_labels, &block)
   end
 
   # For an optional field with default values, Protobuf omits the field when it
