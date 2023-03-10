@@ -71,8 +71,8 @@ module BaseTest
     exception_count = 0
     begin
       create_driver(PRIVATE_KEY_CONFIG)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Please remove configuration parameters'
+    rescue Fluent::ConfigError => e
+      assert e.message.include? 'Please remove configuration parameters'
       exception_count += 1
     end
     assert_equal 1, exception_count
@@ -110,13 +110,13 @@ module BaseTest
         create_driver(config)
         assert_true is_valid_config, "Invalid config at index #{index} should "\
           'have raised an error.'
-      rescue Fluent::ConfigError => error
+      rescue Fluent::ConfigError => e
         assert_false is_valid_config, "Valid config at index #{index} should "\
-          "not have raised an error #{error}."
-        assert error.message.include?('Unable to obtain metadata parameters:'),
+          "not have raised an error #{e}."
+        assert e.message.include?('Unable to obtain metadata parameters:'),
                "Index #{index} failed."
         missing_parts.each do |part|
-          assert error.message.include?(part), "Index #{index} failed."
+          assert e.message.include?(part), "Index #{index} failed."
         end
       end
     end
@@ -210,9 +210,9 @@ module BaseTest
         create_driver(config)
         assert false,
                "Invalid config at index #{index} should have raised an error."
-      rescue Fluent::ConfigError => error
-        assert error.message.match?(pattern), \
-               "Index #{index} failed: got #{error.message}."
+      rescue Fluent::ConfigError => e
+        assert e.message.match?(pattern), \
+               "Index #{index} failed: got #{e.message}."
       end
     end
   end
@@ -293,9 +293,9 @@ module BaseTest
     exception_count = 0
     begin
       create_driver
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Unable to obtain metadata parameters:'
-      assert error.message.include? 'project_id'
+    rescue Fluent::ConfigError => e
+      assert e.message.include? 'Unable to obtain metadata parameters:'
+      assert e.message.include? 'project_id'
       exception_count += 1
     end
     assert_equal 1, exception_count
@@ -344,8 +344,8 @@ module BaseTest
       ENV[CREDENTIALS_PATH_ENV_VAR] = INVALID_CREDENTIALS[:path]
       begin
         create_driver
-      rescue RuntimeError => error
-        assert error.message.include? 'Unable to read the credential file'
+      rescue RuntimeError => e
+        assert e.message.include? 'Unable to read the credential file'
         exception_count += 1
       end
       assert_equal 1, exception_count

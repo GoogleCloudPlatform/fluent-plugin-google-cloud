@@ -65,8 +65,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit('message' => log_entry(0))
     begin
       d.run
-    rescue Google::Apis::AuthorizationError => error
-      assert_equal 'Unauthorized', error.message
+    rescue Google::Apis::AuthorizationError => e
+      assert_equal 'Unauthorized', e.message
     end
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
   end
@@ -154,8 +154,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     exception_count = 0
     begin
       d.run
-    rescue Google::Apis::ServerError => error
-      assert_equal 'Server error', error.message
+    rescue Google::Apis::ServerError => e
+      assert_equal 'Server error', e.message
       exception_count += 1
     end
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)

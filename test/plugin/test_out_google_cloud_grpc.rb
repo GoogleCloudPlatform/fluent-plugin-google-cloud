@@ -176,8 +176,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         d.emit('message' => log_entry(0))
         begin
           d.run
-        rescue GRPC::BadStatus => error
-          assert_equal "#{code}:#{message}", error.message
+        rescue GRPC::BadStatus => e
+          assert_equal "#{code}:#{message}", e.message
           exception_count += 1
         end
       end

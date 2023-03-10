@@ -920,9 +920,9 @@ module Fluent
         @successful_call = true
         @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
       end
-    rescue Google::Gax::GaxError => gax_error
+    rescue Google::Gax::GaxError => e
       # GRPC::BadStatus is wrapped in error.cause.
-      error = gax_error.cause
+      error = e.cause
 
       # See the mapping between HTTP status and gRPC status code at:
       # https://github.com/grpc/grpc/blob/master/src/core/lib/transport/status_conversion.cc
@@ -977,7 +977,7 @@ module Fluent
           GRPC::InvalidArgument,
           # HTTP status 403 (Forbidden).
           GRPC::PermissionDenied
-        error_details_map = construct_error_details_map_grpc(gax_error)
+        error_details_map = construct_error_details_map_grpc(e)
         if error_details_map.empty?
           increment_failed_requests_count(error.code)
           increment_dropped_entries_count(entries_count, error.code)
@@ -1013,13 +1013,13 @@ module Fluent
 
     # Got an unexpected error (not Google::Gax::GaxError) from the
     # google-cloud-logging lib.
-    rescue StandardError => error
+    rescue StandardError => e
       increment_failed_requests_count(GRPC::Core::StatusCodes::UNKNOWN)
       increment_dropped_entries_count(entries_count,
                                       GRPC::Core::StatusCodes::UNKNOWN)
-      @log.error "Unexpected error type #{error.class.name} from the client" \
+      @log.error "Unexpected error type #{e.class.name} from the client" \
                  " library, dropping #{entries_count} log message(s)",
-                 error: error.to_s
+                 error: e.to_s
     end
 
     def write_request_via_rest(entries:,
@@ -1047,29 +1047,29 @@ module Fluent
         @successful_call = true
         @log.info 'Successfully sent to Stackdriver Logging API.'
       end
-    rescue Google::Apis::ServerError => error
+    rescue Google::Apis::ServerError => e
       # 5xx server errors. Retry via re-raising the error.
-      increment_retried_entries_count(entries_count, error.status_code)
+      increment_retried_entries_count(entries_count, e.status_code)
       @log.debug "Retrying #{entries_count} log message(s) later.",
-                 error: error.to_s, error_code: error.status_code.to_s
-      raise error
-    rescue Google::Apis::AuthorizationError => error
+                 error: e.to_s, error_code: e.status_code.to_s
+      raise e
+    rescue Google::Apis::AuthorizationError => e
       # 401 authorization error.
       # These are usually solved via a `gcloud auth` call, or by modifying
       # the permissions on the Google Cloud project.
-      increment_failed_requests_count(error.status_code)
-      increment_dropped_entries_count(entries_count, error.status_code)
+      increment_failed_requests_count(e.status_code)
+      increment_dropped_entries_count(entries_count, e.status_code)
       @log.warn "Dropping #{entries_count} log message(s)",
-                error: error.to_s, error_code: error.status_code.to_s
-    rescue Google::Apis::ClientError => error
+                error: e.to_s, error_code: e.status_code.to_s
+    rescue Google::Apis::ClientError => e
       # 4xx client errors. Most client errors indicate a problem with the
       # request itself and should not be retried.
-      error_details_map = construct_error_details_map(error)
+      error_details_map = construct_error_details_map(e)
       if error_details_map.empty?
-        increment_failed_requests_count(error.status_code)
-        increment_dropped_entries_count(entries_count, error.status_code)
+        increment_failed_requests_count(e.status_code)
+        increment_dropped_entries_count(entries_count, e.status_code)
         @log.warn "Dropping #{entries_count} log message(s)",
-                  error: error.to_s, error_code: error.status_code.to_s
+                  error: e.to_s, error_code: e.status_code.to_s
       else
         error_details_map.each do |(error_code, error_message), indexes|
           partial_errors_count = indexes.length
@@ -1503,8 +1503,8 @@ module Fluent
           record.delete(payload_key) if fields.empty?
 
           entry.send("#{field_name}=", output)
-        rescue StandardError => err
-          @log.error "Failed to set log entry field for #{field_name}.", err
+        rescue StandardError => e
+          @log.error "Failed to set log entry field for #{field_name}.", e
         end
       end
     end
@@ -1530,8 +1530,8 @@ module Fluent
         return nil
       end
       payload_labels
-    rescue StandardError => err
-      @log.error "Failed to extract '#{@labels_key}' from payload.", err
+    rescue StandardError => e
+      @log.error "Failed to extract '#{@labels_key}' from payload.", e
       nil
     end
 
