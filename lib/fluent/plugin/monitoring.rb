@@ -82,9 +82,9 @@ module Monitoring
       # labels in the metric constructor. The 'labels' field in
       # Prometheus client 0.9.0 has a different function and will not
       # work as intended.
-      return PrometheusCounter.new(@registry.counter(name, docstring))
+      PrometheusCounter.new(@registry.counter(name, docstring))
     rescue Prometheus::Client::Registry::AlreadyRegisteredError
-      return PrometheusCounter.new(@registry.get(name))
+      PrometheusCounter.new(@registry.get(name))
     end
   end
 

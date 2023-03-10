@@ -1532,7 +1532,7 @@ module Fluent
       payload_labels
     rescue StandardError => err
       @log.error "Failed to extract '#{@labels_key}' from payload.", err
-      return nil
+      nil
     end
 
     # Values permitted by the API for 'severity' (which is an enum).
@@ -1664,12 +1664,12 @@ module Fluent
       seconds = match['seconds'].to_i
       nanos = (match['decimal'].to_f * 1000 * 1000 * 1000).round
       if @use_grpc
-        return Google::Protobuf::Duration.new(
+        Google::Protobuf::Duration.new(
           seconds: seconds,
           nanos: nanos
         )
       else
-        return {
+        {
           seconds: seconds,
           nanos: nanos
         }.delete_if { |_, v| v == 0 }

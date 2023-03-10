@@ -253,10 +253,10 @@ module Common
       case platform
       when Platform::OTHER
         # Unknown platform will be defaulted to GCE instance.
-        return COMPUTE_CONSTANTS[:resource_type]
+        COMPUTE_CONSTANTS[:resource_type]
 
       when Platform::EC2
-        return EC2_CONSTANTS[:resource_type]
+        EC2_CONSTANTS[:resource_type]
 
       when Platform::GCE
         # Resource types determined by subservice_name config.
@@ -276,7 +276,7 @@ module Common
         end
 
         # GCE instance.
-        return COMPUTE_CONSTANTS[:resource_type]
+        COMPUTE_CONSTANTS[:resource_type]
       end
     end
 
