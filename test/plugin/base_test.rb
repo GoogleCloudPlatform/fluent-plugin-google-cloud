@@ -2013,12 +2013,12 @@ module BaseTest
             (1..entry_count).each do |entry_index|
               d.emit('message' => log_entry(entry_index.to_s))
             end
-            # rubocop:disable Lint/HandleExceptions
+            # rubocop:disable Lint/SuppressedException
             begin
               d.run
             rescue mock_error_type
             end
-            # rubocop:enable Lint/HandleExceptions
+            # rubocop:enable Lint/SuppressedException
             failed_requests_count, dropped_entries_count,
             retried_entries_count = metric_values
 
