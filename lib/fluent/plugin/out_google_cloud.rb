@@ -1805,8 +1805,7 @@ module Fluent
           tag = sanitized_tag unless sanitized_tag.nil?
         end
       end
-      tag = ERB::Util.url_encode(tag)
-      tag
+      ERB::Util.url_encode(tag)
     end
 
     def init_api_client
