@@ -386,7 +386,7 @@ module Fluent
           'analysis.'
         )
       end
-    rescue => e
+    rescue StandardError => e
       # Do not crash the agent due to configuration analysis failures.
       @log.warn(
         'analyze_config plugin: Failed to optionally analyze the ' \

@@ -1385,7 +1385,7 @@ module Fluent
         # k8s ISO8601 timestamp
         begin
           timestamp = Time.iso8601(record.delete('time'))
-        rescue
+        rescue StandardError
           timestamp = Time.at(time)
         end
         ts_secs = timestamp.tv_sec
@@ -1590,7 +1590,7 @@ module Fluent
           else
             return numeric_severity
           end
-        rescue
+        rescue StandardError
           return 'DEFAULT'
         end
       end

@@ -373,7 +373,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       @failed_attempts << 1
       begin
         raise @error
-      rescue
+      rescue StandardError
         # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
         raise Google::Gax::GaxError, 'This test message does not matter.'
       end
