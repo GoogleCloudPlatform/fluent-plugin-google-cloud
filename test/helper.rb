@@ -31,6 +31,10 @@ require 'fluent/test'
 unless ENV.key?('VERBOSE')
   nulllogger = Object.new
   nulllogger.instance_eval do |_|
+    def respond_to_missing?(_method, _include_private = false)
+      true
+    end
+
     def method_missing(_method, *_args)
       # pass
     end

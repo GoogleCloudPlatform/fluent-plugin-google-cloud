@@ -22,6 +22,7 @@ module Monitoring
   # Prometheus implementation of counters.
   class PrometheusCounter < BaseCounter
     def initialize(prometheus_counter)
+      super()
       @counter = prometheus_counter
     end
 
@@ -33,6 +34,7 @@ module Monitoring
   # OpenCensus implementation of counters.
   class OpenCensusCounter < BaseCounter
     def initialize(recorder, measure, translator)
+      super()
       raise ArgumentError, 'measure must not be nil' if measure.nil?
 
       @recorder = recorder
