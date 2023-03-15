@@ -259,9 +259,7 @@ module Fluent
         )
         # Export metrics every 60 seconds.
         timer_execute(:export_config_analysis_metrics, 60) do
-          if @registry.respond_to? :update_timestamps
-            @registry.update_timestamps(PREFIX)
-          end
+          @registry.update_timestamps(PREFIX) if @registry.respond_to? :update_timestamps
           @registry.export
         end
 

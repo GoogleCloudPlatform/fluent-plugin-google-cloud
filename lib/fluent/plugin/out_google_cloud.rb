@@ -718,9 +718,7 @@ module Fluent
             record_json = nil
             if (record.keys - preserved_keys).length == 1
               %w[log message msg].each do |field|
-                if record.key?(field)
-                  record_json = parse_json_or_nil(record[field])
-                end
+                record_json = parse_json_or_nil(record[field]) if record.key?(field)
               end
             end
             unless record_json.nil?
@@ -1596,9 +1594,7 @@ module Fluent
       end
 
       # Try to translate the severity.
-      if SEVERITY_TRANSLATIONS.key?(severity)
-        return SEVERITY_TRANSLATIONS[severity]
-      end
+      return SEVERITY_TRANSLATIONS[severity] if SEVERITY_TRANSLATIONS.key?(severity)
 
       # If all else fails, use 'DEFAULT'.
       'DEFAULT'
@@ -1630,9 +1626,7 @@ module Fluent
       # if severity.is_a? String
       #   return Google::Logging::Type::LogSeverity.resolve(severity)
       # end
-      if GRPC_SEVERITY_MAPPING.key?(severity)
-        return GRPC_SEVERITY_MAPPING[severity]
-      end
+      return GRPC_SEVERITY_MAPPING[severity] if GRPC_SEVERITY_MAPPING.key?(severity)
 
       severity
     end

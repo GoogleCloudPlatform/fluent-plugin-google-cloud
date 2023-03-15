@@ -181,9 +181,7 @@ module Monitoring
         view_data.data.each_value do |aggr_data|
           # Apply this only to GAUGE metrics. This could fail if the metric uses
           # Distribution or other fancier aggregators.
-          if aggr_data.is_a? OpenCensus::Stats::AggregationData::LastValue
-            aggr_data.add aggr_data.value, new_time
-          end
+          aggr_data.add aggr_data.value, new_time if aggr_data.is_a? OpenCensus::Stats::AggregationData::LastValue
         end
       end
     end
