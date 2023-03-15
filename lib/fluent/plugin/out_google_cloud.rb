@@ -744,9 +744,11 @@ module Fluent
 
           dynamic_labels_from_payload = parse_labels(record)
 
-          entry_level_common_labels.merge!(
-            dynamic_labels_from_payload
-          ) if dynamic_labels_from_payload
+          if dynamic_labels_from_payload
+            entry_level_common_labels.merge!(
+              dynamic_labels_from_payload
+            )
+          end
 
           entry = @construct_log_entry.call(entry_level_common_labels,
                                             entry_level_resource,
@@ -1984,9 +1986,10 @@ module Fluent
       )
       log_entry_errors.each do |index, log_entry_error|
         error_hash = ensure_hash(log_entry_error)
-        raise JSON::ParserError,
-              "Entry #{index} is missing 'code' or 'message'." unless
-          error_hash['code'] && error_hash['message']
+        unless error_hash['code'] && error_hash['message']
+          raise JSON::ParserError,
+                "Entry #{index} is missing 'code' or 'message'."
+        end
         error_key = [error_hash['code'], error_hash['message']].freeze
         # TODO(qingling128): Convert indexes to integers.
         error_details_map[error_key] << index

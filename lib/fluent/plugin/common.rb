@@ -206,9 +206,10 @@ module Common
     # 2. If not, try to retrieve it locally.
     def get_location(platform, zone, use_aws_availability_zone)
       # Response format: "projects/<number>/zones/<zone>"
-      zone ||= fetch_gce_metadata(platform,
-                                  'instance/zone').rpartition('/')[2] if
-        platform == Platform::GCE
+      if platform == Platform::GCE
+        zone ||= fetch_gce_metadata(platform,
+                                    'instance/zone').rpartition('/')[2]
+      end
       aws_location_key = if use_aws_availability_zone
                            'availabilityZone'
                          else
