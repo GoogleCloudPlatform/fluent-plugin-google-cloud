@@ -2259,11 +2259,11 @@ module BaseTest
       assert_equal expected_value, actual_value, "Value for #{expected_key}" \
                    " mismatch. Expected #{expected_value}. Got #{actual_value}"
     end
-    if check_exact_labels
-      assert_equal expected_labels.length, labels.length, 'Expected ' \
-        "#{expected_labels.length} labels: #{expected_labels}, got " \
-        "#{labels.length} labels: #{labels}"
-    end
+    return unless check_exact_labels
+
+    assert_equal expected_labels.length, labels.length, 'Expected ' \
+      "#{expected_labels.length} labels: #{expected_labels}, got " \
+      "#{labels.length} labels: #{labels}"
   end
 
   def verify_default_log_entry_text(text, index, entry)

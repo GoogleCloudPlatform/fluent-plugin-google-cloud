@@ -637,12 +637,12 @@ module Fluent
         @write_request = method(:write_request_via_rest)
       end
 
-      if [Common::Platform::GCE, Common::Platform::EC2].include?(@platform)
-        # Log an informational message containing the Logs viewer URL
-        @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
-                  "viewer?project=#{@project_id}&resource=#{@resource.type}/",
-                  "instance_id/#{@vm_id}"
-      end
+      return unless [Common::Platform::GCE, Common::Platform::EC2].include?(@platform)
+
+      # Log an informational message containing the Logs viewer URL
+      @log.info 'Logs viewer address: https://console.cloud.google.com/logs/',
+                "viewer?project=#{@project_id}&resource=#{@resource.type}/",
+                "instance_id/#{@vm_id}"
     end
 
     def start
@@ -651,16 +651,16 @@ module Fluent
       @successful_call = false
       @timenanos_warning = false
 
-      if @statusz_port > 0
-        @log.info "Starting statusz server on port #{@statusz_port}"
-        server_create(:out_google_cloud_statusz,
-                      @statusz_port,
-                      bind: '127.0.0.1') do |data, conn|
-          if data.split(' ')[1] == '/statusz'
-            write_html_response(data, conn, 200, Statusz.response(self))
-          else
-            write_html_response(data, conn, 404, "Not found\n")
-          end
+      return unless @statusz_port > 0
+
+      @log.info "Starting statusz server on port #{@statusz_port}"
+      server_create(:out_google_cloud_statusz,
+                    @statusz_port,
+                    bind: '127.0.0.1') do |data, conn|
+        if data.split(' ')[1] == '/statusz'
+          write_html_response(data, conn, 200, Statusz.response(self))
+        else
+          write_html_response(data, conn, 404, "Not found\n")
         end
       end
     end
