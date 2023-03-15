@@ -365,9 +365,8 @@ module Common
       # Returns the project ID (as a string) on success, or nil on failure.
       def self.project_id
         creds = Google::Auth.get_application_default(LOGGING_SCOPE)
-        if creds.respond_to?(:project_id)
-          return creds.project_id if creds.project_id
-        end
+        return creds.project_id if creds.respond_to?(:project_id) && creds.project_id
+
         if creds.issuer
           id = extract_project_id(creds.issuer)
           return id unless id.nil?
