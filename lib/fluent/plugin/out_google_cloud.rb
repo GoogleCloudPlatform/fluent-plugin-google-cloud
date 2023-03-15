@@ -554,13 +554,13 @@ module Fluent
           @log.warn "monitoring_type '#{@monitoring_type}' is unknown; "\
                     'there will be no metrics'
         end
-        if @metrics_resource
-          @monitoring_resource = @utils.create_monitored_resource(
-            @metrics_resource[:type], @metrics_resource[:labels]
-          )
-        else
-          @monitoring_resource = @resource
-        end
+        @monitoring_resource = if @metrics_resource
+                                 @utils.create_monitored_resource(
+                                   @metrics_resource[:type], @metrics_resource[:labels]
+                                 )
+                               else
+                                 @resource
+                               end
         @registry = Monitoring::MonitoringRegistryFactory
                     .create(@monitoring_type, @project_id,
                             @monitoring_resource, @gcm_service_address)

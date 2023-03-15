@@ -145,11 +145,11 @@ module Monitoring
           "#{prefix}.\n#{@exporters[prefix]}"
         )
       end
-      if aggregation == 'GAUGE'
-        stats_aggregation = OpenCensus::Stats.create_last_value_aggregation
-      else
-        stats_aggregation = OpenCensus::Stats.create_sum_aggregation
-      end
+      stats_aggregation = if aggregation == 'GAUGE'
+                            OpenCensus::Stats.create_last_value_aggregation
+                          else
+                            OpenCensus::Stats.create_sum_aggregation
+                          end
       @recorders[prefix].register_view(
         OpenCensus::Stats::View.new(
           name: translator.name,
