@@ -521,7 +521,7 @@ module Fluent
                   " #{@metrics_resource}."
           end
           extra_keys = @metrics_resource.reject do |k, _|
-            k == :type || k == :labels
+            %i[type labels].include?(k)
           end
           unless extra_keys.empty?
             raise Fluent::ConfigError,
@@ -1101,7 +1101,7 @@ module Fluent
           # in which case we continue to look for a left curly bracket.
           # Whitespace as per the JSON spec are: tabulation (U+0009),
           # line feed (U+000A), carriage return (U+000D), and space (U+0020).
-          break unless c == 9 || c == 10 || c == 13 || c == 32
+          break unless [9, 10, 13, 32].include?(c)
         end # case
       end # do
       nil
