@@ -791,7 +791,7 @@ module BaseTest
   # any non-string tags or tags with non-utf8 characters are detected.
   def test_reject_invalid_tags_with_require_valid_tags_true
     setup_gce_metadata_stubs
-    INVALID_TAGS.keys.each do |tag|
+    INVALID_TAGS.each_key do |tag|
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)

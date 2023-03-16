@@ -190,7 +190,7 @@ module Monitoring
       @log.debug(
         "monitoring module: Exporting metrics for #{@exporters.keys}."
       )
-      @exporters.keys.each do |prefix|
+      @exporters.each_key do |prefix|
         @log.debug(
           "monitoring module: Exporting metrics for #{prefix}. " \
           "#{@recorders[prefix].views_data}"
