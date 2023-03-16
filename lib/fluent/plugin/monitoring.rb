@@ -15,7 +15,8 @@
 module Monitoring
   # Base class for the counter.
   class BaseCounter
-    def increment(*)
+    def increment(by: 1, labels: {})
+      # No default behavior
     end
   end
 
@@ -54,6 +55,7 @@ module Monitoring
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
     def initialize(_project_id, _monitored_resource, _gcm_service_address)
+      # no default behavior
     end
 
     def counter(_name, _labels, _docstring, _prefix, _aggregation)

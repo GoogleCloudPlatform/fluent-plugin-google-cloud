@@ -85,6 +85,7 @@ require 'strptime'
 # Dummy Strptime class.
 class Strptime
   def self.new(_)
+    # empty
   end
 end
 
