@@ -65,14 +65,6 @@ module Fluent
       @log.info "Initialized the insert ID key to #{@insert_id}."
     end
 
-    def configure(conf)
-      super
-    end
-
-    def shutdown
-      super
-    end
-
     # rubocop:disable Lint/UnusedMethodArgument
     def filter(tag, time, record)
       # Only generate and add an insertId field if the record is a hash and
