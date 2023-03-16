@@ -306,6 +306,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       resp = Net::HTTP.get('127.0.0.1', '/statusz', 5678)
       must_match = [
         '<h1>Status for .*</h1>.*',
+        '\bStarted: .*<br>',
+        '\bUp \d+ hr \d{2} min \d{2} sec<br>',
 
         '\badjust_invalid_timestamps\b.*\bfalse\b',
         '\bautoformat_stackdriver_trace\b.*\bfalse\b',

@@ -22,10 +22,10 @@ module Statusz
   # Note: The plugin parameter is referenced in STATUSZ_TMPL.
   def response(plugin)
     uptime = Time.now - SERVER_START
-    uptime_str = format('%d hr %02d min %02d sec',
-                        uptime / 3600,
-                        (uptime / 60) % 60,
-                        uptime % 60)
+    uptime_str = format('%<hours>d hr %<minutes>02d min %<seconds>02d sec',
+                        hours: uptime / 3600,
+                        minutes: (uptime / 60) % 60,
+                        seconds: uptime % 60)
     ERB.new(STATUSZ_TMPL).result(binding)
   end
 end
