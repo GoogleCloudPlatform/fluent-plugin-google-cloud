@@ -669,7 +669,7 @@ module Fluent
       super
       # Export metrics on shutdown. This is a best-effort attempt, and it might
       # fail, for instance if there was a recent write to the same time series.
-      @registry.export unless @registry.nil?
+      @registry&.export
     end
 
     def write(chunk)
@@ -1796,7 +1796,7 @@ module Fluent
       elsif resource.type == GKE_CONSTANTS[:resource_type]
         # For Kubernetes logs, use just the container name as the log name
         # if we have it.
-        if resource.labels && resource.labels.key?('container_name')
+        if resource.labels&.key?('container_name')
           sanitized_tag = sanitize_tag(resource.labels['container_name'])
           tag = sanitized_tag unless sanitized_tag.nil?
         end

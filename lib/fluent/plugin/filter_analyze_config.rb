@@ -397,7 +397,7 @@ module Fluent
       super
       # Export metrics on shutdown. This is a best-effort attempt, and it might
       # fail, for instance if there was a recent write to the same time series.
-      @registry.export unless @registry.nil?
+      @registry&.export
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
