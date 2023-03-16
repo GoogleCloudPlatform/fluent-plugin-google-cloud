@@ -234,8 +234,7 @@ module Monitoring
   # Avoid this mechanism for new metrics by defining them in their final form,
   # so they don't need translation.
   class MetricTranslator
-    attr_reader :name
-    attr_reader :view_labels
+    attr_reader :name, :view_labels
 
     def initialize(name, metric_labels)
       @legacy = true

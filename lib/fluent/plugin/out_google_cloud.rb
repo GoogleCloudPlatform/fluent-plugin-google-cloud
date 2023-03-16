@@ -431,12 +431,7 @@ module Fluent
 
     # Expose attr_readers to make testing of metadata more direct than only
     # testing it indirectly through metadata sent with logs.
-    attr_reader :project_id
-    attr_reader :zone
-    attr_reader :vm_id
-    attr_reader :resource
-    attr_reader :common_labels
-    attr_reader :monitoring_resource
+    attr_reader :project_id, :zone, :vm_id, :resource, :common_labels, :monitoring_resource
 
     def initialize
       super
