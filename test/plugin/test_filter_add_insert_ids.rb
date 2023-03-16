@@ -70,7 +70,7 @@ class FilterAddInsertIdsTest < Test::Unit::TestCase
       assert_equal TEST_MESSAGE, record['message'], "Index #{index} failed."
 
       # Get the first insertID.
-      expected_insert_id = record[DEFAULT_INSERT_ID_KEY] if index == 0
+      expected_insert_id = record[DEFAULT_INSERT_ID_KEY] if index.zero?
       insert_id = record[DEFAULT_INSERT_ID_KEY]
       assert_equal expected_insert_id, insert_id, "Index #{index} failed."
       expected_insert_id = expected_insert_id.next

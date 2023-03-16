@@ -383,7 +383,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Set up grpc stubs to mock the external calls.
   def setup_logging_stubs(error = nil, code = nil, message = 'some message')
-    if error.nil? && (code.nil? || code == 0)
+    if error.nil? && (code.nil? || code.zero?)
       @requests_sent = []
       @grpc_stub = GRPCLoggingMockService.new(@requests_sent)
     else

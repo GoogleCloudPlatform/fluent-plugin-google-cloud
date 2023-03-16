@@ -651,7 +651,7 @@ module Fluent
       @successful_call = false
       @timenanos_warning = false
 
-      return unless @statusz_port > 0
+      return unless @statusz_port.positive?
 
       @log.info "Starting statusz server on port #{@statusz_port}"
       server_create(:out_google_cloud_statusz,
@@ -1583,7 +1583,7 @@ module Fluent
         begin
           numeric_severity = (severity.to_i / 100) * 100
           case
-          when numeric_severity < 0
+          when numeric_severity.negative?
             return 0
           when numeric_severity > 800
             return 800
@@ -1668,7 +1668,7 @@ module Fluent
         {
           seconds: seconds,
           nanos: nanos
-        }.delete_if { |_, v| v == 0 }
+        }.delete_if { |_, v| v.zero? }
       end
     end
 
