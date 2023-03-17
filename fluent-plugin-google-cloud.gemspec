@@ -19,7 +19,7 @@ Gem::Specification.new do |gem|
   gem.test_files    = gem.files.grep(/^(test)/)
   gem.require_paths = ['lib']
 
-  # Note: In order to update the Fluentd version, please update both here and
+  # NOTE: In order to update the Fluentd version, please update both here and
   # also the fluentd version in
   # https://github.com/GoogleCloudPlatform/google-fluentd/blob/master/config/software/fluentd.rb.
   gem.add_runtime_dependency 'fluentd', '1.13.3'
