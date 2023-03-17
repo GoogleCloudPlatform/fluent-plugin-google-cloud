@@ -1098,8 +1098,8 @@ module Fluent
           # Whitespace as per the JSON spec are: tabulation (U+0009),
           # line feed (U+000A), carriage return (U+000D), and space (U+0020).
           break unless [9, 10, 13, 32].include?(c)
-        end # case
-      end # do
+        end
+      end
       nil
     end
 
