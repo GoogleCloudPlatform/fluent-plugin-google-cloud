@@ -259,7 +259,7 @@ module Monitoring
       return labels unless @legacy
 
       translation = { code: :response_code, grpc: :grpc }
-      labels.map { |k, v| [translation[k], v] }.to_h
+      labels.transform_keys { |k| translation[k] }
     end
   end
 end
