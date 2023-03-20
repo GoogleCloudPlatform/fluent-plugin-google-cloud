@@ -106,18 +106,16 @@ module BaseTest
       [CONFIG_MISSING_METADATA_VM_ID, [], true],
       [CONFIG_MISSING_METADATA_ALL, ['project_id'], false]
     ].each_with_index do |(config, missing_parts, is_valid_config), index|
-      begin
-        create_driver(config)
-        assert_true is_valid_config, "Invalid config at index #{index} should "\
-          'have raised an error.'
-      rescue Fluent::ConfigError => e
-        assert_false is_valid_config, "Valid config at index #{index} should "\
-          "not have raised an error #{e}."
-        assert e.message.include?('Unable to obtain metadata parameters:'),
-               "Index #{index} failed."
-        missing_parts.each do |part|
-          assert e.message.include?(part), "Index #{index} failed."
-        end
+      create_driver(config)
+      assert_true is_valid_config, "Invalid config at index #{index} should "\
+        'have raised an error.'
+    rescue Fluent::ConfigError => e
+      assert_false is_valid_config, "Valid config at index #{index} should "\
+        "not have raised an error #{e}."
+      assert e.message.include?('Unable to obtain metadata parameters:'),
+             "Index #{index} failed."
+      missing_parts.each do |part|
+        assert e.message.include?(part), "Index #{index} failed."
       end
     end
   end
@@ -206,14 +204,12 @@ module BaseTest
       CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS_NO_LABELS =>
         /unrecognized keys: \[:random\]/
     }.each_with_index do |(config, pattern), index|
-      begin
-        create_driver(config)
-        assert false,
-               "Invalid config at index #{index} should have raised an error."
-      rescue Fluent::ConfigError => e
-        assert e.message.match?(pattern), \
-               "Index #{index} failed: got #{e.message}."
-      end
+      create_driver(config)
+      assert false,
+             "Invalid config at index #{index} should have raised an error."
+    rescue Fluent::ConfigError => e
+      assert e.message.match?(pattern), \
+             "Index #{index} failed: got #{e.message}."
     end
   end
 
