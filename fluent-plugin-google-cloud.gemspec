@@ -13,7 +13,7 @@ Gem::Specification.new do |gem|
   gem.version       = '0.12.11'
   gem.authors       = ['Stackdriver Agents Team']
   gem.email         = ['stackdriver-agents@google.com']
-  gem.required_ruby_version = Gem::Requirement.new('>= 2.3')
+  gem.required_ruby_version = Gem::Requirement.new('>= 2.6')
 
   gem.files         = Dir['**/*'].keep_if { |file| File.file?(file) }
   gem.test_files    = gem.files.grep(/^(test)/)
