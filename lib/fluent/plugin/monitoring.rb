@@ -15,13 +15,15 @@
 module Monitoring
   # Base class for the counter.
   class BaseCounter
-    def increment(*)
+    def increment(by: 1, labels: {})
+      # No default behavior
     end
   end
 
   # Prometheus implementation of counters.
   class PrometheusCounter < BaseCounter
     def initialize(prometheus_counter)
+      super()
       @counter = prometheus_counter
     end
 
@@ -33,7 +35,9 @@ module Monitoring
   # OpenCensus implementation of counters.
   class OpenCensusCounter < BaseCounter
     def initialize(recorder, measure, translator)
+      super()
       raise ArgumentError, 'measure must not be nil' if measure.nil?
+
       @recorder = recorder
       @measure = measure
       @translator = translator
@@ -42,7 +46,8 @@ module Monitoring
     def increment(by: 1, labels: {})
       labels = @translator.translate_labels(labels)
       tag_map = OpenCensus::Tags::TagMap.new(
-        labels.map { |k, v| [k.to_s, v.to_s] }.to_h)
+        labels.map { |k, v| [k.to_s, v.to_s] }.to_h
+      )
       @recorder.record(@measure.create_measurement(value: by, tags: tag_map))
     end
   end
@@ -50,6 +55,7 @@ module Monitoring
   # Base class for the monitoring registry.
   class BaseMonitoringRegistry
     def initialize(_project_id, _monitored_resource, _gcm_service_address)
+      # no default behavior
     end
 
     def counter(_name, _labels, _docstring, _prefix, _aggregation)
@@ -80,9 +86,9 @@ module Monitoring
       # labels in the metric constructor. The 'labels' field in
       # Prometheus client 0.9.0 has a different function and will not
       # work as intended.
-      return PrometheusCounter.new(@registry.counter(name, docstring))
+      PrometheusCounter.new(@registry.counter(name, docstring))
     rescue Prometheus::Client::Registry::AlreadyRegisteredError
-      return PrometheusCounter.new(@registry.get(name))
+      PrometheusCounter.new(@registry.get(name))
     end
   end
 
@@ -104,7 +110,8 @@ module Monitoring
       @exporters = {}
       @log.info(
         'monitoring module: Successfully initialized Open Census monitoring ' \
-        'registry.')
+        'registry.'
+      )
     end
 
     def counter(name, labels, docstring, prefix, aggregation)
@@ -113,7 +120,8 @@ module Monitoring
       if measure.nil?
         @log.info(
           'monitoring module: Registering a new measure registry for ' \
-          "#{translator.name}")
+          "#{translator.name}"
+        )
         measure = OpenCensus::Stats.create_measure_int(
           name: translator.name,
           unit: OpenCensus::Stats::Measure::UNIT_NONE,
@@ -123,7 +131,8 @@ module Monitoring
       unless @exporters.keys.include?(prefix)
         @log.info(
           'monitoring module: Registering a new exporter for ' \
-          "#{prefix}")
+          "#{prefix}"
+        )
         @recorders[prefix] = OpenCensus::Stats::Recorder.new
         @exporters[prefix] = \
           OpenCensus::Stats::Exporters::Stackdriver.new(
@@ -135,13 +144,14 @@ module Monitoring
           )
         @log.info(
           'monitoring module: Registered recorders and exporters for ' \
-          "#{prefix}.\n#{@exporters[prefix]}")
+          "#{prefix}.\n#{@exporters[prefix]}"
+        )
       end
-      if aggregation == 'GAUGE'
-        stats_aggregation = OpenCensus::Stats.create_last_value_aggregation
-      else
-        stats_aggregation = OpenCensus::Stats.create_sum_aggregation
-      end
+      stats_aggregation = if aggregation == 'GAUGE'
+                            OpenCensus::Stats.create_last_value_aggregation
+                          else
+                            OpenCensus::Stats.create_sum_aggregation
+                          end
       @recorders[prefix].register_view(
         OpenCensus::Stats::View.new(
           name: translator.name,
@@ -154,7 +164,8 @@ module Monitoring
       counter = OpenCensusCounter.new(@recorders[prefix], measure, translator)
       @log.info(
         'monitoring module: Successfully initialized Open Census counter for ' \
-        "#{prefix}/#{name}.")
+        "#{prefix}/#{name}."
+      )
       counter
     rescue StandardError => e
       @log.warn "Failed to count metrics for #{name}.", error: e
@@ -172,20 +183,20 @@ module Monitoring
         view_data.data.each_value do |aggr_data|
           # Apply this only to GAUGE metrics. This could fail if the metric uses
           # Distribution or other fancier aggregators.
-          if aggr_data.is_a? OpenCensus::Stats::AggregationData::LastValue
-            aggr_data.add aggr_data.value, new_time
-          end
+          aggr_data.add aggr_data.value, new_time if aggr_data.is_a? OpenCensus::Stats::AggregationData::LastValue
         end
       end
     end
 
     def export
       @log.debug(
-        "monitoring module: Exporting metrics for #{@exporters.keys}.")
-      @exporters.keys.each do |prefix|
+        "monitoring module: Exporting metrics for #{@exporters.keys}."
+      )
+      @exporters.each_key do |prefix|
         @log.debug(
           "monitoring module: Exporting metrics for #{prefix}. " \
-          "#{@recorders[prefix].views_data}")
+          "#{@recorders[prefix].views_data}"
+        )
         @exporters[prefix].export @recorders[prefix].views_data
       end
     rescue StandardError => e
@@ -223,8 +234,7 @@ module Monitoring
   # Avoid this mechanism for new metrics by defining them in their final form,
   # so they don't need translation.
   class MetricTranslator
-    attr_reader :name
-    attr_reader :view_labels
+    attr_reader :name, :view_labels
 
     def initialize(name, metric_labels)
       @legacy = true
@@ -247,8 +257,9 @@ module Monitoring
 
     def translate_labels(labels)
       return labels unless @legacy
+
       translation = { code: :response_code, grpc: :grpc }
-      labels.map { |k, v| [translation[k], v] }.to_h
+      labels.transform_keys { |k| translation[k] }
     end
   end
 end

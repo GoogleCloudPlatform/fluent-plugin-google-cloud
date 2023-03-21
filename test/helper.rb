@@ -17,8 +17,10 @@ require 'bundler'
 begin
   Bundler.setup(:default, :development)
 rescue Bundler::BundlerError => e
+  # rubocop:disable Style/StderrPuts
   $stderr.puts e.message
   $stderr.puts 'Run `bundle install` to install missing gems'
+  # rubocop:enable Style/StderrPuts
   exit e.status_code
 end
 require 'test/unit'
@@ -29,6 +31,10 @@ require 'fluent/test'
 unless ENV.key?('VERBOSE')
   nulllogger = Object.new
   nulllogger.instance_eval do |_|
+    def respond_to_missing?(_method, _include_private = false)
+      true
+    end
+
     def method_missing(_method, *_args)
       # pass
     end

@@ -19,13 +19,13 @@ require 'erb'
 module Statusz
   module_function
 
-  # Note: The plugin parameter is referenced in STATUSZ_TMPL.
+  # NOTE: The plugin parameter is referenced in STATUSZ_TMPL.
   def response(plugin)
     uptime = Time.now - SERVER_START
-    uptime_str = format('%d hr %02d min %02d sec',
-                        uptime / 3600,
-                        (uptime / 60) % 60,
-                        uptime % 60)
+    uptime_str = format('%<hours>d hr %<minutes>02d min %<seconds>02d sec',
+                        hours: uptime / 3600,
+                        minutes: (uptime / 60) % 60,
+                        seconds: uptime % 60)
     ERB.new(STATUSZ_TMPL).result(binding)
   end
 end
@@ -34,7 +34,7 @@ SERVER_START = Time.now
 
 # Does not include the following deprecated config params:
 # auth_method, private_key_email, private_key_passphrase, private_key_path
-CONFIG_KEYS = %w(
+CONFIG_KEYS = %w[
   adjust_invalid_timestamps
   autoformat_stackdriver_trace
   coerce_to_utf8
@@ -68,9 +68,8 @@ CONFIG_KEYS = %w(
   vm_id
   vm_name
   zone
-).freeze
+].freeze
 
-# rubocop:disable LineLength
 STATUSZ_TMPL = %(\
 <!DOCTYPE html>
 <html>
@@ -121,4 +120,3 @@ STATUSZ_TMPL = %(\
   </body>
 </html>
 ).freeze
-# rubocop:enable LineLength

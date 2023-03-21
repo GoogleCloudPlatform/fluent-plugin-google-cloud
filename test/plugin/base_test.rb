@@ -71,8 +71,8 @@ module BaseTest
     exception_count = 0
     begin
       create_driver(PRIVATE_KEY_CONFIG)
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Please remove configuration parameters'
+    rescue Fluent::ConfigError => e
+      assert e.message.include? 'Please remove configuration parameters'
       exception_count += 1
     end
     assert_equal 1, exception_count
@@ -100,23 +100,22 @@ module BaseTest
   def test_configure_metadata_missing_parts_on_other_platforms
     setup_no_metadata_service_stubs
     Common::Utils::CredentialsInfo.stubs(:project_id).returns(nil)
-    [[CONFIG_MISSING_METADATA_PROJECT_ID, ['project_id'], false],
-     [CONFIG_MISSING_METADATA_ZONE, [], true],
-     [CONFIG_MISSING_METADATA_VM_ID, [], true],
-     [CONFIG_MISSING_METADATA_ALL, ['project_id'], false]
+    [
+      [CONFIG_MISSING_METADATA_PROJECT_ID, ['project_id'], false],
+      [CONFIG_MISSING_METADATA_ZONE, [], true],
+      [CONFIG_MISSING_METADATA_VM_ID, [], true],
+      [CONFIG_MISSING_METADATA_ALL, ['project_id'], false]
     ].each_with_index do |(config, missing_parts, is_valid_config), index|
-      begin
-        create_driver(config)
-        assert_true is_valid_config, "Invalid config at index #{index} should "\
-          'have raised an error.'
-      rescue Fluent::ConfigError => error
-        assert_false is_valid_config, "Valid config at index #{index} should "\
-          "not have raised an error #{error}."
-        assert error.message.include?('Unable to obtain metadata parameters:'),
-               "Index #{index} failed."
-        missing_parts.each do |part|
-          assert error.message.include?(part), "Index #{index} failed."
-        end
+      create_driver(config)
+      assert_true is_valid_config, "Invalid config at index #{index} should "\
+        'have raised an error.'
+    rescue Fluent::ConfigError => e
+      assert_false is_valid_config, "Valid config at index #{index} should "\
+        "not have raised an error #{e}."
+      assert e.message.include?('Unable to obtain metadata parameters:'),
+             "Index #{index} failed."
+      missing_parts.each do |part|
+        assert e.message.include?(part), "Index #{index} failed."
       end
     end
   end
@@ -128,38 +127,52 @@ module BaseTest
     setup_gce_metadata_stubs
     create_driver(CONFIG_UNKNOWN_MONITORING_TYPE)
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_successful_requests_count))
+                 :stackdriver_successful_requests_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_failed_requests_count))
+                 :stackdriver_failed_requests_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_ingested_entries_count))
+                 :stackdriver_ingested_entries_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_dropped_entries_count))
+                 :stackdriver_dropped_entries_count
+               ))
     assert_nil(Prometheus::Client.registry.get(
-                 :stackdriver_retried_entries_count))
+                 :stackdriver_retried_entries_count
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_successful_requests_count, {})))
+                   :stackdriver_successful_requests_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_failed_requests_count, {})))
+                   :stackdriver_failed_requests_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_ingested_entries_count, {})))
+                   :stackdriver_ingested_entries_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_dropped_entries_count, {})))
+                   :stackdriver_dropped_entries_count, {}
+                 )
+               ))
     assert_nil(OpenCensus::Stats::MeasureRegistry.get(
                  Monitoring::MetricTranslator.new(
-                   :stackdriver_retried_entries_count, {})))
+                   :stackdriver_retried_entries_count, {}
+                 )
+               ))
   end
 
   def test_configure_uses_metrics_resource
     setup_gce_metadata_stubs
     [CONFIG_METRICS_RESOURCE_JSON,
      CONFIG_METRICS_RESOURCE_HASH,
-     CONFIG_METRICS_RESOURCE_JSON_HASH
-    ].each_with_index do |config, index|
+     CONFIG_METRICS_RESOURCE_JSON_HASH].each_with_index do |config, index|
       d = create_driver(config)
       assert_equal 'custom_resource', d.instance.monitoring_resource.type, \
                    "Index #{index}"
@@ -171,7 +184,8 @@ module BaseTest
       registry = d.instance.instance_variable_get(:@registry)
       assert_not_nil registry
       monitored_resource = registry.instance_variable_get(
-        :@metrics_monitored_resource)
+        :@metrics_monitored_resource
+      )
       assert_equal('custom_resource', monitored_resource.type, "Index #{index}")
       assert_equal({ 'label1' => '123', 'label2' => 'abc' },
                    monitored_resource.labels, "Index #{index}")
@@ -190,14 +204,12 @@ module BaseTest
       CONFIG_METRICS_RESOURCE_JSON_BAD_KEYS_NO_LABELS =>
         /unrecognized keys: \[:random\]/
     }.each_with_index do |(config, pattern), index|
-      begin
-        create_driver(config)
-        assert false,
-               "Invalid config at index #{index} should have raised an error."
-      rescue Fluent::ConfigError => error
-        assert error.message.match?(pattern), \
-               "Index #{index} failed: got #{error.message}."
-      end
+      create_driver(config)
+      assert false,
+             "Invalid config at index #{index} should have raised an error."
+    rescue Fluent::ConfigError => e
+      assert e.message.match?(pattern), \
+             "Index #{index} failed: got #{e.message}."
     end
   end
 
@@ -277,16 +289,16 @@ module BaseTest
     exception_count = 0
     begin
       create_driver
-    rescue Fluent::ConfigError => error
-      assert error.message.include? 'Unable to obtain metadata parameters:'
-      assert error.message.include? 'project_id'
+    rescue Fluent::ConfigError => e
+      assert e.message.include? 'Unable to obtain metadata parameters:'
+      assert e.message.include? 'project_id'
       exception_count += 1
     end
     assert_equal 1, exception_count
   end
 
   def test_project_id_from_credentials
-    %w(gce ec2).each do |platform|
+    %w[gce ec2].each do |platform|
       send("setup_#{platform}_metadata_stubs")
       [IAM_CREDENTIALS, NEW_STYLE_CREDENTIALS, LEGACY_CREDENTIALS].each \
       do |creds|
@@ -317,18 +329,19 @@ module BaseTest
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS.merge(
-                            project_id: IAM_CREDENTIALS[:project_id]))
+                            project_id: IAM_CREDENTIALS[:project_id]
+                          ))
   end
 
   def test_invalid_json_credentials
-    %w(gce_metadata ec2_metadata no_metadata_service).each do |platform|
+    %w[gce_metadata ec2_metadata no_metadata_service].each do |platform|
       send("setup_#{platform}_stubs")
       exception_count = 0
       ENV[CREDENTIALS_PATH_ENV_VAR] = INVALID_CREDENTIALS[:path]
       begin
         create_driver
-      rescue RuntimeError => error
-        assert error.message.include? 'Unable to read the credential file'
+      rescue RuntimeError => e
+        assert e.message.include? 'Unable to read the credential file'
         exception_count += 1
       end
       assert_equal 1, exception_count
@@ -498,9 +511,9 @@ module BaseTest
       d.emit(
         'int_key' => { 1 => message },
         'int_array_key' => { [1, 2, 3, 4] => message },
-        'string_array_key' => { %w(a b c) => message },
+        'string_array_key' => { %w[a b c] => message },
         'hash_key' => { { 'some_key' => 'some_value' } => message },
-        'mixed_key' => { { 'some_key' => %w(a b c) } => message },
+        'mixed_key' => { { 'some_key' => %w[a b c] } => message },
         'symbol_key' => { some_symbol: message },
         'nil_key' => { nil => message }
       )
@@ -527,9 +540,9 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG)
-      d.emit('message' => 'notJSON ' + json_string)
+      d.emit('message' => "notJSON #{json_string}")
       d.emit('message' => json_string)
-      d.emit('message' => "  \r\n \t" + json_string)
+      d.emit('message' => "  \r\n \t#{json_string}")
       d.run
     end
     verify_log_entries(3, COMPUTE_PARAMS, 'textPayload') do
@@ -543,10 +556,10 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG)
-      %w(log msg).each do |field|
-        d.emit(field => 'notJSON ' + json_string)
+      %w[log msg].each do |field|
+        d.emit(field => "notJSON #{json_string}")
         d.emit(field => json_string)
-        d.emit(field => "  \r\n \t" + json_string)
+        d.emit(field => "  \r\n \t#{json_string}")
       end
       d.run
     end
@@ -564,7 +577,7 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
-      d.emit('message' => 'notJSON ' + json_string)
+      d.emit('message' => "notJSON #{json_string}")
       d.run
     end
     verify_log_entries(1, COMPUTE_PARAMS, 'textPayload') do
@@ -578,8 +591,8 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
-      %w(log msg).each do |field|
-        d.emit(field => 'notJSON ' + json_string)
+      %w[log msg].each do |field|
+        d.emit(field => "notJSON #{json_string}")
       end
       d.run
     end
@@ -668,9 +681,9 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG)
-      %w(message log msg).each do |field|
+      %w[message log msg].each do |field|
         d.emit(field => json_string)
-        d.emit(field => "  \r\n \t" + json_string)
+        d.emit(field => "  \r\n \t#{json_string}")
       end
       d.run
     end
@@ -691,9 +704,9 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(APPLICATION_DEFAULT_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry_with_metadata('notJSON' + json_string))
+      d.emit(container_log_entry_with_metadata("notJSON#{json_string}"))
       d.emit(container_log_entry_with_metadata(json_string))
-      d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
+      d.emit(container_log_entry_with_metadata("  \r\n \t#{json_string}"))
       d.run
     end
     verify_log_entries(3, CONTAINER_FROM_METADATA_PARAMS, 'textPayload') do
@@ -708,7 +721,7 @@ module BaseTest
                   '"data": 5000, "some_null_field": null}'
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
-      d.emit(container_log_entry_with_metadata('notJSON' + json_string))
+      d.emit(container_log_entry_with_metadata("notJSON#{json_string}"))
       d.run
     end
     verify_log_entries(1, CONTAINER_FROM_METADATA_PARAMS, 'textPayload') do
@@ -724,7 +737,7 @@ module BaseTest
     setup_logging_stubs do
       d = create_driver(DETECT_JSON_CONFIG, CONTAINER_TAG)
       d.emit(container_log_entry_with_metadata(json_string))
-      d.emit(container_log_entry_with_metadata("  \r\n \t" + json_string))
+      d.emit(container_log_entry_with_metadata("  \r\n \t#{json_string}"))
       d.run
     end
     verify_log_entries(2, CONTAINER_FROM_METADATA_PARAMS, 'jsonPayload') \
@@ -749,14 +762,16 @@ module BaseTest
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(DETECT_JSON_CONFIG)
-        %w(message log msg).each do |field|
+        %w[message log msg].each do |field|
           d.emit(PRESERVED_KEYS_MAP.merge(
-            field => json_string).merge(timestamp_fields))
+            field => json_string
+          ).merge(timestamp_fields))
         end
         d.run
       end
       expected_params = COMPUTE_PARAMS.merge(
-        labels: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE))
+        labels: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)
+      )
       verify_log_entries(3, expected_params, 'jsonPayload') do |entry|
         fields = entry['jsonPayload']
         assert_equal 4, fields.size, entry
@@ -772,7 +787,7 @@ module BaseTest
   # any non-string tags or tags with non-utf8 characters are detected.
   def test_reject_invalid_tags_with_require_valid_tags_true
     setup_gce_metadata_stubs
-    INVALID_TAGS.keys.each do |tag|
+    INVALID_TAGS.each_key do |tag|
       setup_logging_stubs do
         @logs_sent = []
         d = create_driver(REQUIRE_VALID_TAGS_CONFIG, tag)
@@ -800,8 +815,11 @@ module BaseTest
     params = CONTAINER_FROM_METADATA_PARAMS.merge(
       resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
         labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
-          'container_name' => container_name)),
-      log_name: tag)
+          'container_name' => container_name
+        )
+      ),
+      log_name: tag
+    )
     verify_log_entries(1, params, 'textPayload')
   end
 
@@ -824,8 +842,10 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         labels: CONTAINER_FROM_METADATA_PARAMS[:labels].merge(
           "#{GKE_CONSTANTS[:service]}/container_name" =>
-            CGI.unescape(encoded_name)),
-        log_name: encoded_name)
+            CGI.unescape(encoded_name)
+        ),
+        log_name: encoded_name
+      )
       verify_log_entries(0, params, 'textPayload')
     end
   end
@@ -861,8 +881,11 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
           labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
-            'container_name' => tag)),
-        log_name: encoded_tag)
+            'container_name' => tag
+          )
+        ),
+        log_name: encoded_tag
+      )
       verify_log_entries(1, params, 'textPayload')
     end
   end
@@ -907,8 +930,11 @@ module BaseTest
       params = CONTAINER_FROM_METADATA_PARAMS.merge(
         resource: CONTAINER_FROM_METADATA_PARAMS[:resource].merge(
           labels: CONTAINER_FROM_METADATA_PARAMS[:resource][:labels].merge(
-            'container_name' => CGI.unescape(encoded_container_name))),
-        log_name: encoded_container_name)
+            'container_name' => CGI.unescape(encoded_container_name)
+          )
+        ),
+        log_name: encoded_container_name
+      )
       verify_log_entries(1, params, 'textPayload')
     end
   end
@@ -960,13 +986,15 @@ module BaseTest
           request_count,
           'agent.googleapis.com/agent',
           OpenCensus::Stats::Aggregation::Sum, d,
-          :aggregate)
+          :aggregate
+        )
         assert_prometheus_metric_value(
           :stackdriver_ingested_entries_count,
           log_entry_count,
           'agent.googleapis.com/agent',
           OpenCensus::Stats::Aggregation::Sum, d,
-          :aggregate)
+          :aggregate
+        )
       end
     end
   end
@@ -1044,13 +1072,13 @@ module BaseTest
                            current_time)
     end
 
-    december_29 = Time.new(2019, 12, 29, 10, 23, 35, '-08:00')
-    december_31 = Time.new(2019, 12, 31, 10, 23, 35, '-08:00')
-    january_1 = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
+    december29 = Time.new(2019, 12, 29, 10, 23, 35, '-08:00')
+    december31 = Time.new(2019, 12, 31, 10, 23, 35, '-08:00')
+    january1 = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
 
     {
       # December 29, 2019 (normal operation).
-      december_29 => begin
+      december29 => begin
         one_day_later = Time.new(2019, 12, 30, 10, 23, 35, '-08:00')
         one_day_a_year_earlier = Time.new(2018, 12, 30, 10, 23, 35, '-08:00')
         just_under_one_day_later = Time.new(2019, 12, 30, 10, 23, 34, '-08:00')
@@ -1064,7 +1092,7 @@ module BaseTest
         {
           Time.at(123_456.789) => Time.at(123_456.789),
           Time.at(0) => Time.at(0),
-          december_29 => december_29,
+          december29 => december29,
           one_day_later => one_day_a_year_earlier,
           just_under_one_day_later => just_under_one_day_later,
           one_second_before_next_year => one_second_before_this_year,
@@ -1074,7 +1102,7 @@ module BaseTest
         }
       end,
       # January 1, 2020 (normal operation).
-      january_1 => begin
+      january1 => begin
         one_day_later = Time.new(2020, 1, 2, 10, 23, 35, '-08:00')
         one_day_a_year_earlier = Time.new(2019, 1, 2, 10, 23, 35, '-08:00')
         just_under_one_day_later = Time.new(2020, 1, 2, 10, 23, 34, '-08:00')
@@ -1088,7 +1116,7 @@ module BaseTest
         {
           Time.at(123_456.789) => Time.at(123_456.789),
           Time.at(0) => Time.at(0),
-          january_1 => january_1,
+          january1 => january1,
           one_day_later => one_day_a_year_earlier,
           just_under_one_day_later => just_under_one_day_later,
           one_second_before_next_year => one_second_before_this_year,
@@ -1098,7 +1126,7 @@ module BaseTest
         }
       end,
       # December 31, 2019 (next day overlaps new year).
-      december_31 => begin
+      december31 => begin
         one_day_later = Time.new(2020, 1, 1, 10, 23, 35, '-08:00')
         just_under_one_day_later = Time.new(2020, 1, 1, 10, 23, 34, '-08:00')
         next_year = Time.new(2020, 1, 1, 0, 0, 0, '-08:00')
@@ -1109,7 +1137,7 @@ module BaseTest
         {
           Time.at(123_456.789) => Time.at(123_456.789),
           Time.at(0) => Time.at(0),
-          december_31 => december_31,
+          december31 => december31,
           one_day_later => Time.at(0), # Falls into the next year.
           just_under_one_day_later => just_under_one_day_later,
           one_second_before_next_year => one_second_before_next_year,
@@ -1607,7 +1635,8 @@ module BaseTest
                      custom_key: 'custom_labels_key',
                      custom_key_config: CONFIG_CUSTOM_LABELS_KEY_SPECIFIED,
                      sample_value: COMPUTE_PARAMS[:labels].merge(
-                       LABELS_MESSAGE),
+                       LABELS_MESSAGE
+                     ),
                      default_value: COMPUTE_PARAMS[:labels])
   end
 
@@ -1659,7 +1688,8 @@ module BaseTest
     verify_cascading_json_detection_with_log_entry_fields(
       'insertId', DEFAULT_INSERT_ID_KEY,
       root_level_value: INSERT_ID,
-      nested_level_value: INSERT_ID2)
+      nested_level_value: INSERT_ID2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_labels_field
@@ -1669,7 +1699,9 @@ module BaseTest
       nested_level_value: LABELS_MESSAGE2,
       expected_value_from_root: COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE),
       expected_value_from_nested: COMPUTE_PARAMS[:labels].merge(
-        LABELS_MESSAGE2))
+        LABELS_MESSAGE2
+      )
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_operation_field
@@ -1677,28 +1709,32 @@ module BaseTest
       'operation', DEFAULT_OPERATION_KEY,
       root_level_value: OPERATION_MESSAGE,
       nested_level_value: OPERATION_MESSAGE2,
-      expected_value_from_nested: expected_operation_message2)
+      expected_value_from_nested: expected_operation_message2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_source_location_field
     verify_cascading_json_detection_with_log_entry_fields(
       'sourceLocation', DEFAULT_SOURCE_LOCATION_KEY,
       root_level_value: SOURCE_LOCATION_MESSAGE,
-      nested_level_value: SOURCE_LOCATION_MESSAGE2)
+      nested_level_value: SOURCE_LOCATION_MESSAGE2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_span_id_field
     verify_cascading_json_detection_with_log_entry_fields(
       'spanId', DEFAULT_SPAN_ID_KEY,
       root_level_value: SPAN_ID,
-      nested_level_value: SPAN_ID2)
+      nested_level_value: SPAN_ID2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_trace_field
     verify_cascading_json_detection_with_log_entry_fields(
       'trace', DEFAULT_TRACE_KEY,
       root_level_value: TRACE,
-      nested_level_value: TRACE2)
+      nested_level_value: TRACE2
+    )
   end
 
   def test_cascading_json_detection_with_log_entry_trace_sampled_field
@@ -1707,7 +1743,8 @@ module BaseTest
       root_level_value: TRACE_SAMPLED,
       nested_level_value: TRACE_SAMPLED2,
       default_value_from_root: false,
-      default_value_from_nested: false)
+      default_value_from_nested: false
+    )
   end
 
   # Verify that labels present in multiple inputs respect the expected priority
@@ -1739,9 +1776,11 @@ module BaseTest
       {
         config: CONFIG_LABLES_AND_LABLE_MAP,
         emitted_log: PAYLOAD_FOR_LABEL_MAP.merge(
-          DEFAULT_LABELS_KEY => LABELS_MESSAGE),
+          DEFAULT_LABELS_KEY => LABELS_MESSAGE
+        ),
         expected_labels: LABELS_MESSAGE.merge(LABELS_FROM_LABELS_CONFIG).merge(
-          LABELS_FROM_LABEL_MAP_CONFIG)
+          LABELS_FROM_LABEL_MAP_CONFIG
+        )
       },
       # labels from the config "labels" and "label_map" conflict.
       {
@@ -1761,14 +1800,16 @@ module BaseTest
       {
         config: CONFIG_LABEL_MAP_CONFLICTING,
         emitted_log: PAYLOAD_FOR_LABEL_MAP_CONFLICTING.merge(
-          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING),
+          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING
+        ),
         expected_labels: LABELS_FROM_PAYLOAD_CONFLICTING
       },
       # All three types of labels conflict.
       {
         config: CONFIG_LABLES_AND_LABLE_MAP_CONFLICTING,
         emitted_log: PAYLOAD_FOR_LABEL_MAP_CONFLICTING.merge(
-          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING),
+          DEFAULT_LABELS_KEY => LABELS_FROM_PAYLOAD_CONFLICTING
+        ),
         expected_labels: LABELS_FROM_PAYLOAD_CONFLICTING
       }
     ].each do |test_params|
@@ -1780,7 +1821,8 @@ module BaseTest
           d.run
         end
         expected_params = COMPUTE_PARAMS.merge(
-          labels: COMPUTE_PARAMS[:labels].merge(test_params[:expected_labels]))
+          labels: COMPUTE_PARAMS[:labels].merge(test_params[:expected_labels])
+        )
         verify_log_entries(1, expected_params)
       end
     end
@@ -1852,7 +1894,8 @@ module BaseTest
         config: APPLICATION_DEFAULT_CONFIG,
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
-          log_entry(0)).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
+          log_entry(0)
+        ).reject { |k, _| k == LOCAL_RESOURCE_ID_KEY },
         expected_params: CONTAINER_FROM_TAG_PARAMS
       },
       {
@@ -1860,7 +1903,8 @@ module BaseTest
         setup_k8s_stub: true,
         log_entry: k8s_container_log_entry(
           log_entry(0),
-          local_resource_id: RANDOM_LOCAL_RESOURCE_ID),
+          local_resource_id: RANDOM_LOCAL_RESOURCE_ID
+        ),
         expected_params: CONTAINER_FROM_TAG_PARAMS
       }
     ].each do |test_params|
@@ -1979,7 +2023,8 @@ module BaseTest
         assert_metric_value.call(
           :uptime, expected, 'agent.googleapis.com/agent',
           OpenCensus::Stats::Aggregation::Sum, d,
-          version: Fluent::GoogleCloudOutput.version_string)
+          version: Fluent::GoogleCloudOutput.version_string
+        )
       rescue Test::Unit::AssertionFailedError
         retry if (retries += 1) < 3
       end
@@ -2013,12 +2058,12 @@ module BaseTest
             (1..entry_count).each do |entry_index|
               d.emit('message' => log_entry(entry_index.to_s))
             end
-            # rubocop:disable Lint/HandleExceptions
+            # rubocop:disable Lint/SuppressedException
             begin
               d.run
             rescue mock_error_type
             end
-            # rubocop:enable Lint/HandleExceptions
+            # rubocop:enable Lint/SuppressedException
             failed_requests_count, dropped_entries_count,
             retried_entries_count = metric_values
 
@@ -2067,6 +2112,7 @@ module BaseTest
             # assertion will fail in the case when a single metric contains time
             # series with success and failure events.
             next if code == ok_status_code
+
             assert_metric_value.call(:stackdriver_failed_requests_count,
                                      failed_requests_count,
                                      'agent.googleapis.com/agent',
@@ -2100,7 +2146,8 @@ module BaseTest
   end
 
   def container_log_entry_with_metadata(
-      log, container_name = K8S_CONTAINER_NAME)
+    log, container_name = K8S_CONTAINER_NAME
+  )
     {
       log: log,
       stream: K8S_STREAM,
@@ -2159,10 +2206,10 @@ module BaseTest
     }
   end
 
-  def dataflow_log_entry(i)
+  def dataflow_log_entry(index)
     {
       step: DATAFLOW_STEP_ID,
-      message: log_entry(i)
+      message: log_entry(index)
     }
   end
 
@@ -2175,10 +2222,10 @@ module BaseTest
     }
   end
 
-  def ml_log_entry(i)
+  def ml_log_entry(index)
     {
       name: ML_LOG_AREA,
-      message: log_entry(i)
+      message: log_entry(index)
     }
   end
 
@@ -2189,8 +2236,8 @@ module BaseTest
     }
   end
 
-  def log_entry(i)
-    "test log entry #{i}"
+  def log_entry(index)
+    "test log entry #{index}"
   end
 
   # If check_exact_labels is true, assert 'labels' and 'expected_labels' match
@@ -2198,6 +2245,7 @@ module BaseTest
   # 'expected_labels'.
   def check_labels(expected_labels, labels, check_exact_labels = true)
     return if expected_labels.empty? && labels.empty?
+
     expected_labels.each do |expected_key, expected_value|
       assert labels.key?(expected_key), "Expected label #{expected_key} not" \
              " found. Got labels: #{labels}."
@@ -2207,20 +2255,21 @@ module BaseTest
       assert_equal expected_value, actual_value, "Value for #{expected_key}" \
                    " mismatch. Expected #{expected_value}. Got #{actual_value}"
     end
-    if check_exact_labels
-      assert_equal expected_labels.length, labels.length, 'Expected ' \
-        "#{expected_labels.length} labels: #{expected_labels}, got " \
-        "#{labels.length} labels: #{labels}"
-    end
+    return unless check_exact_labels
+
+    assert_equal expected_labels.length, labels.length, 'Expected ' \
+      "#{expected_labels.length} labels: #{expected_labels}, got " \
+      "#{labels.length} labels: #{labels}"
   end
 
-  def verify_default_log_entry_text(text, i, entry)
-    assert_equal "test log entry #{i}", text,
-                 "Entry ##{i} had unexpected text: #{entry}"
+  def verify_default_log_entry_text(text, index, entry)
+    assert_equal "test log entry #{index}", text,
+                 "Entry ##{index} had unexpected text: #{entry}"
   end
 
   # The caller can optionally provide a block which is called for each entry.
-  def verify_json_log_entries(n, params, payload_type = 'textPayload',
+  def verify_json_log_entries(expected_count, params,
+                              payload_type = 'textPayload',
                               check_exact_entry_labels = true)
     entry_count = 0
     @logs_sent.each do |request|
@@ -2258,11 +2307,11 @@ module BaseTest
                                         entry)
         end
         entry_count += 1
-        assert entry_count <= n,
-               "Number of entries #{entry_count} exceeds expected number #{n}."
+        assert entry_count <= expected_count,
+               "Number of entries #{entry_count} exceeds expected number #{expected_count}."
       end
     end
-    assert_equal n, entry_count
+    assert_equal expected_count, entry_count
   end
 
   def verify_container_logs(log_entry_factory, expected_params)
@@ -2291,13 +2340,17 @@ module BaseTest
       # LogEntry info from. The values are lists of two elements: the name of
       # the subfield in LogEntry object and the expected value of that field.
       DEFAULT_HTTP_REQUEST_KEY => [
-        'httpRequest', HTTP_REQUEST_MESSAGE],
+        'httpRequest', HTTP_REQUEST_MESSAGE
+      ],
       DEFAULT_LABELS_KEY => [
-        'labels', COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)],
+        'labels', COMPUTE_PARAMS[:labels].merge(LABELS_MESSAGE)
+      ],
       DEFAULT_OPERATION_KEY => [
-        'operation', OPERATION_MESSAGE],
+        'operation', OPERATION_MESSAGE
+      ],
       DEFAULT_SOURCE_LOCATION_KEY => [
-        'sourceLocation', SOURCE_LOCATION_MESSAGE]
+        'sourceLocation', SOURCE_LOCATION_MESSAGE
+      ]
     }
   end
 
@@ -2397,17 +2450,22 @@ module BaseTest
   # left with name "log", "message" or "msg". This test verifies additional
   # LogEntry fields like spanId and traceId do not disable that by accident.
   def verify_cascading_json_detection_with_log_entry_fields(
-      log_entry_field, default_key, expectation)
+    log_entry_field, default_key, expectation
+  )
     root_level_value = expectation[:root_level_value]
     nested_level_value = expectation[:nested_level_value]
     expected_value_from_root = expectation.fetch(
-      :expected_value_from_root, root_level_value)
+      :expected_value_from_root, root_level_value
+    )
     expected_value_from_nested = expectation.fetch(
-      :expected_value_from_nested, nested_level_value)
+      :expected_value_from_nested, nested_level_value
+    )
     default_value_from_root = expectation.fetch(
-      :default_value_from_root, nil)
+      :default_value_from_root, nil
+    )
     default_value_from_nested = expectation.fetch(
-      :default_value_from_nested, nil)
+      :default_value_from_nested, nil
+    )
 
     setup_gce_metadata_stubs
 
@@ -2443,7 +2501,8 @@ module BaseTest
     #   }
     # }
     log_entry_with_both_level_fields = log_entry_with_nested_level_field.merge(
-      default_key => root_level_value)
+      default_key => root_level_value
+    )
 
     [
       [
@@ -2594,7 +2653,8 @@ module BaseTest
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(_n, _params, _payload_type = 'textPayload',
+  def verify_log_entries(_expected_count, _params,
+                         _payload_type = 'textPayload',
                          _check_exact_entry_labels = true, &_block)
     _undefined
   end

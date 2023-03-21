@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'uri'
+
 module Common
   # Constants for service names, resource types and etc.
   module ServiceConstants
     APPENGINE_CONSTANTS = {
       service: 'appengine.googleapis.com',
       resource_type: 'gae_app',
-      metadata_attributes: %w(gae_backend_name gae_backend_version)
+      metadata_attributes: %w[gae_backend_name gae_backend_version]
     }.freeze
     COMPUTE_CONSTANTS = {
       service: 'compute.googleapis.com',
@@ -27,9 +29,9 @@ module Common
     GKE_CONSTANTS = {
       service: 'container.googleapis.com',
       resource_type: 'gke_container',
-      extra_resource_labels: %w(namespace_id pod_id container_name),
-      extra_common_labels: %w(namespace_name pod_name),
-      metadata_attributes: %w(cluster-name cluster-location),
+      extra_resource_labels: %w[namespace_id pod_id container_name],
+      extra_common_labels: %w[namespace_name pod_name],
+      metadata_attributes: %w[cluster-name cluster-location],
       stream_severity_map: {
         'stdout' => 'INFO',
         'stderr' => 'ERROR'
@@ -47,12 +49,12 @@ module Common
     DATAFLOW_CONSTANTS = {
       service: 'dataflow.googleapis.com',
       resource_type: 'dataflow_step',
-      extra_resource_labels: %w(region job_name job_id step_id)
+      extra_resource_labels: %w[region job_name job_id step_id]
     }.freeze
     DATAPROC_CONSTANTS = {
       service: 'cluster.dataproc.googleapis.com',
       resource_type: 'cloud_dataproc_cluster',
-      metadata_attributes: %w(dataproc-cluster-uuid dataproc-cluster-name)
+      metadata_attributes: %w[dataproc-cluster-uuid dataproc-cluster-name]
     }.freeze
     EC2_CONSTANTS = {
       service: 'ec2.amazonaws.com',
@@ -61,7 +63,7 @@ module Common
     ML_CONSTANTS = {
       service: 'ml.googleapis.com',
       resource_type: 'ml_job',
-      extra_resource_labels: %w(job_id task_name)
+      extra_resource_labels: %w[job_id task_name]
     }.freeze
 
     # The map between a subservice name and a resource type.
@@ -111,7 +113,7 @@ module Common
       end
 
       begin
-        open('http://' + METADATA_SERVICE_ADDR, proxy: false) do |f|
+        URI.open("http://#{METADATA_SERVICE_ADDR}", proxy: false) do |f|
           if f.meta['metadata-flavor'] == 'Google'
             @log.info 'Detected GCE platform'
             return Platform::GCE
@@ -132,10 +134,10 @@ module Common
     def fetch_gce_metadata(platform, metadata_path)
       raise "Called fetch_gce_metadata with platform=#{platform}" unless
         platform == Platform::GCE
+
       # See https://cloud.google.com/compute/docs/metadata
-      open('http://' + METADATA_SERVICE_ADDR + '/computeMetadata/v1/' +
-           metadata_path, 'Metadata-Flavor' => 'Google', :proxy => false,
-           &:read)
+      URI.open("http://#{METADATA_SERVICE_ADDR}/computeMetadata/v1/#{metadata_path}",
+               'Metadata-Flavor' => 'Google', :proxy => false, &:read)
     end
 
     # EC2 Metadata server returns everything in one call. Store it after the
@@ -143,10 +145,10 @@ module Common
     def ec2_metadata(platform)
       raise "Called ec2_metadata with platform=#{platform}" unless
         platform == Platform::EC2
+
       unless @ec2_metadata
         # See http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
-        open('http://' + METADATA_SERVICE_ADDR +
-             '/latest/dynamic/instance-identity/document', proxy: false) do |f|
+        URI.open("http://#{METADATA_SERVICE_ADDR}/latest/dynamic/instance-identity/document", proxy: false) do |f|
           contents = f.read
           @ec2_metadata = JSON.parse(contents)
         end
@@ -164,6 +166,7 @@ module Common
         missing << 'vm_id' unless vm_id
       end
       return if missing.empty?
+
       raise Fluent::ConfigError,
             "Unable to obtain metadata parameters: #{missing.join(' ')}"
     end
@@ -203,15 +206,16 @@ module Common
     # 2. If not, try to retrieve it locally.
     def get_location(platform, zone, use_aws_availability_zone)
       # Response format: "projects/<number>/zones/<zone>"
-      zone ||= fetch_gce_metadata(platform,
-                                  'instance/zone').rpartition('/')[2] if
-        platform == Platform::GCE
+      if platform == Platform::GCE
+        zone ||= fetch_gce_metadata(platform,
+                                    'instance/zone').rpartition('/')[2]
+      end
       aws_location_key = if use_aws_availability_zone
                            'availabilityZone'
                          else
                            'region'
                          end
-      zone ||= 'aws:' + ec2_metadata(platform)[aws_location_key] if
+      zone ||= "aws:#{ec2_metadata(platform)[aws_location_key]}" if
         platform == Platform::EC2 &&
         ec2_metadata(platform).key?(aws_location_key)
       zone
@@ -222,7 +226,8 @@ module Common
     # Create a monitored resource from type and labels.
     def create_monitored_resource(type, labels)
       Google::Apis::LoggingV2::MonitoredResource.new(
-        type: type, labels: labels.to_h)
+        type: type, labels: labels.to_h
+      )
     end
 
     # Retrieve monitored resource via the legacy way.
@@ -231,25 +236,30 @@ module Common
     # Metadata Agent. Thus it should be equivalent to what Metadata Agent
     # returns.
     def determine_agent_level_monitored_resource_via_legacy(
-          platform, subservice_name, detect_subservice, vm_id, zone)
+      platform, subservice_name, detect_subservice, vm_id, zone
+    )
       resource_type = determine_agent_level_monitored_resource_type(
-        platform, subservice_name, detect_subservice)
+        platform, subservice_name, detect_subservice
+      )
       create_monitored_resource(
         resource_type,
         determine_agent_level_monitored_resource_labels(
-          platform, resource_type, vm_id, zone))
+          platform, resource_type, vm_id, zone
+        )
+      )
     end
 
     # Determine agent level monitored resource type.
     def determine_agent_level_monitored_resource_type(
-          platform, subservice_name, detect_subservice)
+      platform, subservice_name, detect_subservice
+    )
       case platform
       when Platform::OTHER
         # Unknown platform will be defaulted to GCE instance.
-        return COMPUTE_CONSTANTS[:resource_type]
+        COMPUTE_CONSTANTS[:resource_type]
 
       when Platform::EC2
-        return EC2_CONSTANTS[:resource_type]
+        EC2_CONSTANTS[:resource_type]
 
       when Platform::GCE
         # Resource types determined by subservice_name config.
@@ -269,14 +279,15 @@ module Common
         end
 
         # GCE instance.
-        return COMPUTE_CONSTANTS[:resource_type]
+        COMPUTE_CONSTANTS[:resource_type]
       end
     end
 
     # Determine agent level monitored resource labels based on the resource
     # type. Each resource type has its own labels that need to be filled in.
     def determine_agent_level_monitored_resource_labels(
-          platform, type, vm_id, zone)
+      platform, type, vm_id, zone
+    )
       case type
       # GAE app.
       when APPENGINE_CONSTANTS[:resource_type]
@@ -293,6 +304,7 @@ module Common
       when COMPUTE_CONSTANTS[:resource_type]
         raise "Cannot construct a #{type} resource without vm_id and zone" \
           unless vm_id && zone
+
         return {
           'instance_id' => vm_id,
           'zone' => zone
@@ -302,6 +314,7 @@ module Common
       when GKE_CONSTANTS[:resource_type]
         raise "Cannot construct a #{type} resource without vm_id and zone" \
           unless vm_id && zone
+
         return {
           'instance_id' => vm_id,
           'zone' => zone,
@@ -327,6 +340,7 @@ module Common
       when EC2_CONSTANTS[:resource_type]
         raise "Cannot construct a #{type} resource without vm_id and zone" \
           unless vm_id && zone
+
         labels = {
           'instance_id' => vm_id,
           'region' => zone
@@ -352,9 +366,8 @@ module Common
       # Returns the project ID (as a string) on success, or nil on failure.
       def self.project_id
         creds = Google::Auth.get_application_default(LOGGING_SCOPE)
-        if creds.respond_to?(:project_id)
-          return creds.project_id if creds.project_id
-        end
+        return creds.project_id if creds.respond_to?(:project_id) && creds.project_id
+
         if creds.issuer
           id = extract_project_id(creds.issuer)
           return id unless id.nil?

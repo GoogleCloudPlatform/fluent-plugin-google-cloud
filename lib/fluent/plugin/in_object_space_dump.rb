@@ -48,7 +48,7 @@ module Fluent
     def on_timer
       GC.start
       # Use Tempfile.create to open the file, in order to preserve the file.
-      file = Tempfile.create(['heap-' + fluentd_worker_id.to_s + '-', '.json'])
+      file = Tempfile.create(["heap-#{fluentd_worker_id}-", '.json'])
       begin
         log.info 'dumping object space to',
                  filepath: file.path,

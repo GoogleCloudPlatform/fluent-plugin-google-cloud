@@ -88,7 +88,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     clear_metrics
     setup_logging_stubs(
       GRPC::PermissionDenied.new('User not authorized.',
-                                 PARTIAL_SUCCESS_GRPC_METADATA)) do
+                                 PARTIAL_SUCCESS_GRPC_METADATA)
+    ) do
       # The API Client should not retry this and the plugin should consume
       # the exception.
       d = create_driver(ENABLE_PROMETHEUS_CONFIG)
@@ -99,23 +100,28 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 0,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED
+      )
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 2,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT
+      )
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::PERMISSION_DENIED
+      )
     end
   end
 
@@ -124,7 +130,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     clear_metrics
     setup_logging_stubs(
       GRPC::InvalidArgument.new('internal client error',
-                                PARSE_ERROR_GRPC_METADATA)) do
+                                PARSE_ERROR_GRPC_METADATA)
+    ) do
       # The API Client should not retry this and the plugin should consume
       # the exception.
       d = create_driver(ENABLE_PROMETHEUS_CONFIG)
@@ -133,19 +140,23 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       assert_prometheus_metric_value(
         :stackdriver_successful_requests_count, 0,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_failed_requests_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT
+      )
       assert_prometheus_metric_value(
         :stackdriver_ingested_entries_count, 0,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::OK
+      )
       assert_prometheus_metric_value(
         :stackdriver_dropped_entries_count, 1,
         'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT)
+        grpc: use_grpc, code: GRPC::Core::StatusCodes::INVALID_ARGUMENT
+      )
     end
   end
 
@@ -165,8 +176,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         d.emit('message' => log_entry(0))
         begin
           d.run
-        rescue GRPC::BadStatus => error
-          assert_equal "#{code}:#{message}", error.message
+        rescue GRPC::BadStatus => e
+          assert_equal "#{code}:#{message}", e.message
           exception_count += 1
         end
       end
@@ -189,8 +200,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     setup_logging_stubs do
       d = create_driver
       # Array of pairs of [parsed_severity, expected_severity]
-      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
-       %w(105 DEBUG), ['', 'DEFAULT']].each do |sev|
+      [%w[INFO INFO], %w[warn WARNING], %w[E ERROR], %w[BLAH DEFAULT],
+       %w[105 DEBUG], ['', 'DEFAULT']].each do |sev|
         d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
         expected_severity.push(sev[1])
         emit_index += 1
@@ -297,10 +308,12 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     conf += USE_GRPC_CONFIG
     driver = if multi_tags
                Fluent::Test::MultiTagBufferedOutputTestDriver.new(
-                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub))
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub)
+               )
              else
                Fluent::Test::BufferedOutputTestDriver.new(
-                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag)
+                 GoogleCloudOutputWithGRPCMock.new(@grpc_stub), tag
+               )
              end
     driver.configure(conf, true)
   end
@@ -360,7 +373,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       @failed_attempts << 1
       begin
         raise @error
-      rescue
+      rescue StandardError
         # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
         raise Google::Gax::GaxError, 'This test message does not matter.'
       end
@@ -370,7 +383,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Set up grpc stubs to mock the external calls.
   def setup_logging_stubs(error = nil, code = nil, message = 'some message')
-    if error.nil? && (code.nil? || code == 0)
+    if error.nil? && (code.nil? || code.zero?)
       @requests_sent = []
       @grpc_stub = GRPCLoggingMockService.new(@requests_sent)
     else
@@ -410,7 +423,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload',
+  def verify_log_entries(expected_count, params, payload_type = 'textPayload',
                          check_exact_entry_labels = true, &block)
     @requests_sent.each do |request|
       @logs_sent << {
@@ -420,8 +433,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
         'logName' => request.log_name
       }
     end
-    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
-                            &block)
+    verify_json_log_entries(expected_count, params, payload_type,
+                            check_exact_entry_labels, &block)
   end
 
   # Use the right single quotation mark as the sample non-utf8 character.

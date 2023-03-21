@@ -37,7 +37,8 @@ module Fluent
         result = nil
         super(num_waits) do
           chunk = @instance.buffer.generate_chunk(
-            @instance.metadata(nil, nil, nil)).staged!
+            @instance.metadata(nil, nil, nil)
+          ).staged!
           @entries.each do |entry|
             chunk.concat(entry, 1)
           end

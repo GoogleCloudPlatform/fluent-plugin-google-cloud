@@ -36,8 +36,7 @@ module Utils
   end
 
   def stub_metadata_request(metadata_path, response_body)
-    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' +
-                 metadata_path)
+    stub_request(:get, "http://169.254.169.254/computeMetadata/v1/#{metadata_path}")
       .to_return(body: response_body, status: 200,
                  headers: { 'Content-Length' => response_body.length })
   end
@@ -101,7 +100,8 @@ module Utils
   def setup_managed_vm_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
-      "attribute1\ngae_backend_name\ngae_backend_version\nlast_attribute")
+      "attribute1\ngae_backend_name\ngae_backend_version\nlast_attribute"
+    )
     stub_metadata_request('instance/attributes/gae_backend_name',
                           MANAGED_VM_BACKEND_NAME)
     stub_metadata_request('instance/attributes/gae_backend_version',
@@ -112,13 +112,14 @@ module Utils
     if should_respond
       stub_metadata_request(
         'instance/attributes/',
-        "attribute1\ncluster-location\ncluster-name\nlast_attribute")
+        "attribute1\ncluster-location\ncluster-name\nlast_attribute"
+      )
       stub_metadata_request('instance/attributes/cluster-location',
                             K8S_LOCATION2)
       stub_metadata_request('instance/attributes/cluster-name',
                             K8S_CLUSTER_NAME)
     else
-      ['cluster-location', 'cluster-name'].each do |metadata_name|
+      %w[cluster-location cluster-name].each do |metadata_name|
         stub_request(:get, %r{.*instance/attributes/#{metadata_name}.*})
           .to_return(status: 404,
                      body: 'The requested URL /computeMetadata/v1/instance/' \
@@ -131,7 +132,8 @@ module Utils
   def setup_dataproc_metadata_stubs
     stub_metadata_request(
       'instance/attributes/',
-      "attribute1\ndataproc-cluster-uuid\ndataproc-cluster-name")
+      "attribute1\ndataproc-cluster-uuid\ndataproc-cluster-name"
+    )
     stub_metadata_request('instance/attributes/dataproc-cluster-name',
                           DATAPROC_CLUSTER_NAME)
     stub_metadata_request('instance/attributes/dataproc-cluster-uuid',

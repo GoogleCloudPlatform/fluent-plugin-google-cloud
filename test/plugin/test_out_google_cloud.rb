@@ -44,7 +44,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                  user_agent
   end
 
-  def test_client_400
+  def test_client_status400
     setup_gce_metadata_stubs
     # The API Client should not retry this and the plugin should consume
     # the exception.
@@ -57,7 +57,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
   end
 
   # All credentials errors resolve to a 401.
-  def test_client_401
+  def test_client_status401
     setup_gce_metadata_stubs
     stub_request(:post, WRITE_LOG_ENTRIES_URI)
       .to_return(status: 401, body: 'Unauthorized')
@@ -65,8 +65,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     d.emit('message' => log_entry(0))
     begin
       d.run
-    rescue Google::Apis::AuthorizationError => error
-      assert_equal 'Unauthorized', error.message
+    rescue Google::Apis::AuthorizationError => e
+      assert_equal 'Unauthorized', e.message
     end
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 2)
   end
@@ -88,19 +88,23 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_prometheus_metric_value(
       :stackdriver_successful_requests_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_ingested_entries_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 2,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 3)
+      grpc: false, code: 3
+    )
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 7)
+      grpc: false, code: 7
+    )
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
@@ -119,19 +123,23 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     assert_prometheus_metric_value(
       :stackdriver_successful_requests_count, 0,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_failed_requests_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 400)
+      grpc: false, code: 400
+    )
     assert_prometheus_metric_value(
       :stackdriver_ingested_entries_count, 0,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 200)
+      grpc: false, code: 200
+    )
     assert_prometheus_metric_value(
       :stackdriver_dropped_entries_count, 1,
       'agent.googleapis.com/agent', OpenCensus::Stats::Aggregation::Sum, d,
-      grpc: false, code: 400)
+      grpc: false, code: 400
+    )
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
   end
 
@@ -146,8 +154,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     exception_count = 0
     begin
       d.run
-    rescue Google::Apis::ServerError => error
-      assert_equal 'Server error', error.message
+    rescue Google::Apis::ServerError => e
+      assert_equal 'Server error', e.message
       exception_count += 1
     end
     assert_requested(:post, WRITE_LOG_ENTRIES_URI, times: 1)
@@ -168,7 +176,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     setup_logging_stubs do
       d = create_driver
       # Array of pairs of [parsed_severity, expected_severity]
-      [%w(INFO INFO), %w(warn WARNING), %w(E ERROR), %w(BLAH DEFAULT),
+      [%w[INFO INFO], %w[warn WARNING], %w[E ERROR], %w[BLAH DEFAULT],
        ['105', 100], ['', 'DEFAULT']].each do |sev|
         d.emit('message' => log_entry(emit_index), 'severity' => sev[0])
         expected_severity.push(sev[1])
@@ -188,7 +196,7 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     test_obj = Fluent::GoogleCloudOutput.new
 
     # known severities should translate to themselves, regardless of case
-    %w(DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY).each \
+    %w[DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY].each \
       do |severity|
       assert_equal(severity, test_obj.parse_severity(severity))
       assert_equal(severity, test_obj.parse_severity(severity.downcase))
@@ -298,6 +306,8 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
       resp = Net::HTTP.get('127.0.0.1', '/statusz', 5678)
       must_match = [
         '<h1>Status for .*</h1>.*',
+        '\bStarted: .*<br>',
+        '\bUp \d+ hr \d{2} min \d{2} sec<br>',
 
         '\badjust_invalid_timestamps\b.*\bfalse\b',
         '\bautoformat_stackdriver_trace\b.*\bfalse\b',
@@ -411,20 +421,22 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
                     multi_tags = false)
     driver = if multi_tags
                Fluent::Test::MultiTagBufferedOutputTestDriver.new(
-                 Fluent::GoogleCloudOutput)
+                 Fluent::GoogleCloudOutput
+               )
              else
                Fluent::Test::BufferedOutputTestDriver.new(
-                 Fluent::GoogleCloudOutput, tag)
+                 Fluent::GoogleCloudOutput, tag
+               )
              end
     driver.configure(conf, true)
   end
 
   # Verify the number and the content of the log entries match the expectation.
   # The caller can optionally provide a block which is called for each entry.
-  def verify_log_entries(n, params, payload_type = 'textPayload',
+  def verify_log_entries(expected_count, params, payload_type = 'textPayload',
                          check_exact_entry_labels = true, &block)
-    verify_json_log_entries(n, params, payload_type, check_exact_entry_labels,
-                            &block)
+    verify_json_log_entries(expected_count, params, payload_type,
+                            check_exact_entry_labels, &block)
   end
 
   # For an optional field with default values, Protobuf omits the field when it

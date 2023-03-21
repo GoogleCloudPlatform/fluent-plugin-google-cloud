@@ -1,11 +1,21 @@
 inherit_from: .rubocop_todo.yml
 
 AllCops:
-  TargetRubyVersion: 2.3
+  TargetRubyVersion: 2.6
   Exclude:
     # Generated files.
     - 'lib/google/**/*'
+  NewCops: disable
+
+# Rakefile doesn't need to be executable.
+Lint/ScriptPermission:
+  Enabled: false
 
 # TODO: Re-enable this and fix frozen strings.
 Style/FrozenStringLiteralComment:
+  Enabled: false
+
+# TODO: Re-enable this and switch once upgraded to Ruby 3.
+# Ruby 2's automatic keyword argument coercion makes this hard.
+Style/OptionalBooleanParameter:
   Enabled: false
