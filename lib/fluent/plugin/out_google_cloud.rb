@@ -1470,20 +1470,20 @@ module Fluent
 
           extracted_subfields = subfields.each_with_object({}) \
             do |(original_key, destination_key, cast_fn), extracted_fields|
-            value = fields.delete(original_key)
-            next if value.nil?
+              value = fields.delete(original_key)
+              next if value.nil?
 
-            begin
-              casted_value = send(cast_fn, value)
-            rescue TypeError
-              @log.error "Failed to #{cast_fn} for #{field_name}." \
-                         "#{original_key} with value #{value.inspect}.", err
-              next
+              begin
+                casted_value = send(cast_fn, value)
+              rescue TypeError
+                @log.error "Failed to #{cast_fn} for #{field_name}." \
+                           "#{original_key} with value #{value.inspect}.", err
+                next
+              end
+              next if casted_value.nil?
+
+              extracted_fields[destination_key] = casted_value
             end
-            next if casted_value.nil?
-
-            extracted_fields[destination_key] = casted_value
-          end
 
           next unless extracted_subfields
 
@@ -1700,9 +1700,9 @@ module Fluent
 
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
-        value = hash.delete(original_label)
-        extracted_labels[new_label] = convert_to_utf8(value.to_s) if value
-      end
+          value = hash.delete(original_label)
+          extracted_labels[new_label] = convert_to_utf8(value.to_s) if value
+        end
     end
 
     def value_from_ruby(value)
