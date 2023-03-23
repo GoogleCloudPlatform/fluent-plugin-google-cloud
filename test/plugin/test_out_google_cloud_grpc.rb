@@ -34,6 +34,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     # Record user agent when creating a GRPC::Core::Channel.
     GRPC::Core::Channel.class_eval do
       old_initialize = instance_method(:initialize)
+      # Suppress redefine warning (https://bugs.ruby-lang.org/issues/17055).
+      alias_method :initialize, :initialize
       define_method(:initialize) do |url, args, creds|
         user_agent = args['grpc.primary_user_agent']
         old_initialize.bind(self).call(url, args, creds)

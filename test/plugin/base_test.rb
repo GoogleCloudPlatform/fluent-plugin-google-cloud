@@ -29,8 +29,10 @@ require_relative 'utils'
 
 module Monitoring
   # Prevent OpenCensus from writing to the network.
-  class OpenCensusMonitoringRegistry
-    def export
+  OpenCensusMonitoringRegistry.class_eval do
+    # Suppress redefine warning (https://bugs.ruby-lang.org/issues/17055).
+    alias_method :export, :export
+    define_method(:export) do
       nil
     end
   end
