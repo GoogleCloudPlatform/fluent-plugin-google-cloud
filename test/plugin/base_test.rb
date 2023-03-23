@@ -55,6 +55,7 @@ module BaseTest
     registry.unregister(:stackdriver_retried_entries_count)
 
     setup_auth_stubs('https://www.googleapis.com/oauth2/v4/token')
+    setup_auth_stubs('https://oauth2.googleapis.com/token')
     @logs_sent = []
   end
 
