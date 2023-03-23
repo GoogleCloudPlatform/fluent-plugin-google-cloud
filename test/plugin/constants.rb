@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require 'google/rpc/error_details_pb'
+
 # Add some helper methods to standard classes.
 module Google
   module Protobuf
@@ -1018,7 +1020,7 @@ module Constants
   }.freeze
 
   PARTIAL_SUCCESS_GRPC_METADATA = begin
-    partial_errors = Google::Logging::V2::WriteLogEntriesPartialErrors.new(
+    partial_errors = Google::Cloud::Logging::V2::WriteLogEntriesPartialErrors.new(
       log_entry_errors: {
         0 => Google::Rpc::Status.new(
           code: GRPC::Core::StatusCodes::PERMISSION_DENIED,
