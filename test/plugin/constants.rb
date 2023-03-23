@@ -15,19 +15,6 @@
 require 'google/rpc/error_details_pb'
 
 # Add some helper methods to standard classes.
-module Google
-  module Protobuf
-    Any.class_eval do
-      # TODO(igorpeshansky): Remove this once
-      # https://github.com/google/protobuf/pull/4719 gets released.
-      def self.pack(msg, type_url_prefix = 'type.googleapis.com/')
-        any = Google::Protobuf::Any.new
-        any.pack(msg, type_url_prefix)
-        any
-      end
-    end
-  end
-end
 String.class_eval do
   def inspect_octal
     specials = {
