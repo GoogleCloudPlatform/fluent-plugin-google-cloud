@@ -23,7 +23,7 @@ Gem::Specification.new do |gem|
   # also the fluentd version in
   # https://github.com/GoogleCloudPlatform/google-fluentd/blob/master/config/software/fluentd.rb.
   gem.add_runtime_dependency 'fluentd', '1.13.3'
-  gem.add_runtime_dependency 'google-api-client', '0.30.8'
+  gem.add_runtime_dependency 'google-api-client', '0.44.2'
   gem.add_runtime_dependency 'googleapis-common-protos', '1.3.10'
   gem.add_runtime_dependency 'googleauth', '0.9.0'
   gem.add_runtime_dependency 'google-cloud-logging', '1.6.6'
