@@ -34,6 +34,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     # Record user agent when creating a GRPC::Core::Channel.
     GRPC::Core::Channel.class_eval do
       old_initialize = instance_method(:initialize)
+      # Suppress redefine warning (https://bugs.ruby-lang.org/issues/17055).
+      alias_method :initialize, :initialize
       define_method(:initialize) do |url, args, creds|
         user_agent = args['grpc.primary_user_agent']
         old_initialize.bind(self).call(url, args, creds)
@@ -270,8 +272,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   private
 
-  WriteLogEntriesRequest = Google::Logging::V2::WriteLogEntriesRequest
-  WriteLogEntriesResponse = Google::Logging::V2::WriteLogEntriesResponse
+  WriteLogEntriesRequest = Google::Cloud::Logging::V2::WriteLogEntriesRequest
+  WriteLogEntriesResponse = Google::Cloud::Logging::V2::WriteLogEntriesResponse
 
   USE_GRPC_CONFIG = %(
     use_grpc true
@@ -332,13 +334,13 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # GRPC logging mock that successfully logs the records.
   class GRPCLoggingMockService <
-      Google::Cloud::Logging::V2::LoggingServiceV2Client
+      Google::Cloud::Logging::V2::LoggingService::Client
     def initialize(requests_received)
       super()
       @requests_received = requests_received
     end
 
-    def write_log_entries(entries,
+    def write_log_entries(entries:,
                           log_name: nil,
                           resource: nil,
                           labels: nil,
@@ -357,7 +359,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
 
   # GRPC logging mock that fails and returns server side or client side errors.
   class GRPCLoggingMockFailingService <
-      Google::Cloud::Logging::V2::LoggingServiceV2Client
+      Google::Cloud::Logging::V2::LoggingService::Client
     def initialize(error, failed_attempts)
       super()
       @error = error
@@ -365,7 +367,7 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
     end
 
     # rubocop:disable Lint/UnusedMethodArgument
-    def write_log_entries(entries,
+    def write_log_entries(entries:,
                           log_name: nil,
                           resource: nil,
                           labels: nil,
@@ -374,8 +376,8 @@ class GoogleCloudOutputGRPCTest < Test::Unit::TestCase
       begin
         raise @error
       rescue StandardError
-        # Google::Gax::GaxError will wrap the latest thrown exception as @cause.
-        raise Google::Gax::GaxError, 'This test message does not matter.'
+        # Google::Cloud::Error will wrap the latest thrown exception as @cause.
+        raise Google::Cloud::Error, 'This test message does not matter.'
       end
     end
     # rubocop:enable Lint/UnusedMethodArgument

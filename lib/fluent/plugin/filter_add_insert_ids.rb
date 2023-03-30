@@ -51,9 +51,6 @@ module Fluent
     desc 'The field name for insertIds in the log record.'
     config_param :insert_id_key, :string, default: DEFAULT_INSERT_ID_KEY
 
-    # Expose attr_readers for testing.
-    attr_reader :insert_id_key
-
     def start
       super
       @log = $log # rubocop:disable Style/GlobalVars

@@ -198,10 +198,10 @@ class GoogleCloudOutputTest < Test::Unit::TestCase
     # known severities should translate to themselves, regardless of case
     %w[DEFAULT DEBUG INFO NOTICE WARNING ERROR CRITICAL ALERT EMERGENCY].each \
       do |severity|
-      assert_equal(severity, test_obj.parse_severity(severity))
-      assert_equal(severity, test_obj.parse_severity(severity.downcase))
-      assert_equal(severity, test_obj.parse_severity(severity.capitalize))
-    end
+        assert_equal(severity, test_obj.parse_severity(severity))
+        assert_equal(severity, test_obj.parse_severity(severity.downcase))
+        assert_equal(severity, test_obj.parse_severity(severity.capitalize))
+      end
 
     # numeric levels
     assert_equal(0, test_obj.parse_severity('0'))

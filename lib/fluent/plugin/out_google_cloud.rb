@@ -20,9 +20,9 @@ require 'socket'
 require 'time'
 require 'yaml'
 require 'google/apis'
+require 'google/cloud/errors'
 require 'google/apis/logging_v2'
 require 'google/cloud/logging/v2'
-require 'google/gax'
 require 'google/logging/v2/logging_pb'
 require 'google/logging/v2/logging_services_pb'
 require 'google/logging/v2/log_entry_pb'
@@ -149,7 +149,7 @@ module Fluent
             %w[userAgent user_agent parse_string]
           ],
           # The grpc version class name.
-          'Google::Logging::Type::HttpRequest',
+          'Google::Cloud::Logging::Type::HttpRequest',
           # The non-grpc version class name.
           'Google::Apis::LoggingV2::HttpRequest'
         ],
@@ -161,7 +161,7 @@ module Fluent
             %w[first first parse_bool],
             %w[last last parse_bool]
           ],
-          'Google::Logging::V2::LogEntryOperation',
+          'Google::Cloud::Logging::V2::LogEntryOperation',
           'Google::Apis::LoggingV2::LogEntryOperation'
         ],
         'source_location' => [
@@ -171,7 +171,7 @@ module Fluent
             %w[function function parse_string],
             %w[line line parse_int]
           ],
-          'Google::Logging::V2::LogEntrySourceLocation',
+          'Google::Cloud::Logging::V2::LogEntrySourceLocation',
           'Google::Apis::LoggingV2::LogEntrySourceLocation'
         ]
       }.freeze
@@ -431,7 +431,7 @@ module Fluent
 
     # Expose attr_readers to make testing of metadata more direct than only
     # testing it indirectly through metadata sent with logs.
-    attr_reader :project_id, :zone, :vm_id, :resource, :common_labels, :monitoring_resource
+    attr_reader :resource, :common_labels, :monitoring_resource
 
     def initialize
       super
@@ -784,7 +784,7 @@ module Fluent
 
       if @split_logs_by_tag
         requests_to_send.each do |request|
-          @write_request.call(request)
+          @write_request.call(**request)
         end
       else
         # Combine all requests into one. The request level "log_name" will be
@@ -846,7 +846,7 @@ module Fluent
                                            severity,
                                            ts_secs,
                                            ts_nanos)
-      entry = Google::Logging::V2::LogEntry.new(
+      entry = Google::Cloud::Logging::V2::LogEntry.new(
         labels: labels,
         resource: Google::Api::MonitoredResource.new(
           type: resource.type,
@@ -893,7 +893,7 @@ module Fluent
       client = api_client
       entries_count = entries.length
       client.write_log_entries(
-        entries,
+        entries: entries,
         log_name: log_name,
         # Leave resource nil if it's nil.
         resource: if resource
@@ -916,7 +916,7 @@ module Fluent
         @successful_call = true
         @log.info 'Successfully sent gRPC to Stackdriver Logging API.'
       end
-    rescue Google::Gax::GaxError => e
+    rescue Google::Cloud::Error => e
       # GRPC::BadStatus is wrapped in error.cause.
       error = e.cause
 
@@ -1007,7 +1007,7 @@ module Fluent
                    error: error.to_s, error_code: error_code.to_s
       end
 
-    # Got an unexpected error (not Google::Gax::GaxError) from the
+    # Got an unexpected error (not Google::Cloud::Error) from the
     # google-cloud-logging lib.
     rescue StandardError => e
       increment_failed_requests_count(GRPC::Core::StatusCodes::UNKNOWN)
@@ -1470,20 +1470,20 @@ module Fluent
 
           extracted_subfields = subfields.each_with_object({}) \
             do |(original_key, destination_key, cast_fn), extracted_fields|
-            value = fields.delete(original_key)
-            next if value.nil?
+              value = fields.delete(original_key)
+              next if value.nil?
 
-            begin
-              casted_value = send(cast_fn, value)
-            rescue TypeError
-              @log.error "Failed to #{cast_fn} for #{field_name}." \
-                         "#{original_key} with value #{value.inspect}.", err
-              next
+              begin
+                casted_value = send(cast_fn, value)
+              rescue TypeError
+                @log.error "Failed to #{cast_fn} for #{field_name}." \
+                           "#{original_key} with value #{value.inspect}.", err
+                next
+              end
+              next if casted_value.nil?
+
+              extracted_fields[destination_key] = casted_value
             end
-            next if casted_value.nil?
-
-            extracted_fields[destination_key] = casted_value
-          end
 
           next unless extracted_subfields
 
@@ -1599,30 +1599,30 @@ module Fluent
     end
 
     GRPC_SEVERITY_MAPPING = {
-      'DEFAULT' => Google::Logging::Type::LogSeverity::DEFAULT,
-      'DEBUG' => Google::Logging::Type::LogSeverity::DEBUG,
-      'INFO' => Google::Logging::Type::LogSeverity::INFO,
-      'NOTICE' => Google::Logging::Type::LogSeverity::NOTICE,
-      'WARNING' => Google::Logging::Type::LogSeverity::WARNING,
-      'ERROR' => Google::Logging::Type::LogSeverity::ERROR,
-      'CRITICAL' => Google::Logging::Type::LogSeverity::CRITICAL,
-      'ALERT' => Google::Logging::Type::LogSeverity::ALERT,
-      'EMERGENCY' => Google::Logging::Type::LogSeverity::EMERGENCY,
-      0 => Google::Logging::Type::LogSeverity::DEFAULT,
-      100 => Google::Logging::Type::LogSeverity::DEBUG,
-      200 => Google::Logging::Type::LogSeverity::INFO,
-      300 => Google::Logging::Type::LogSeverity::NOTICE,
-      400 => Google::Logging::Type::LogSeverity::WARNING,
-      500 => Google::Logging::Type::LogSeverity::ERROR,
-      600 => Google::Logging::Type::LogSeverity::CRITICAL,
-      700 => Google::Logging::Type::LogSeverity::ALERT,
-      800 => Google::Logging::Type::LogSeverity::EMERGENCY
+      'DEFAULT' => Google::Cloud::Logging::Type::LogSeverity::DEFAULT,
+      'DEBUG' => Google::Cloud::Logging::Type::LogSeverity::DEBUG,
+      'INFO' => Google::Cloud::Logging::Type::LogSeverity::INFO,
+      'NOTICE' => Google::Cloud::Logging::Type::LogSeverity::NOTICE,
+      'WARNING' => Google::Cloud::Logging::Type::LogSeverity::WARNING,
+      'ERROR' => Google::Cloud::Logging::Type::LogSeverity::ERROR,
+      'CRITICAL' => Google::Cloud::Logging::Type::LogSeverity::CRITICAL,
+      'ALERT' => Google::Cloud::Logging::Type::LogSeverity::ALERT,
+      'EMERGENCY' => Google::Cloud::Logging::Type::LogSeverity::EMERGENCY,
+      0 => Google::Cloud::Logging::Type::LogSeverity::DEFAULT,
+      100 => Google::Cloud::Logging::Type::LogSeverity::DEBUG,
+      200 => Google::Cloud::Logging::Type::LogSeverity::INFO,
+      300 => Google::Cloud::Logging::Type::LogSeverity::NOTICE,
+      400 => Google::Cloud::Logging::Type::LogSeverity::WARNING,
+      500 => Google::Cloud::Logging::Type::LogSeverity::ERROR,
+      600 => Google::Cloud::Logging::Type::LogSeverity::CRITICAL,
+      700 => Google::Cloud::Logging::Type::LogSeverity::ALERT,
+      800 => Google::Cloud::Logging::Type::LogSeverity::EMERGENCY
     }.freeze
 
     def grpc_severity(severity)
       # TODO: find out why this doesn't work.
       # if severity.is_a? String
-      #   return Google::Logging::Type::LogSeverity.resolve(severity)
+      #   return Google::Cloud::Logging::Type::LogSeverity.resolve(severity)
       # end
       return GRPC_SEVERITY_MAPPING[severity] if GRPC_SEVERITY_MAPPING.key?(severity)
 
@@ -1700,9 +1700,9 @@ module Fluent
 
       label_map.each_with_object({}) \
         do |(original_label, new_label), extracted_labels|
-        value = hash.delete(original_label)
-        extracted_labels[new_label] = convert_to_utf8(value.to_s) if value
-      end
+          value = hash.delete(original_label)
+          extracted_labels[new_label] = convert_to_utf8(value.to_s) if value
+        end
     end
 
     def value_from_ruby(value)
@@ -1834,11 +1834,11 @@ module Fluent
           "#{Google::Apis::OS_VERSION}"
         channel_args = { 'grpc.primary_user_agent' => user_agent }
                        .merge!(compression_channel_args)
-        @client = Google::Cloud::Logging::V2::LoggingServiceV2Client.new(
-          credentials: GRPC::Core::Channel.new(
+        @client = Google::Cloud::Logging::V2::LoggingService::Client.new do |config|
+          config.credentials = GRPC::Core::Channel.new(
             "#{host}#{port}", channel_args, creds
           )
-        )
+        end
       else
         # TODO: Use a non-default ClientOptions object.
         Google::Apis::ClientOptions.default.application_name = PLUGIN_NAME
@@ -2004,11 +2004,10 @@ module Fluent
     # are a list of indexes of log entries that failed due to this error.
     #
     # A sample error looks like:
-    # <Google::Gax::RetryError:
-    #   message: 'GaxError Exception occurred in retry method that was not class
-    #             ified as transient, caused by 7:User not authorized.',
+    # <Google::Cloud::PermissionDeniedError:
+    #   message: 'User not authorized.',
     #   details: [
-    #     <Google::Logging::V2::WriteLogEntriesPartialErrors:
+    #     <Google::Cloud::Logging::V2::WriteLogEntriesPartialErrors:
     #       log_entry_errors: {
     #         0 => <Google::Rpc::Status:
     #                code: 7,
@@ -2038,13 +2037,14 @@ module Fluent
     #   [3, 'Log name contains illegal character :']: [1, 3]
     # }
     def construct_error_details_map_grpc(gax_error)
+      @log.error "construct_error_details_map_grpc: #{gax_error}"
       error_details_map = Hash.new { |h, k| h[k] = [] }
       error_details = ensure_array(gax_error.status_details)
       raise JSON::ParserError, 'The error details are empty.' if
         error_details.empty?
       raise JSON::ParserError, 'No partial error info in error details.' unless
         error_details[0].is_a?(
-          Google::Logging::V2::WriteLogEntriesPartialErrors
+          Google::Cloud::Logging::V2::WriteLogEntriesPartialErrors
         )
 
       log_entry_errors = ensure_hash(error_details[0].log_entry_errors)

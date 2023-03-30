@@ -29,8 +29,10 @@ require_relative 'utils'
 
 module Monitoring
   # Prevent OpenCensus from writing to the network.
-  class OpenCensusMonitoringRegistry
-    def export
+  OpenCensusMonitoringRegistry.class_eval do
+    # Suppress redefine warning (https://bugs.ruby-lang.org/issues/17055).
+    alias_method :export, :export
+    define_method(:export) do
       nil
     end
   end
@@ -55,6 +57,7 @@ module BaseTest
     registry.unregister(:stackdriver_retried_entries_count)
 
     setup_auth_stubs('https://www.googleapis.com/oauth2/v4/token')
+    setup_auth_stubs('https://oauth2.googleapis.com/token')
     @logs_sent = []
   end
 

@@ -60,8 +60,7 @@ module Utils
                           "attribute1\nattribute2\nattribute3")
 
     # Used by 'googleauth' to fetch the default service account credentials.
-    stub_request(:get, 'http://169.254.169.254/computeMetadata/v1/' \
-                 'instance/service-accounts/default/token')
+    stub_request(:get, %r{http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token(?:\?.*)})
       .to_return(body: %({"access_token": "#{FAKE_AUTH_TOKEN}"}),
                  status: 200,
                  headers: { 'Content-Length' => FAKE_AUTH_TOKEN.length,
