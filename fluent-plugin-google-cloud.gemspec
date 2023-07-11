@@ -29,7 +29,7 @@ Gem::Specification.new do |gem|
   gem.add_runtime_dependency 'google-cloud-logging', '2.3.2'
   gem.add_runtime_dependency 'google-cloud-monitoring-v3', '0.10.0'
   gem.add_runtime_dependency 'google-protobuf', '3.22.1'
-  gem.add_runtime_dependency 'grpc', '1.52.0'
+  gem.add_runtime_dependency 'grpc', '1.53.0'
   gem.add_runtime_dependency 'json', '2.6.3'
   gem.add_runtime_dependency 'opencensus', '0.5.0'
   gem.add_runtime_dependency 'opencensus-stackdriver', '0.4.1'
