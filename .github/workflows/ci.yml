@@ -7,7 +7,6 @@ jobs:
       matrix:
         rvm:
           - 2.7
-          - 2.6
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
