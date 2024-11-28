@@ -34,6 +34,11 @@ Gem::Specification.new do |gem|
   gem.add_runtime_dependency 'opencensus', '0.5.0'
   gem.add_runtime_dependency 'opencensus-stackdriver', '0.4.1'
 
+  # CVE-2023-28120, CVE-2023-22796, CVE-2023-38037: activesupport is a
+  # transitive dependency of google-api-client, which has not been updated
+  # upstream to a patched version, so we are pinning it here instead.
+  gem.add_runtime_dependency 'activesupport', '~> 6.1', '>= 6.1.7.5'
+
   gem.add_development_dependency 'mocha', '1.9.0'
   # Keep this the same as in
   # https://github.com/fluent/fluent-plugin-prometheus/blob/master/fluent-plugin-prometheus.gemspec
